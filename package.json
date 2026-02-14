@@ -1,0 +1,20 @@
+{
+  "name": "commit-gen-bun",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/express": "^5.0.6",
+    "@types/luxon": "^3.7.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@optique/core": "^0.9.6",
+    "@optique/run": "^0.9.6",
+    "fluture": "^14.0.0",
+    "luxon": "^3.7.2",
+    "sorted-btree": "^2.1.0"
+  }
+}

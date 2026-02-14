@@ -1,65 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Future } from "@/future";
-import { CommitConvention } from "./config";
+import { CommitConvention } from "@domain/config/schema";
 
-export class AIError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "AIError";
-  }
-}
-
-const PRIMARY_MODEL = "gemini-1.5-flash";
-
-/**
- * Generates a commit message using Gemini.
- */
-export const generateCommitMessage = (
-  apiKey: string,
-  diff: string,
-  convention: CommitConvention,
-  customTemplate?: string
-): Future<AIError, string> => {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: PRIMARY_MODEL });
-
-  return Future.attemptP(async () => {
-    const prompt = getPrompt(diff, convention, customTemplate);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    if (!text.trim()) throw new AIError("Empty AI response");
-    return text.trim();
-  }).mapRej(e => new AIError(String(e)));
-};
-
-/**
- * Refines a commit message based on user feedback.
- */
-export const refineCommitMessage = (
-  apiKey: string,
-  currentMessage: string,
-  adjustment: string,
-  diff: string
-): Future<AIError, string> => {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: PRIMARY_MODEL,
-    systemInstruction:
-      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '.",
-  });
-
-  const prompt = `<diff>\n${diff}\n</diff>\n<current>\n${currentMessage}\n</current>\n<adjustment>\n${adjustment}\n</adjustment>`;
-
-  return Future.attemptP(async () => {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    if (!text.trim()) throw new AIError("Empty AI response during refinement");
-    return text.trim();
-  }).mapRej(e => new AIError(String(e)));
-};
-
-function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
+export function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);
@@ -72,7 +13,7 @@ function getPrompt(diff: string, convention: CommitConvention, customTemplate?: 
   }
 }
 
-function promptConventional(gitDiff: string): string {
+export function promptConventional(gitDiff: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
@@ -116,10 +57,10 @@ function promptConventional(gitDiff: string): string {
             index 1234567..89abcde 100644
             --- a/src/logger.ts
             +++ b/src/logger.ts
-            @@ -10,7 +10,7 @@ export function logInfo(message: string) {{
+            @@ -10,7 +10,7 @@ export function logInfo(message: string) {
             -  console.log('[INFO]', message);
             +  console.log('[INFO]', new Date().toISOString(), message);
-            }}
+            }
           </git_diff>
           <classification>SMALL</classification>
           <commit_message>
@@ -150,11 +91,11 @@ function promptConventional(gitDiff: string): string {
 `;
 }
 
-function promptImperative(gitDiff: string): string {
+export function promptImperative(gitDiff: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
-        Your job is to read git diffs and output high-quality commit messages
+        Your job is to read git diffs and output high-quality comic messages
         that follow these rules.
       </system>
 
@@ -193,10 +134,10 @@ function promptImperative(gitDiff: string): string {
             index 1234567..89abcde 100644
             --- a/src/logger.ts
             +++ b/src/logger.ts
-            @@ -10,7 +10,7 @@ export function logInfo(message: string) {{
+            @@ -10,7 +10,7 @@ export function logInfo(message: string) {
             -  console.log('[INFO]', message);
             +  console.log('[INFO]', new Date().toISOString(), message);
-            }}
+            }
           </git_diff>
 
           <classification>SMALL</classification>
@@ -213,7 +154,7 @@ function promptImperative(gitDiff: string): string {
             --- a/tools/prompting.py
             +++ b/tools/prompting.py
             @@ -1,0 +1,40 @@
-            +def prompt_commit_message(git_diff: str) -> str:
+            +def prompt_commit_message(git_diff: string) -> string:
             +    \"\"\"Generate a commit message prompt from a git diff.\"\"\"
             +    ...
 
@@ -267,7 +208,7 @@ function promptImperative(gitDiff: string): string {
 `;
 }
 
-function promptCustom(gitDiff: string, template?: string): string {
+export function promptCustom(gitDiff: string, template?: string): string {
   if (!template) {
     return promptImperative(gitDiff);
   }

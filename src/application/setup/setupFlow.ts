@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts";
 import color from "picocolors";
 import { Future } from "@/future";
-import { saveConfig, CommitConvention } from "../config";
+import { saveConfig } from "@infra/config/storage";
+import { CommitConvention } from "@domain/config/schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const executeSetupFlow = (): Future<Error, void> => {

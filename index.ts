@@ -1,13 +1,8 @@
-import * as p from "@clack/prompts";
-
-import { executeCommitFlow } from "@app/commands/commitFlow";
-import { executeSetupFlow } from "@app/commands/setupFlow";
+import { executeCommitFlow } from "@app/commit/generateCommit";
+import { executeSetupFlow } from "@app/setup/setupFlow";
+import { executeDoctorFlow } from "@app/doctor/doctorFlow";
 import { Future } from "@/future";
-import { CONFIG_FILE } from "@app/config";
-import { exists } from "fs/promises";
-
 import color from "picocolors";
-import Table from "cli-table3";
 
 const main = () => {
   const args = process.argv.slice(2);
@@ -49,38 +44,6 @@ const main = () => {
     }
   );
 };
-
-const executeDoctorFlow = (): Future<Error, void> =>
-  Future.attemptP(async () => {
-    p.intro(color.bgBlue(color.black(" Commit Gen Doctor ")));
-    
-    const table = new Table({
-      head: [color.bold("Check"), color.bold("Status"), color.bold("Details")],
-      colWidths: [20, 15, 45],
-    });
-
-    // 1. Check Bun
-    table.push(["Bun Runtime", color.green("OK"), Bun.version]);
-
-    // 2. Check Platform
-    table.push(["Platform", color.green("OK"), process.platform]);
-
-    // 3. Check Configuration
-    const configExists = await exists(CONFIG_FILE);
-    if (!configExists) {
-      table.push(["Config File", color.yellow("MISSING"), "~/.commit-gen/config.json"]);
-    } else {
-      table.push(["Config File", color.green("FOUND"), CONFIG_FILE]);
-    }
-
-    console.log(table.toString());
-
-    if (!configExists) {
-      p.log.warn(color.yellow("Run 'commit-gen setup' to create your configuration."));
-    }
-
-    p.outro("Doctor check complete!");
-  });
 
 const showHelp = () => {
   console.log(`

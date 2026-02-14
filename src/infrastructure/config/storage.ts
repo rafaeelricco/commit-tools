@@ -1,18 +1,10 @@
 import * as s from "@/json/schema";
+
 import { Future } from "@/future";
 import { resolve } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
-
-export const CommitConvention = s.stringEnum(["conventional", "imperative", "custom"]);
-export type CommitConvention = s.Infer<typeof CommitConvention>;
-
-export const Config = s.object({
-  api_key: s.string,
-  commit_convention: CommitConvention,
-  custom_template: s.optional(s.string),
-});
-export type Config = s.Infer<typeof Config>;
+import { Config } from "@domain/config/schema";
 
 export const CONFIG_DIR = resolve(homedir(), ".commit-gen");
 export const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");

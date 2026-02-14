@@ -1,17 +1,26 @@
 import * as p from "@clack/prompts";
 import color from "picocolors";
 import { Future } from "@/future";
-import { loadConfig, CommitConvention } from "../config";
-import { checkGitRepo, getStagedDiff, commit, push, NoStagedChanges } from "../git";
-import { generateCommitMessage, refineCommitMessage, AIError } from "../ai";
+import { loadConfig } from "@infra/config/storage";
+import { CommitConvention } from "@domain/config/schema";
+import { 
+  checkIsGitRepo, 
+  getStagedDiff, 
+  performCommit, 
+  performPush, 
+  getCurrentBranch, 
+  hasUpstream, 
+  NoStagedChanges 
+} from "@infra/git";
+import { generateCommitMessage, refineCommitMessage } from "@infra/ai/gemini";
 
 export const executeCommitFlow = (): Future<Error, void> =>
   loadConfig()
     .chain(config => 
-      checkGitRepo().chain(cwd =>
-        getStagedDiff(cwd).chain(diff =>
+      checkIsGitRepo().chain(() =>
+        getStagedDiff().chain(diff =>
           generateWithSpinner(config.api_key, diff, config.commit_convention, config.custom_template)
-            .chain(message => interactionLoop(config.api_key, diff, message, cwd))
+            .chain(message => interactionLoop(config.api_key, diff, message))
         )
       )
     )
@@ -29,7 +38,7 @@ const generateWithSpinner = (
   diff: string,
   convention: CommitConvention,
   customTemplate?: string
-): Future<AIError, string> => {
+): Future<Error, string> => {
   const s = p.spinner();
   s.start("Generating commit message...");
   return generateCommitMessage(apiKey, diff, convention, customTemplate)
@@ -46,8 +55,7 @@ const generateWithSpinner = (
 const interactionLoop = (
   apiKey: string,
   diff: string,
-  message: string,
-  cwd: string
+  message: string
 ): Future<Error, void> => {
   return Future.attemptP(async () => {
     p.note(message, "Proposed Commit Message");
@@ -55,8 +63,8 @@ const interactionLoop = (
     const action = await p.select({
       message: "What would you like to do?",
       options: [
-        { value: "commit", label: "Commit" },
         { value: "commit_push", label: "Commit & Push" },
+        { value: "commit", label: "Commit" },
         { value: "regenerate", label: "Regenerate" },
         { value: "adjust", label: "Adjust" },
         { value: "cancel", label: "Cancel" },
@@ -72,22 +80,43 @@ const interactionLoop = (
   }).chain(action => {
     switch (action) {
       case "commit":
-        return commit(message, cwd).map(() => {
+        return performCommit(message).map(stats => {
+          process.stdout.write(stats);
           p.outro(color.green("Committed successfully!"));
         });
       case "commit_push":
-        return commit(message, cwd)
-          .chain(() => {
-            const s = p.spinner();
-            s.start("Pushing...");
-            return push(cwd).map(() => s.stop("Pushed successfully!"));
+        return performCommit(message)
+          .chain(stats => {
+            process.stdout.write(stats);
+            return hasUpstream().chain(exists => {
+              if (exists) {
+                const s = p.spinner();
+                s.start("Pushing...");
+                return performPush().map(() => s.stop("Pushed successfully!"));
+              } else {
+                return getCurrentBranch().chain(branch => 
+                  Future.attemptP(async () => {
+                    const publish = await p.confirm({
+                      message: `Branch '${branch}' has no upstream. Publish to origin?`,
+                    });
+                    if (p.isCancel(publish) || !publish) return "skip_push";
+                    return "publish";
+                  }).chain(pubAction => {
+                    if (pubAction === "skip_push") return Future.resolve(undefined);
+                    const s = p.spinner();
+                    s.start(`Publishing '${branch}'...`);
+                    return performPush(branch, true).map(() => s.stop("Published successfully!"));
+                  })
+                );
+              }
+            });
           })
           .map(() => {
-            p.outro(color.green("Committed and pushed successfully!"));
+            p.outro(color.green("Done!"));
           });
       case "regenerate":
-        return generateWithSpinner(apiKey, diff, "imperative") // Defaulting for simple retry
-          .chain(newMsg => interactionLoop(apiKey, diff, newMsg, cwd));
+        return generateWithSpinner(apiKey, diff, "imperative")
+          .chain(newMsg => interactionLoop(apiKey, diff, newMsg));
       case "adjust":
         return Future.attemptP(async () => {
           const adj = await p.text({
@@ -97,7 +126,7 @@ const interactionLoop = (
           if (p.isCancel(adj)) return null;
           return adj;
         }).chain(adj => {
-          if (!adj) return interactionLoop(apiKey, diff, message, cwd);
+          if (!adj) return interactionLoop(apiKey, diff, message);
           const s = p.spinner();
           s.start("Refining...");
           return refineCommitMessage(apiKey, message, adj, diff)
@@ -105,7 +134,7 @@ const interactionLoop = (
               s.stop("Refined!");
               return newMsg;
             })
-            .chain(newMsg => interactionLoop(apiKey, diff, newMsg, cwd));
+            .chain(newMsg => interactionLoop(apiKey, diff, newMsg));
         });
       default:
         return Future.resolve(undefined);

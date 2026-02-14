@@ -25,7 +25,9 @@
     "allowUnreachableCode": false,
     "paths": {
       "@/*": ["./src/libs/*"],
-      "@app/*": ["./src/app/*"],
+      "@domain/*": ["./src/domain/*"],
+      "@app/*": ["./src/application/*"],
+      "@infra/*": ["./src/infrastructure/*"],
       "@tests/*": ["./tests/*"]
     }
   },

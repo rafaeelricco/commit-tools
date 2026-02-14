@@ -24,10 +24,10 @@
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
     "paths": {
-      "@/*": ["./libs/*"],
+      "@/*": ["./src/libs/*"],
       "@tests/*": ["./tests/*"]
     }
   },
-  "include": ["index.ts", "libs/**/*", "tests/**/*"],
+  "include": ["index.ts", "src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

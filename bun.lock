@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "commit-gen-bun",
+      "name": "commit-tools",
       "dependencies": {
         "@clack/prompts": "^1.0.1",
         "@google/generative-ai": "^0.24.1",

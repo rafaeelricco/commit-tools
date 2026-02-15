@@ -1,4 +1,4 @@
-# commit-gen-bun
+# commit-tools
 
 To install dependencies:
 

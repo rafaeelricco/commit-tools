@@ -1,5 +1,5 @@
 {
-  "name": "commit-gen-bun",
+  "name": "commit-tools",
   "module": "index.ts",
   "type": "module",
   "bin": {

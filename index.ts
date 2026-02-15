@@ -24,7 +24,7 @@ const main = () => {
       break;
     case "--version":
     case "-v":
-      console.log("commit-gen 0.1.1 (bun)");
+      console.log("commit-gen 0.1.0 (bun)");
       return;
     case "--help":
     case "-h":

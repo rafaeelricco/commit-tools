@@ -2,23 +2,24 @@ import { executeCommitFlow } from "@app/commit/generateCommit";
 import { executeSetupFlow } from "@app/setup/setupFlow";
 import { executeDoctorFlow } from "@app/doctor/doctorFlow";
 import { Future } from "@/future";
+
 import color from "picocolors";
 
 const main = () => {
   const args = process.argv.slice(2);
   const command = args[0] || "generate";
 
-  let flow: Future<Error, void>;
+  let action: Future<Error, void>;
 
   switch (command) {
     case "generate":
-      flow = executeCommitFlow();
+      action = executeCommitFlow();
       break;
     case "setup":
-      flow = executeSetupFlow();
+      action = executeSetupFlow();
       break;
     case "doctor":
-      flow = executeDoctorFlow();
+      action = executeDoctorFlow();
       break;
     case "--version":
     case "-v":
@@ -34,14 +35,9 @@ const main = () => {
       process.exit(1);
   }
 
-  flow.fork(
-    err => {
-      console.error(err)
-      process.exit(1);
-    },
-    () => {
-      process.exit(0);
-    }
+  action.fork(
+    _ => process.exit(1),
+    () => process.exit(0)
   );
 };
 

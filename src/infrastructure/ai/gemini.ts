@@ -3,8 +3,6 @@ import { Future } from "@/future";
 import { CommitConvention } from "@domain/config/schema";
 import { getPrompt } from "@domain/commit/prompts";
 
-const PRIMARY_MODEL = "gemini-1.5-flash";
-
 /**
  * Generates a commit message using Gemini.
  */
@@ -15,7 +13,7 @@ export const generateCommitMessage = (
   customTemplate?: string
 ): Future<Error, string> => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: PRIMARY_MODEL });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
   return Future.attemptP(async () => {
     const prompt = getPrompt(diff, convention, customTemplate);
@@ -37,7 +35,7 @@ export const refineCommitMessage = (
 ): Future<Error, string> => {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: PRIMARY_MODEL,
+    model: "gemini-3-flash-preview",
     systemInstruction:
       "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '.",
   });

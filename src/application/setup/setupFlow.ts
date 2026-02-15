@@ -1,9 +1,11 @@
 import * as p from "@clack/prompts";
-import color from "picocolors";
+
 import { Future } from "@/future";
 import { saveConfig } from "@infra/config/storage";
 import { CommitConvention } from "@domain/config/schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+
+import color from "picocolors";
 
 export const executeSetupFlow = (): Future<Error, void> => {
   return Future.attemptP(async () => {
@@ -64,7 +66,7 @@ export const executeSetupFlow = (): Future<Error, void> => {
 
 const validateApiKey = (apiKey: string): Future<Error, void> => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
   return Future.attemptP(async () => {
     await model.generateContent("test");
   });

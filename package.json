@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "commit": "./commit"
+    "commit": "./index.ts"
   },
   "scripts": {
     "start": "bun index.ts",
@@ -11,7 +11,7 @@
     "doctor": "bun run start doctor",
     "test": "bun test",
     "build": "bun build --compile --outfile=commit ./index.ts",
-    "install:global": "bun run build && bun link"
+    "install:global": "bun link"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { executeCommitFlow } from "@app/commit/generateCommit";
 import { executeSetupFlow } from "@app/setup/setupFlow";
 import { executeDoctorFlow } from "@app/doctor/doctorFlow";
@@ -23,7 +24,7 @@ const main = () => {
       break;
     case "--version":
     case "-v":
-      console.log("commit-gen 0.1.0 (bun)");
+      console.log("commit-gen 0.1.1 (bun)");
       return;
     case "--help":
     case "-h":

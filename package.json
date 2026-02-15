@@ -11,7 +11,7 @@
     "doctor": "bun run start doctor",
     "test": "bun test",
     "compile": "bun run build",
-    "build": "bun build ./index.ts --outdir ./dist --target bun",
+    "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
     "install:global": "bun link"
   },
   "files": [
@@ -28,12 +28,9 @@
   "dependencies": {
     "@clack/prompts": "^1.0.1",
     "@google/generative-ai": "^0.24.1",
-    "@optique/core": "^0.9.6",
-    "@optique/run": "^0.9.6",
     "cli-table3": "^0.6.5",
     "fluture": "^14.0.0",
     "luxon": "^3.7.2",
-    "picocolors": "^1.1.1",
-    "sorted-btree": "^2.1.0"
+    "picocolors": "^1.1.1"
   }
 }

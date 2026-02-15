@@ -14,7 +14,8 @@ export const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
  */
 export const loadConfig = (): Future<Error, Config> =>
   Future.attemptP(() => Bun.file(CONFIG_FILE).text())
-    .map(JSON.parse)
+    .mapRej(err => new Error(`Failed to read config file: ${err}`))
+    .map((value) => JSON.parse(value))
     .chain(json => {
       const result = s.decode(Config, json);
       return result.either(

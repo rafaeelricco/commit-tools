@@ -23,9 +23,14 @@ const main = () => {
       action = executeDoctorFlow();
       break;
     case "--version":
-    case "-v":
+    case "-v": {
+      const start = performance.now();
       console.log("commit-gen 0.1.0 (bun)");
+      const end = performance.now();
+      const diff = end - start;
+      console.log(`Done in ${diff.toLocaleString()}ms`);
       return;
+    }
     case "--help":
     case "-h":
       showHelp();

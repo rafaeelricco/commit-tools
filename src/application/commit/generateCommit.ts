@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts";
-import color from "picocolors";
+
 import { Future } from "@/future";
 import { loadConfig } from "@infra/config/storage";
+import { executeSetupFlow } from "@app/setup/setupFlow";
 import { CommitConvention } from "@domain/config/schema";
 import { 
   checkIsGitRepo, 
@@ -14,8 +15,14 @@ import {
 } from "@infra/git";
 import { generateCommitMessage, refineCommitMessage } from "@infra/ai/gemini";
 
+import color from "picocolors";
+
 export const executeCommitFlow = (): Future<Error, void> =>
   loadConfig()
+    .chainRej(() => {
+      p.log.warn(color.yellow("No configuration found. Let's set you up first."));
+      return executeSetupFlow().chain(() => loadConfig());
+    })
     .chain(config => 
       checkIsGitRepo().chain(() =>
         getStagedDiff().chain(diff =>
@@ -26,7 +33,7 @@ export const executeCommitFlow = (): Future<Error, void> =>
     )
     .mapRej(e => {
       if (e instanceof NoStagedChanges) {
-        p.log.warn(color.yellow("No staged changes found. Use 'git add' to stage files."));
+        console.log(color.yellow("No staged changes found. Use 'git add' to stage files."));
         return e;
       }
       p.log.error(color.red(e.message));

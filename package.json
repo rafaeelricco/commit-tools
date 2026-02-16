@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "commit": "./dist/index.js"
+    "commit-tools": "./dist/index.js"
   },
   "scripts": {
     "start": "bun index.ts",
@@ -30,7 +30,9 @@
     "@google/generative-ai": "^0.24.1",
     "cli-table3": "^0.6.5",
     "fluture": "^14.0.0",
+    "google-auth-library": "^10.5.0",
     "luxon": "^3.7.2",
+    "open": "^11.0.0",
     "picocolors": "^1.1.1"
   }
 }

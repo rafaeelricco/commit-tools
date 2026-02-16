@@ -1,9 +1,9 @@
+import * as s from "@/libs/json/schema";
+
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
-import type { Dependencies } from "@/app/integrations";
+import { type Dependencies } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
-
-import * as s from "@/libs/json/schema";
 
 export const CommitConvention = s.stringEnum(["conventional", "imperative", "custom"]);
 export type CommitConvention = s.Infer<typeof CommitConvention>;
@@ -37,6 +37,8 @@ const SCOPES = [
 const OAUTH_TIMEOUT_MS = 300_000;
 const PORT_RANGE_START = 8400;
 const PORT_RANGE_END = 8410;
+
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 type CallbackServer = {
   readonly server: ReturnType<typeof Bun.serve>;
@@ -168,8 +170,7 @@ const openBrowser = async (url: string): Promise<void> => {
     await open(url);
   } catch {
     console.log("\nCould not open browser automatically.");
-    console.log("Please open the following URL in your browser:\n");
-    console.log(`  ${url}\n`);
+    console.log(`Please open the following URL in your browser:\n${url}\n`);
   }
 };
 
@@ -231,11 +232,10 @@ export const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens>
         });
 
         const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-          const timer = setTimeout(
+          return () => clearTimeout(setTimeout(
             () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
             OAUTH_TIMEOUT_MS,
-          );
-          return () => clearTimeout(timer);
+          ));
         });
 
         return Future.race(waitForCode, timeout)
@@ -260,8 +260,6 @@ export const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthToken
 
   return client;
 };
-
-const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 export const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;

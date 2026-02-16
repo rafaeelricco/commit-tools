@@ -12,7 +12,6 @@ import {
   performPush,
   getCurrentBranch,
   hasUpstream,
-  NoStagedChanges,
 } from "@/app/services";
 import {
   generateCommitMessage,
@@ -67,11 +66,11 @@ export const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
       )
     )
     .mapRej(e => {
-      if (e instanceof NoStagedChanges) {
+      if (e instanceof Error) {
         console.log(color.yellow("No staged changes found. Use 'git add' to stage files."));
         return e;
       }
-      p.log.error(color.red(e.message));
+      p.log.error(color.red(e));
       return e;
     });
 

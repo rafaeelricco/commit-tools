@@ -1,14 +1,16 @@
+export { executeSetupFlow };
+
 import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
 import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
-import type { Dependencies } from "@/app/integrations";
+import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import color from "picocolors";
 
-export const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
+const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
   return Future.attemptP(async () => {
     p.intro(color.bgCyan(color.black(" Commit Gen Setup ")));
 

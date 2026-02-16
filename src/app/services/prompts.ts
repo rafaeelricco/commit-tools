@@ -1,6 +1,8 @@
+export { getPrompt };
+
 import { CommitConvention } from "@/app/services/googleAuth";
 
-export function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
+function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);
@@ -13,7 +15,7 @@ export function getPrompt(diff: string, convention: CommitConvention, customTemp
   }
 }
 
-export function promptConventional(gitDiff: string): string {
+function promptConventional(gitDiff: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
@@ -91,7 +93,7 @@ export function promptConventional(gitDiff: string): string {
 `;
 }
 
-export function promptImperative(gitDiff: string): string {
+function promptImperative(gitDiff: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
@@ -208,7 +210,7 @@ export function promptImperative(gitDiff: string): string {
 `;
 }
 
-export function promptCustom(gitDiff: string, template?: string): string {
+function promptCustom(gitDiff: string, template?: string): string {
   if (!template) {
     return promptImperative(gitDiff);
   }

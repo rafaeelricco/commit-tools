@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
 import { Future } from "@/libs/future";
 import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
 import { getPrompt } from "@/app/services/prompts";
@@ -7,7 +7,7 @@ const GEMINI_MODEL = "gemini-flash-lite-latest";
 const GEMINI_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export type AuthCredentials =
-  | { readonly method: "api_key"; readonly apiKey: string }
+  | { readonly method: "byok"; readonly apiKey: string }
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
 export const getAuthCredentials = (config: Config): AuthCredentials | null => {
@@ -15,7 +15,7 @@ export const getAuthCredentials = (config: Config): AuthCredentials | null => {
     return { method: "oauth", tokens: config.tokens };
   }
   if (config.api_key !== undefined) {
-    return { method: "api_key", apiKey: config.api_key };
+    return { method: "byok", apiKey: config.api_key };
   }
   return null;
 };
@@ -43,19 +43,7 @@ const generateContentWithApiKey = (
   }).mapRej(e => new Error(String(e)));
 };
 
-type GeminiRestResponse = {
-  readonly candidates?: ReadonlyArray<{
-    readonly content?: {
-      readonly parts?: ReadonlyArray<{
-        readonly text?: string;
-      }>;
-    };
-  }>;
-  readonly error?: {
-    readonly message?: string;
-    readonly code?: number;
-  };
-};
+
 
 const generateContentWithOAuth = (
   tokens: OAuthTokens,
@@ -88,11 +76,7 @@ const generateContentWithOAuth = (
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
-      const json = await response.json() as GeminiRestResponse;
-
-      if (json.error) {
-        throw new Error(`Gemini API error: ${json.error.message ?? "Unknown error"}`);
-      }
+      const json = await response.json() as GenerateContentResponse;
 
       const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text || !text.trim()) {
@@ -108,7 +92,7 @@ const generateContent = (
   params: GenerateContentParams,
 ): Future<Error, string> => {
   switch (auth.method) {
-    case "api_key":
+    case "byok":
       return generateContentWithApiKey(auth.apiKey, params);
     case "oauth":
       return generateContentWithOAuth(auth.tokens, params);
@@ -121,9 +105,7 @@ export const generateCommitMessage = (
   convention: CommitConvention,
   customTemplate?: string,
 ): Future<Error, string> =>
-  generateContent(auth, {
-    prompt: getPrompt(diff, convention, customTemplate),
-  });
+  generateContent(auth, { prompt: getPrompt(diff, convention, customTemplate) });
 
 export const refineCommitMessage = (
   auth: AuthCredentials,

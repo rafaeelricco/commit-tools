@@ -1,3 +1,5 @@
+export { loadConfig, saveConfig, updateTokens, CONFIG_DIR, CONFIG_FILE };
+
 import * as s from "@/libs/json/schema";
 
 import { Future } from "@/libs/future";
@@ -6,13 +8,13 @@ import { homedir } from "os";
 import { mkdir } from "fs/promises";
 import { Config, type OAuthTokens } from "@/app/services/googleAuth";
 
-export const CONFIG_DIR = resolve(homedir(), ".commit-tools");
-export const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
+const CONFIG_DIR = resolve(homedir(), ".commit-tools");
+const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
 
 /**
  * Loads the configuration from the home directory.
  */
-export const loadConfig = (): Future<Error, Config> =>
+const loadConfig = (): Future<Error, Config> =>
   Future.attemptP(() => Bun.file(CONFIG_FILE).text())
     .mapRej(err => new Error(`Failed to read config file: ${err}`))
     .map((value) => JSON.parse(value))
@@ -27,7 +29,7 @@ export const loadConfig = (): Future<Error, Config> =>
 /**
  * Saves the configuration to the home directory.
  */
-export const saveConfig = (config: Config): Future<Error, void> =>
+const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
     await mkdir(CONFIG_DIR, { recursive: true });
     await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
@@ -36,5 +38,5 @@ export const saveConfig = (config: Config): Future<Error, void> =>
 /**
  * Persists refreshed OAuth tokens without rewriting the entire config.
  */
-export const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
+const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
   loadConfig().chain(config => saveConfig({ ...config, tokens }));

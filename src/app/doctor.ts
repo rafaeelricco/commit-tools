@@ -1,11 +1,14 @@
+export { executeDoctorFlow };
+
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/app/storage";
-import type { Dependencies } from "@/app/integrations";
 import { exists } from "fs/promises";
+import { type Dependencies } from "@/app/integrations";
+
 import color from "picocolors";
 import Table from "cli-table3";
 
-export const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
+const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
   Future.attemptP(async () => {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],

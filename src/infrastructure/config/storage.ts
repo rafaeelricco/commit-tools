@@ -4,9 +4,9 @@ import { Future } from "@/future";
 import { resolve } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
-import { Config } from "@domain/config/schema";
+import { Config, type OAuthTokens } from "@domain/config/schema";
 
-export const CONFIG_DIR = resolve(homedir(), ".commit-gen");
+export const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 export const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
 
 /**
@@ -32,3 +32,9 @@ export const saveConfig = (config: Config): Future<Error, void> =>
     await mkdir(CONFIG_DIR, { recursive: true });
     await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
   });
+
+/**
+ * Persists refreshed OAuth tokens without rewriting the entire config.
+ */
+export const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
+  loadConfig().chain(config => saveConfig({ ...config, tokens }));

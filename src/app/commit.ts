@@ -1,3 +1,5 @@
+export { executeCommitFlow };
+
 import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
@@ -49,7 +51,7 @@ const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCred
   return Future.resolve(creds);
 };
 
-export const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
+const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
   loadConfig()
     .chainRej(() => {
       p.log.warn(color.yellow("No configuration found. Let's set you up first."));

@@ -1,33 +1,47 @@
+export {
+  CommitConvention,
+  AuthMethod,
+  OAuthTokens,
+  Config,
+  performOAuthFlow,
+  createAuthenticatedClient,
+  ensureFreshTokens,
+  validateOAuthTokens,
+  getAccessToken,
+};
+
 import * as s from "@/libs/json/schema";
+
 
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
 import { type Dependencies } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
 
-export const CommitConvention = s.stringEnum(["conventional", "imperative", "custom"]);
-export type CommitConvention = s.Infer<typeof CommitConvention>;
+const CommitConvention = s.stringEnum(["conventional", "imperative", "custom"]);
+type CommitConvention = s.Infer<typeof CommitConvention>;
 
-export const AuthMethod = s.stringEnum(["api_key", "oauth"]);
-export type AuthMethod = s.Infer<typeof AuthMethod>;
+const AuthMethod = s.stringEnum(["api_key", "oauth"]);
+type AuthMethod = s.Infer<typeof AuthMethod>;
 
-export const OAuthTokens = s.object({
+const OAuthTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
   expiry_date: s.number,
   token_type: s.string,
   scope: s.string,
 });
-export type OAuthTokens = s.Infer<typeof OAuthTokens>;
+type OAuthTokens = s.Infer<typeof OAuthTokens>;
 
-export const Config = s.object({
+const Config = s.object({
   auth_method: s.optionalDefault("api_key" as AuthMethod, AuthMethod),
   api_key: s.optional(s.string),
   tokens: s.optional(OAuthTokens),
   commit_convention: CommitConvention,
   custom_template: s.optional(s.string),
 });
-export type Config = s.Infer<typeof Config>;
+type Config = s.Infer<typeof Config>;
+
 
 
 const SCOPES = [
@@ -200,7 +214,7 @@ const exchangeCodeForTokens = (
     };
   }).mapRej(e => new Error(`Token exchange failed: ${e}`));
 
-export const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
+const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
   findAvailablePort().chain(port => {
     const redirectUri = `http://127.0.0.1:${port}/callback`;
     const codeVerifier = generateCodeVerifier();
@@ -244,7 +258,7 @@ export const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens>
     );
   });
 
-export const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): OAuth2Client => {
+const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): OAuth2Client => {
   const client = new OAuth2Client({
     clientId: deps.oauth.clientId,
     clientSecret: deps.oauth.clientSecret,
@@ -261,7 +275,7 @@ export const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthToken
   return client;
 };
 
-export const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
+const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
 
   if (!isExpired) {
@@ -296,12 +310,12 @@ export const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Futu
   });
 };
 
-export const validateOAuthTokens = (tokens: OAuthTokens): Future<Error, void> =>
+const validateOAuthTokens = (tokens: OAuthTokens): Future<Error, void> =>
   tokens.access_token && tokens.access_token.length > 0
     ? Future.resolve(undefined)
     : Future.reject(new Error("No valid access token available"));
 
-export const getAccessToken = (tokens: OAuthTokens): Future<Error, string> =>
+const getAccessToken = (tokens: OAuthTokens): Future<Error, string> =>
   tokens.access_token
     ? Future.resolve(tokens.access_token)
     : Future.reject(new Error("No access token provided"));

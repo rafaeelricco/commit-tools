@@ -1,3 +1,5 @@
+export { type AuthCredentials, generateCommitMessage, refineCommitMessage, getAuthCredentials };
+
 import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
 import { Future } from "@/libs/future";
 import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
@@ -6,11 +8,11 @@ import { getPrompt } from "@/app/services/prompts";
 const GEMINI_MODEL = "gemini-flash-lite-latest";
 const GEMINI_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-export type AuthCredentials =
+type AuthCredentials =
   | { readonly method: "byok"; readonly apiKey: string }
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
-export const getAuthCredentials = (config: Config): AuthCredentials | null => {
+const getAuthCredentials = (config: Config): AuthCredentials | null => {
   if (config.auth_method === "oauth" && config.tokens !== undefined) {
     return { method: "oauth", tokens: config.tokens };
   }
@@ -99,7 +101,7 @@ const generateContent = (
   }
 };
 
-export const generateCommitMessage = (
+const generateCommitMessage = (
   auth: AuthCredentials,
   diff: string,
   convention: CommitConvention,
@@ -107,7 +109,7 @@ export const generateCommitMessage = (
 ): Future<Error, string> =>
   generateContent(auth, { prompt: getPrompt(diff, convention, customTemplate) });
 
-export const refineCommitMessage = (
+const refineCommitMessage = (
   auth: AuthCredentials,
   currentMessage: string,
   adjustment: string,

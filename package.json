@@ -12,7 +12,8 @@
     "test": "bun test",
     "compile": "bun run build",
     "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
-    "install:global": "bun link"
+    "install:global": "bun link",
+    "typecheck": "tsc --noEmit"
   },
   "files": [
     "dist"

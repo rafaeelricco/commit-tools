@@ -6,10 +6,10 @@ export {
   traverse_,
 };
 
-import { Trampoline, end, tailRecursive } from '@/trampoline';
-import { List } from '@/list';
+import { Trampoline, end, tailRecursive } from '@/libs/trampoline';
+import { List } from '@/libs/list';
 
-import Callable from '@/callable';
+import Callable from '@/libs/callable';
 
 type Result<E, T> = Success<E, T> | Failure<E, T>;
 

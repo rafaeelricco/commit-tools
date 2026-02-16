@@ -62,10 +62,10 @@ export {
   recursive,
 };
 
-import { Result, Success, Failure, traverse } from '@/result';
-import { Maybe, Just, Nothing, Nullable } from '@/maybe';
-import { List } from '@/list';
-import { Json } from '@/json/types';
+import { Result, Success, Failure, traverse } from '@/libs/result';
+import { Maybe, Just, Nothing, Nullable } from '@/libs/maybe';
+import { List } from '@/libs/list';
+import { Json } from '@/libs/json/types';
 
 // Infer the type from a decoder definition
 type Infer<A extends Decoder<unknown>> = A extends Decoder<infer B> ? B : never;

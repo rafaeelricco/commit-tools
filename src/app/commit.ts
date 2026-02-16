@@ -1,11 +1,10 @@
 import * as p from "@clack/prompts";
 
-import { Future } from "@/future";
-import { loadConfig } from "@infra/config/storage";
-import { updateTokens } from "@infra/config/storage";
-import { executeSetupFlow } from "@app/setup/setupFlow";
-import { CommitConvention, type Config } from "@domain/config/schema";
-import type { Dependencies } from "@infra/config/integrations";
+import { Future } from "@/libs/future";
+import { loadConfig, updateTokens } from "@/app/storage";
+import { executeSetupFlow } from "@/app/setup";
+import { CommitConvention, type Config, ensureFreshTokens } from "@/app/services/googleAuth";
+import type { Dependencies } from "@/app/integrations";
 import {
   checkIsGitRepo,
   getStagedDiff,
@@ -14,14 +13,13 @@ import {
   getCurrentBranch,
   hasUpstream,
   NoStagedChanges,
-} from "@infra/git";
+} from "@/app/services";
 import {
   generateCommitMessage,
   refineCommitMessage,
   getAuthCredentials,
   type AuthCredentials,
-} from "@infra/ai/gemini";
-import { ensureFreshTokens } from "@infra/auth/googleAuth";
+} from "@/app/services/gemini";
 
 import color from "picocolors";
 

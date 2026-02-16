@@ -37,16 +37,16 @@ export {
   recursive,
 };
 
-import * as decoder from '@/json/decoder';
-import * as encoder from '@/json/encoder';
-import { Result } from '@/result';
-import { Decoder, DecoderDef } from '@/json/decoder';
-import * as D from '@/json/decoder';
-import { Encoder, EncoderDef } from '@/json/encoder';
-import { Json } from '@/json/types';
-import * as E from '@/json/encoder';
-import { Maybe, Nullable } from '@/maybe';
-import { filterMap, mapValues } from '@/helpers/object';
+import * as decoder from '@/libs/json/decoder';
+import * as encoder from '@/libs/json/encoder';
+import { Result } from '@/libs/result';
+import { Decoder, DecoderDef } from '@/libs/json/decoder';
+import * as D from '@/libs/json/decoder';
+import { Encoder, EncoderDef } from '@/libs/json/encoder';
+import { Json } from '@/libs/json/types';
+import * as E from '@/libs/json/encoder';
+import { Maybe, Nullable } from '@/libs/maybe';
+import { filterMap, mapValues } from '@/libs/helpers/object';
 
 // Infer the type from a schema definition
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

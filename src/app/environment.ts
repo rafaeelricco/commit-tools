@@ -8,7 +8,7 @@
 // - Handled consistently
 // - Visible in a single place.
 
-import * as D from "@/json/decoder";
+import * as D from "@/libs/json/decoder";
 
 type Environment = D.Infer<typeof envDecoder>;
 

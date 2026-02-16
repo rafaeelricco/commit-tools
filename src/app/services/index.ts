@@ -1,4 +1,4 @@
-import { Future } from "@/future";
+import { Future } from "@/libs/future";
 import { unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";

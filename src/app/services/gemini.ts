@@ -1,8 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Future } from "@/future";
-import { CommitConvention, type Config, type OAuthTokens } from "@domain/config/schema";
-import { getPrompt } from "@domain/commit/prompts";
-import { getAccessToken } from "@infra/auth/googleAuth";
+import { Future } from "@/libs/future";
+import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
+import { getPrompt } from "@/app/services/prompts";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
 const GEMINI_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models";

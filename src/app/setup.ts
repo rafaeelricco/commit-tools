@@ -1,11 +1,10 @@
 import * as p from "@clack/prompts";
 
-import { Future } from "@/future";
-import { saveConfig } from "@infra/config/storage";
-import { CommitConvention, type AuthMethod, type Config } from "@domain/config/schema";
-import type { Dependencies } from "@infra/config/integrations";
+import { Future } from "@/libs/future";
+import { saveConfig } from "@/app/storage";
+import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
+import type { Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { performOAuthFlow, validateOAuthTokens } from "@infra/auth/googleAuth";
 
 import color from "picocolors";
 

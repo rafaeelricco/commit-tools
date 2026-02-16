@@ -1,4 +1,4 @@
-import { CommitConvention } from "@domain/config/schema";
+import { CommitConvention } from "@/app/services/googleAuth";
 
 export function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
   switch (convention) {

@@ -6,8 +6,8 @@ export {
   CallableLoading as Loading,
 };
 
-import { Nullable, Maybe, Nothing, Just } from '@/maybe';
-import Callable from '@/callable';
+import { Nullable, Maybe, Nothing, Just } from '@/libs/maybe';
+import Callable from '@/libs/callable';
 
 type RemoteData<E, T> =
   | NotAsked<E, T>

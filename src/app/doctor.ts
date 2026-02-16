@@ -1,6 +1,6 @@
-import { Future } from "@/future";
-import { CONFIG_FILE, loadConfig } from "@infra/config/storage";
-import type { Dependencies } from "@infra/config/integrations";
+import { Future } from "@/libs/future";
+import { CONFIG_FILE, loadConfig } from "@/app/storage";
+import type { Dependencies } from "@/app/integrations";
 import { exists } from "fs/promises";
 import color from "picocolors";
 import Table from "cli-table3";

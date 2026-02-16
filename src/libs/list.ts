@@ -1,6 +1,6 @@
 export { List };
 
-import { Maybe, Just, Nothing } from '@/maybe';
+import { Maybe, Just, Nothing } from '@/libs/maybe';
 
 type Content<T> = { head: T; tail: List<T> } | { empty: null };
 

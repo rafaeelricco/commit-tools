@@ -1,6 +1,6 @@
 export { type Dependencies, configureDependencies };
 
-import environment from "@infra/config/environment";
+import environment from "@/app/environment";
 
 type Dependencies = {
   readonly oauth: {

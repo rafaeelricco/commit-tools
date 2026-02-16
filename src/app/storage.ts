@@ -1,10 +1,10 @@
-import * as s from "@/json/schema";
+import * as s from "@/libs/json/schema";
 
-import { Future } from "@/future";
+import { Future } from "@/libs/future";
 import { resolve } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
-import { Config, type OAuthTokens } from "@domain/config/schema";
+import { Config, type OAuthTokens } from "@/app/services/googleAuth";
 
 export const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 export const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");

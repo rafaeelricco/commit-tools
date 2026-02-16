@@ -2,7 +2,7 @@ export { Future, type Cancel };
 
 import * as F from 'fluture';
 
-import { Result, Success, Failure } from '@/result';
+import { Result, Success, Failure } from '@/libs/result';
 import { FutureInstance } from 'fluture';
 
 type Cancel = () => void;

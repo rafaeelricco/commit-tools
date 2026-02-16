@@ -27,8 +27,8 @@ export {
   recursive,
 };
 
-import { Maybe, Nothing, Just, Nullable } from '@/maybe';
-import { Json, JsonObject } from '@/json/types';
+import { Maybe, Nothing, Just, Nullable } from '@/libs/maybe';
+import { Json, JsonObject } from '@/libs/json/types';
 
 // Infer the type from a encoder definition
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

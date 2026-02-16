@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { executeCommitFlow } from "@app/commit/generateCommit";
-import { executeSetupFlow } from "@app/setup/setupFlow";
-import { executeDoctorFlow } from "@app/doctor/doctorFlow";
-import { configureDependencies } from "@infra/config/integrations";
-import { Future } from "@/future";
+import { executeCommitFlow } from "@/app/commit";
+import { executeSetupFlow } from "@/app/setup";
+import { executeDoctorFlow } from "@/app/doctor";
+import { configureDependencies } from "@/app/integrations";
+import { Future } from "@/libs/future";
 
 import color from "picocolors";
 

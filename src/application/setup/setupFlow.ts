@@ -2,12 +2,14 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/future";
 import { saveConfig } from "@infra/config/storage";
-import { CommitConvention } from "@domain/config/schema";
+import { CommitConvention, type AuthMethod, type Config } from "@domain/config/schema";
+import type { Dependencies } from "@infra/config/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { performOAuthFlow, validateOAuthTokens } from "@infra/auth/googleAuth";
 
 import color from "picocolors";
 
-export const executeSetupFlow = (): Future<Error, void> => {
+export const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
   return Future.attemptP(async () => {
     p.intro(color.bgCyan(color.black(" Commit Gen Setup ")));
 
@@ -33,25 +35,100 @@ export const executeSetupFlow = (): Future<Error, void> => {
       customTemplate = template;
     }
 
+    const authMethod = await p.select({
+      message: "Select authentication method:",
+      options: [
+        { value: "oauth", label: "Google OAuth (recommended)", hint: "Opens browser for Google sign-in" },
+        { value: "api_key", label: "API Key", hint: "Paste a Google AI Studio API key" },
+      ],
+      initialValue: "oauth",
+    });
+
+    if (p.isCancel(authMethod)) throw new Error("Setup cancelled");
+
+    return {
+      convention: convention as CommitConvention,
+      customTemplate,
+      authMethod: authMethod as AuthMethod,
+    };
+  }).chain(({ convention, customTemplate, authMethod }) => {
+    switch (authMethod) {
+      case "oauth":
+        return setupOAuth(deps, convention, customTemplate);
+      case "api_key":
+        return setupApiKey(convention, customTemplate);
+    }
+  });
+};
+
+const setupOAuth = (
+  deps: Dependencies,
+  convention: CommitConvention,
+  customTemplate: string | undefined,
+): Future<Error, void> => {
+  p.log.info("Opening browser for Google sign-in...");
+
+  return performOAuthFlow(deps)
+    .chain(tokens => {
+      const s = p.spinner();
+      s.start("Validating OAuth tokens...");
+
+      return validateOAuthTokens(tokens)
+        .chain(() => {
+          s.stop("OAuth tokens validated!");
+
+          const config: Config = {
+            auth_method: "oauth",
+            api_key: undefined,
+            tokens,
+            commit_convention: convention,
+            custom_template: customTemplate,
+          };
+
+          return saveConfig(config);
+        })
+        .map(() => {
+          p.outro(color.green("Setup complete! Authenticated via Google OAuth."));
+        })
+        .mapRej(e => {
+          s.stop(color.red("OAuth validation failed."));
+          return e;
+        });
+    })
+    .mapRej(e => {
+      p.log.error(color.red(e.message));
+      return e;
+    });
+};
+
+const setupApiKey = (
+  convention: CommitConvention,
+  customTemplate: string | undefined,
+): Future<Error, void> =>
+  Future.attemptP(async () => {
     const apiKey = await p.password({
       message: "Enter your GOOGLE_API_KEY:",
       validate: value => (!value || value.length < 10 ? "API Key is too short" : undefined),
     });
 
     if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
-
-    return {
-      api_key: apiKey,
-      commit_convention: convention as CommitConvention,
-      custom_template: customTemplate,
-    };
-  }).chain(config => {
+    return apiKey;
+  }).chain(apiKey => {
     const s = p.spinner();
     s.start("Validating API key...");
-    
-    return validateApiKey(config.api_key)
+
+    return validateApiKey(apiKey)
       .chain(() => {
         s.stop("API key validated!");
+
+        const config: Config = {
+          auth_method: "api_key",
+          api_key: apiKey,
+          tokens: undefined,
+          commit_convention: convention,
+          custom_template: customTemplate,
+        };
+
         return saveConfig(config);
       })
       .map(() => {
@@ -62,7 +139,6 @@ export const executeSetupFlow = (): Future<Error, void> => {
         return e;
       });
   });
-};
 
 const validateApiKey = (apiKey: string): Future<Error, void> => {
   const genAI = new GoogleGenerativeAI(apiKey);

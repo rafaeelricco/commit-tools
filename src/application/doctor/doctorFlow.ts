@@ -1,35 +1,73 @@
 import { Future } from "@/future";
-import { CONFIG_FILE } from "@infra/config/storage";
+import { CONFIG_FILE, loadConfig } from "@infra/config/storage";
+import type { Dependencies } from "@infra/config/integrations";
 import { exists } from "fs/promises";
 import color from "picocolors";
 import Table from "cli-table3";
 
-export const executeDoctorFlow = (): Future<Error, void> =>
+export const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
   Future.attemptP(async () => {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
       colWidths: [20, 15, 40],
     });
 
-    // Runtime Check
     table.push(["Runtime", color.green("Bun"), Bun.version]);
 
-    // Platform Check
     table.push(["Platform", color.green("macOS"), process.platform]);
 
-    // Config Check
+    table.push([
+      "OAuth Credentials",
+      color.green("Configured"),
+      `Client ID: ${deps.oauth.clientId.slice(0, 12)}...`,
+    ]);
+
     const configExists = await exists(CONFIG_FILE);
     table.push([
       "Configuration",
       configExists ? color.green("Found") : color.yellow("Missing"),
-      configExists ? CONFIG_FILE : "Run 'commit-gen setup' to create",
+      configExists ? CONFIG_FILE : "Run 'commit-tools setup' to create",
     ]);
+
+    if (configExists) {
+      const configResult = await loadConfig().promiseR();
+
+      configResult.either(
+        () => {},
+        config => {
+          const authMethod = config.auth_method ?? "api_key";
+
+          table.push([
+            "Auth Method",
+            color.green(authMethod === "oauth" ? "OAuth" : "API Key"),
+            authMethod === "oauth"
+              ? "Google OAuth 2.0"
+              : "Google AI Studio API Key",
+          ]);
+
+          if (authMethod === "oauth" && config.tokens !== undefined) {
+            const now = Date.now();
+            const expiryDate = config.tokens.expiry_date;
+            const isExpired = expiryDate <= now;
+            const expiryStr = new Date(expiryDate).toLocaleString();
+
+            table.push([
+              "Token Status",
+              isExpired ? color.yellow("Expired") : color.green("Valid"),
+              isExpired
+                ? `Expired at ${expiryStr} (will auto-refresh)`
+                : `Expires at ${expiryStr}`,
+            ]);
+          }
+        },
+      );
+    }
 
     process.stdout.write("\n" + table.toString() + "\n\n");
 
     if (!configExists) {
-      process.stdout.write(color.yellow("! Please run 'commit-gen setup' to configure your API key.\n\n"));
+      process.stdout.write(color.yellow("! Please run 'commit-tools setup' to configure your API key.\n\n"));
     } else {
-      process.stdout.write(color.green("✓ System is ready to generate commits!\n\n"));
+      process.stdout.write(color.green("System is ready to generate commits!\n\n"));
     }
   });

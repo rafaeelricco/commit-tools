@@ -6,7 +6,6 @@ import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from 
 import { getPrompt } from "@/app/services/prompts";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
-const GEMINI_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type AuthCredentials =
   | { readonly method: "byok"; readonly apiKey: string }
@@ -53,7 +52,7 @@ const generateContentWithOAuth = (
 ): Future<Error, string> =>
   getAccessToken(tokens).chain(accessToken =>
     Future.attemptP(async () => {
-      const url = `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
       const contents = [{ parts: [{ text: params.prompt }] }];
       const body: Record<string, unknown> = { contents };

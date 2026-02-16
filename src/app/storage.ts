@@ -11,9 +11,6 @@ import { Config, type OAuthTokens } from "@/app/services/googleAuth";
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
 
-/**
- * Loads the configuration from the home directory.
- */
 const loadConfig = (): Future<Error, Config> =>
   Future.attemptP(() => Bun.file(CONFIG_FILE).text())
     .mapRej(err => new Error(`Failed to read config file: ${err}`))
@@ -26,17 +23,11 @@ const loadConfig = (): Future<Error, Config> =>
       );
     });
 
-/**
- * Saves the configuration to the home directory.
- */
 const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
     await mkdir(CONFIG_DIR, { recursive: true });
     await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
   });
 
-/**
- * Persists refreshed OAuth tokens without rewriting the entire config.
- */
 const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
   loadConfig().chain(config => saveConfig({ ...config, tokens }));

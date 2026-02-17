@@ -8,7 +8,7 @@ import { Future } from "@/libs/future";
 import color from "picocolors";
 
 const main = () => {
-  const { oauth } = configureDependencies();
+  const deps = configureDependencies();
   const args = process.argv.slice(2);
   const command = args[0] || "generate";
 
@@ -16,14 +16,14 @@ const main = () => {
 
   switch (command) {
     case "generate":
-      action = executeCommitFlow({ oauth });
+      action = executeCommitFlow(deps);
       break;
     case "setup":
     case "login":
-      action = executeSetupFlow({ oauth });
+      action = executeSetupFlow(deps);
       break;
     case "doctor":
-      action = executeDoctorFlow({ oauth });
+      action = executeDoctorFlow(deps);
       break;
     case "--version":
     case "-v": {

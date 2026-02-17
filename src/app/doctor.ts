@@ -19,11 +19,13 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
 
     table.push(["Platform", color.green("macOS"), process.platform]);
 
-    table.push([
-      "OAuth Credentials",
-      color.green("Configured"),
-      `Client ID: ${deps.oauth.clientId.slice(0, 12)}...`,
-    ]);
+    const oauthResult = await deps.resolveOAuth().promiseR();
+    const [oauthStatus, oauthInfo] = oauthResult.either(
+      () => [color.yellow("Missing"), "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set"],
+      ok => [color.green("Configured"), `Client ID: ${ok.clientId.slice(0, 12)}...`]
+    );
+
+    table.push(["OAuth Credentials", oauthStatus, oauthInfo]);
 
     const configExists = await exists(CONFIG_FILE);
     table.push([

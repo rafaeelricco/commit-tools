@@ -215,26 +215,27 @@ const exchangeCodeForTokens = (
   }).mapRej(e => new Error(`Token exchange failed: ${e}`));
 
 const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
-  findAvailablePort().chain(port => {
-    const redirectUri = `http://127.0.0.1:${port}/callback`;
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = generateCodeChallenge(codeVerifier);
-    const state = randomBytes(32).toString("hex");
+  deps.resolveOAuth().chain(oauth =>
+    findAvailablePort().chain(port => {
+      const redirectUri = `http://127.0.0.1:${port}/callback`;
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = generateCodeChallenge(codeVerifier);
+      const state = randomBytes(32).toString("hex");
 
-    const client = new OAuth2Client({
-      clientId: deps.oauth.clientId,
-      clientSecret: deps.oauth.clientSecret,
-      redirectUri,
-    });
+      const client = new OAuth2Client({
+        clientId: oauth.clientId,
+        clientSecret: oauth.clientSecret,
+        redirectUri,
+      });
 
-    const authUrl = client.generateAuthUrl({
-      access_type: "offline",
-      prompt: "consent",
-      scope: SCOPES,
-      code_challenge: codeChallenge,
-      code_challenge_method: CodeChallengeMethod.S256,
-      state,
-    });
+      const authUrl = client.generateAuthUrl({
+        access_type: "offline",
+        prompt: "consent",
+        scope: SCOPES,
+        code_challenge: codeChallenge,
+        code_challenge_method: CodeChallengeMethod.S256,
+        state,
+      });
 
     return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
       startCallbackServer(port, state),
@@ -256,24 +257,26 @@ const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
           .chain(code => exchangeCodeForTokens(client, code, codeVerifier, redirectUri));
       },
     );
-  });
+  })
+);
 
-const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): OAuth2Client => {
-  const client = new OAuth2Client({
-    clientId: deps.oauth.clientId,
-    clientSecret: deps.oauth.clientSecret,
-  });
+const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuth2Client> =>
+  deps.resolveOAuth().map(oauth => {
+    const client = new OAuth2Client({
+      clientId: oauth.clientId,
+      clientSecret: oauth.clientSecret,
+    });
 
-  client.setCredentials({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expiry_date: tokens.expiry_date,
-    token_type: tokens.token_type,
-    scope: tokens.scope,
-  });
+    client.setCredentials({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date,
+      token_type: tokens.token_type,
+      scope: tokens.scope,
+    });
 
-  return client;
-};
+    return client;
+  });
 
 const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
@@ -282,23 +285,23 @@ const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Erro
     return Future.resolve(tokens);
   }
 
-  return Future.attemptP(async () => {
-    const client = createAuthenticatedClient(deps, tokens);
+  return createAuthenticatedClient(deps, tokens).chain(client =>
+    Future.attemptP(async () => {
+      const { credentials } = await client.refreshAccessToken();
 
-    const { credentials } = await client.refreshAccessToken();
+      if (!credentials.access_token) {
+        throw new Error("Token refresh returned no access_token");
+      }
 
-    if (!credentials.access_token) {
-      throw new Error("Token refresh returned no access_token");
-    }
-
-    return {
-      access_token: credentials.access_token,
-      refresh_token: credentials.refresh_token ?? tokens.refresh_token,
-      expiry_date: credentials.expiry_date ?? Date.now() + 3600 * 1000,
-      token_type: credentials.token_type ?? tokens.token_type,
-      scope: credentials.scope ?? tokens.scope,
-    };
-  }).mapRej(err => {
+      return {
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token ?? tokens.refresh_token,
+        expiry_date: credentials.expiry_date ?? Date.now() + 3600 * 1000,
+        token_type: credentials.token_type ?? tokens.token_type,
+        scope: credentials.scope ?? tokens.scope,
+      };
+    })
+  ).mapRej(err => {
     const message = String(err);
     if (message.includes("invalid_grant")) {
       return new Error("OAuth tokens have been revoked. Please run 'commit-tools setup' or 'commit-tools login' to re-authenticate.");

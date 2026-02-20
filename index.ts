@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { executeCommitFlow } from "@/app/commit";
+import { Commit } from "@/app/commit";
 import { executeSetupFlow } from "@/app/setup";
 import { executeDoctorFlow } from "@/app/doctor";
 import { configureDependencies } from "@/app/integrations";
@@ -16,7 +16,7 @@ const main = () => {
 
   switch (command) {
     case "generate":
-      action = executeCommitFlow(deps);
+      action = Commit.create(deps).chain((flow) => flow.run());
       break;
     case "setup":
     case "login":

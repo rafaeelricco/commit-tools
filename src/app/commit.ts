@@ -22,9 +22,32 @@ import {
   getAuthCredentials,
   type AuthCredentials
 } from "@/app/services/gemini";
-import { Nothing } from "@/libs/maybe";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
 import color from "picocolors";
+
+const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
+type UserAction = (typeof USER_ACTIONS)[number];
+
+type LoopContext = {
+  readonly auth: AuthCredentials;
+  readonly diff: string;
+  readonly message: string;
+};
+
+const loading = <T>(loadingMessage: string, stopLabel: string, f: Future<Error, T>): Future<Error, T> => {
+  const s = p.spinner();
+  s.start(loadingMessage);
+  return f
+    .map((v) => {
+      s.stop(stopLabel);
+      return v;
+    })
+    .mapRej((e) => {
+      s.stop("Failed.");
+      return e;
+    });
+};
 
 const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCredentials> => {
   const credentials = getAuthCredentials(config);
@@ -59,18 +82,15 @@ const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
       return executeSetupFlow(deps).chain(() => loadConfig());
     })
     .chain((config) =>
-      resolveAuth(deps, config).chain((auth) =>
-        checkIsGitRepo().chain(() =>
-          getStagedDiff().chain((diff) =>
-            generateWithSpinner(
-              auth,
-              diff,
-              config.commit_convention,
-              config.custom_template.maybe(undefined, (t) => t)
-            ).chain((message) => interactionLoop(auth, diff, message))
+      resolveAuth(deps, config).chain((auth) => {
+        const template = config.custom_template.maybe(undefined, (t) => t);
+        return checkIsGitRepo()
+          .chain(() => getStagedDiff())
+          .chain((diff) =>
+            generateCommit(auth, diff, config.commit_convention, template).map((message) => ({ auth, diff, message }))
           )
-        )
-      )
+          .chain(interactionLoop);
+      })
     )
     .mapRej((e) => {
       if (e instanceof Error) {
@@ -79,28 +99,74 @@ const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
       return e;
     });
 
-const generateWithSpinner = (
+const generateCommit = (
   auth: AuthCredentials,
   diff: string,
   convention: CommitConvention,
   customTemplate?: string
-): Future<Error, string> => {
-  const s = p.spinner();
-  s.start("Generating commit message...");
-  return generateCommitMessage(auth, diff, convention, customTemplate)
-    .map((msg) => {
-      s.stop("Message generated!");
-      return msg;
-    })
-    .mapRej((e) => {
-      s.stop("Generation failed.");
-      return e;
-    });
-};
+): Future<Error, string> =>
+  loading(
+    "Generating commit message...",
+    "Message generated!",
+    generateCommitMessage(auth, diff, convention, customTemplate)
+  );
 
-const interactionLoop = (auth: AuthCredentials, diff: string, message: string): Future<Error, void> => {
-  return Future.attemptP(async () => {
-    p.note(message, "Proposed Commit Message");
+const handleCommit = (message: string): Future<Error, void> =>
+  performCommit(message).map((stats) => {
+    process.stdout.write(stats);
+    p.outro(color.green("Committed successfully!"));
+  });
+
+const promptPublishBranch = (): Future<Error, void> =>
+  getCurrentBranch().chain((branch) =>
+    Future.attemptP(async () => {
+      const publish = await p.confirm({
+        message: `Branch '${branch}' has no upstream. Publish to origin?`
+      });
+      return !(p.isCancel(publish) || !publish);
+    }).chain((shouldPublish) =>
+      shouldPublish ?
+        loading(`Publishing '${branch}'...`, "Published successfully!", performPush(branch, true)).map(() => {})
+      : Future.resolve(undefined)
+    )
+  );
+
+const pushAfterCommit = (): Future<Error, void> =>
+  hasUpstream().chain((exists) =>
+    exists ? loading("Pushing...", "Pushed successfully!", performPush()).map(() => {}) : promptPublishBranch()
+  );
+
+const handleCommitAndPush = (message: string): Future<Error, void> =>
+  performCommit(message)
+    .chain((stats) => {
+      process.stdout.write(stats);
+      return pushAfterCommit();
+    })
+    .map(() => {
+      p.outro(color.green("Done!"));
+    });
+
+const promptAdjustment = (): Future<Error, Maybe<string>> =>
+  Future.attemptP(async () => {
+    const adj = await p.text({
+      message: "What adjustments would you like?",
+      placeholder: "e.g. make it more concise"
+    });
+    return p.isCancel(adj) ? Nothing<string>() : Just(adj as string);
+  });
+
+const handleAdjust = (ctx: LoopContext): Future<Error, void> =>
+  promptAdjustment().chain((maybeAdj) =>
+    maybeAdj instanceof Nothing ?
+      interactionLoop(ctx)
+    : loading("Refining...", "Refined!", refineCommitMessage(ctx.auth, ctx.message, maybeAdj.value, ctx.diff)).chain(
+        (message) => interactionLoop({ ...ctx, message })
+      )
+  );
+
+const interactionLoop = (ctx: LoopContext): Future<Error, void> =>
+  Future.attemptP(async () => {
+    p.note(ctx.message, "Proposed Commit Message");
 
     const action = await p.select({
       message: "What would you like to do?",
@@ -115,70 +181,23 @@ const interactionLoop = (auth: AuthCredentials, diff: string, message: string): 
 
     if (p.isCancel(action) || action === "cancel") {
       p.outro("Operation cancelled.");
-      return "cancel";
+      return "cancel" as UserAction;
     }
 
-    return action as string;
+    return action as UserAction;
   }).chain((action) => {
     switch (action) {
       case "commit":
-        return performCommit(message).map((stats) => {
-          process.stdout.write(stats);
-          p.outro(color.green("Committed successfully!"));
-        });
+        return handleCommit(ctx.message);
       case "commit_push":
-        return performCommit(message)
-          .chain((stats) => {
-            process.stdout.write(stats);
-            return hasUpstream().chain((exists) => {
-              if (exists) {
-                const s = p.spinner();
-                s.start("Pushing...");
-                return performPush().map(() => s.stop("Pushed successfully!"));
-              } else {
-                return getCurrentBranch().chain((branch) =>
-                  Future.attemptP(async () => {
-                    const publish = await p.confirm({
-                      message: `Branch '${branch}' has no upstream. Publish to origin?`
-                    });
-                    if (p.isCancel(publish) || !publish) return "skip_push";
-                    return "publish";
-                  }).chain((pubAction) => {
-                    if (pubAction === "skip_push") return Future.resolve(undefined);
-                    const s = p.spinner();
-                    s.start(`Publishing '${branch}'...`);
-                    return performPush(branch, true).map(() => s.stop("Published successfully!"));
-                  })
-                );
-              }
-            });
-          })
-          .map(() => {
-            p.outro(color.green("Done!"));
-          });
+        return handleCommitAndPush(ctx.message);
       case "regenerate":
-        return generateWithSpinner(auth, diff, "imperative").chain((newMsg) => interactionLoop(auth, diff, newMsg));
+        return generateCommit(ctx.auth, ctx.diff, "imperative").chain((message) =>
+          interactionLoop({ ...ctx, message })
+        );
       case "adjust":
-        return Future.attemptP(async () => {
-          const adj = await p.text({
-            message: "What adjustments would you like?",
-            placeholder: "e.g. make it more concise"
-          });
-          if (p.isCancel(adj)) return null;
-          return adj;
-        }).chain((adj) => {
-          if (!adj) return interactionLoop(auth, diff, message);
-          const s = p.spinner();
-          s.start("Refining...");
-          return refineCommitMessage(auth, message, adj, diff)
-            .map((newMsg) => {
-              s.stop("Refined!");
-              return newMsg;
-            })
-            .chain((newMsg) => interactionLoop(auth, diff, newMsg));
-        });
-      default:
+        return handleAdjust(ctx);
+      case "cancel":
         return Future.resolve(undefined);
     }
   });
-};

@@ -1,4 +1,10 @@
-export { type RemoteData, CallableSuccess as Ready, CallableFailure as Failed, CallableNotAsked as NotAsked, CallableLoading as Loading };
+export {
+  type RemoteData,
+  CallableSuccess as Ready,
+  CallableFailure as Failed,
+  CallableNotAsked as NotAsked,
+  CallableLoading as Loading
+};
 
 import { Nullable, Maybe, Nothing, Just } from "@/libs/maybe";
 import Callable from "@/libs/callable";

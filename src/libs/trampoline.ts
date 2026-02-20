@@ -44,7 +44,9 @@ class Rec<A> {
 
 type Fun<A extends unknown[], B> = (...args: A) => B;
 
-function fix<A extends unknown[], R>(f: Fun<[Fun<A, Trampoline<R>>, (r: R) => Trampoline<R>], Fun<A, Trampoline<R>>>): Fun<A, R> {
+function fix<A extends unknown[], R>(
+  f: Fun<[Fun<A, Trampoline<R>>, (r: R) => Trampoline<R>], Fun<A, Trampoline<R>>>
+): Fun<A, R> {
   let lazy_f: Fun<A, Trampoline<R>> = (..._: A) => {
     throw new Error("recursion error");
   };

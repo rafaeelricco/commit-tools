@@ -127,9 +127,13 @@ const both = <T, U>(left: Decoder<T>, right: Decoder<U>): Decoder<[T, U]> =>
     return Success([l.value, r.value]);
   });
 
-const string: Decoder<string> = new Decoder((v) => (typeof v === "string" ? Success(v) : failure("expected string but found " + typeof v)));
+const string: Decoder<string> = new Decoder((v) =>
+  typeof v === "string" ? Success(v) : failure("expected string but found " + typeof v)
+);
 
-const number: Decoder<number> = new Decoder((v) => (typeof v === "number" ? Success(v) : failure("expected number but found " + typeof v)));
+const number: Decoder<number> = new Decoder((v) =>
+  typeof v === "number" ? Success(v) : failure("expected number but found " + typeof v)
+);
 
 const stringNumber: Decoder<number> = string.chain((s) => {
   const v = parseInt(s, 10);
@@ -266,7 +270,9 @@ const maybe = <V>(decoder: Decoder<V>): Decoder<Maybe<V>> =>
 
 const nullable = <V>(decoder: Decoder<V>): Decoder<Nullable<V>> => oneOf([nullP, decoder]);
 
-const nullP: Decoder<null> = new Decoder((v) => (v === null ? Success(null) : failure("expected null but found " + typeof v)));
+const nullP: Decoder<null> = new Decoder((v) =>
+  v === null ? Success(null) : failure("expected null but found " + typeof v)
+);
 
 const undefinedP: Decoder<undefined> = new Decoder((v) =>
   v === undefined ? Success(undefined) : failure("expected `undefined` " + typeof v)

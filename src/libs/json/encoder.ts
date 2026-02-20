@@ -115,7 +115,8 @@ const triple = <A, B, C>(sA: Encoder<A>, sB: Encoder<B>, sC: Encoder<C>): Encode
 const maybe = <V>(encoder: Encoder<V>): Encoder<Maybe<V>> =>
   new Encoder((input) => (input instanceof Nothing ? { nothing: {} } : { just: encoder.run(input.value) }) as Json);
 
-const nullable = <V>(encoder: Encoder<V>): Encoder<Nullable<V>> => new Encoder((input) => (input === null ? null : encoder.run(input)));
+const nullable = <V>(encoder: Encoder<V>): Encoder<Nullable<V>> =>
+  new Encoder((input) => (input === null ? null : encoder.run(input)));
 
 // An encoder for object keys that omits the field if the value is Nothing.
 class EncoderOptional<A> {

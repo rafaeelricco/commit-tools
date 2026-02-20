@@ -110,7 +110,8 @@ class SchemaOptional<A> {
 }
 
 // An object field that may be absent.
-const optional = <A>(s: Schema<A>): SchemaOptional<A | undefined> => new SchemaOptional(D.optional(s.decoder), E.optional(s.encoder));
+const optional = <A>(s: Schema<A>): SchemaOptional<A | undefined> =>
+  new SchemaOptional(D.optional(s.decoder), E.optional(s.encoder));
 
 const optionalNullable = <A>(schema: Schema<NonNullable<A>>): SchemaOptional<Nullable<A>> =>
   new SchemaOptional(D.optionalNullable(schema.decoder), E.optionalNullable(schema.encoder));
@@ -170,7 +171,8 @@ const stringLiteral = <T extends string>(str: T): Schema<T> =>
     })
   );
 
-const stringEnum = <const T extends string[]>(strs: T): Schema<T[number]> => new Schema(D.stringEnum(strs), E.stringEnum(strs));
+const stringEnum = <const T extends string[]>(strs: T): Schema<T[number]> =>
+  new Schema(D.stringEnum(strs), E.stringEnum(strs));
 
 const oneOf = <V>(f: (v: V) => Schema<V>, ss: Array<Schema<V>>): Schema<V> =>
   new Schema(
@@ -178,7 +180,9 @@ const oneOf = <V>(f: (v: V) => Schema<V>, ss: Array<Schema<V>>): Schema<V> =>
     E.oneOf((v) => f(v).encoder)
   );
 
-const discriminatedUnion = <const Variants extends readonly Variant<any>[]>(vars: Variants): Schema<Infer<Variants[number]["schema"]>> => {
+const discriminatedUnion = <const Variants extends readonly Variant<any>[]>(
+  vars: Variants
+): Schema<Infer<Variants[number]["schema"]>> => {
   type Ty = Infer<Variants[number]["schema"]>;
   const d: D.Decoder<Ty> = D.oneOf(vars.map((v) => v.schema.decoder));
   const e: E.Encoder<Ty> = E.oneOf<Ty>((v) => {
@@ -225,10 +229,15 @@ type VariantDef<T extends string, A> = {
 };
 
 const variant = <const T extends string, const A>(def: VariantDef<T, A>): Variant<A> => {
-  const pattern = filterMap(def, (_, v): string | undefined => (typeof v == "string" ? v : undefined)) as Record<string, string>;
+  const pattern = filterMap(def, (_, v): string | undefined => (typeof v == "string" ? v : undefined)) as Record<
+    string,
+    string
+  >;
 
   if (Object.keys(pattern).length == 0) {
-    throw new Error("Invalid variant definition. No discriminant identified. Discriminant must be provided as a string");
+    throw new Error(
+      "Invalid variant definition. No discriminant identified. Discriminant must be provided as a string"
+    );
   }
 
   const schemaDef: SchemaDef<A> = mapValues(def, (_, value) =>
@@ -242,7 +251,8 @@ const variant = <const T extends string, const A>(def: VariantDef<T, A>): Varian
 };
 
 // Schema for a stringified JSON representation.
-const stringified = <T>(inner: Schema<T>): Schema<T> => new Schema(D.stringified(inner.decoder), E.stringified(inner.encoder));
+const stringified = <T>(inner: Schema<T>): Schema<T> =>
+  new Schema(D.stringified(inner.decoder), E.stringified(inner.encoder));
 
 const recursive = <T>(f: (s: Schema<T>) => Schema<T>): Schema<T> => {
   const baseEncoder: Encoder<T> = new Encoder((_) => {

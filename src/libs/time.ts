@@ -365,7 +365,10 @@ class Duration {
     // Chained factory methods (seconds → milliseconds) accumulate
     // IEEE-754 floating point errors (~10⁻¹⁵). Rounding to milliseconds is safe
     // as it's our internal precision and the error is far below this threshold.
-    const total = Duration.days(days).add(Duration.hours(hours)).add(Duration.minutes(minutes)).add(Duration.seconds(seconds));
+    const total = Duration.days(days)
+      .add(Duration.hours(hours))
+      .add(Duration.minutes(minutes))
+      .add(Duration.seconds(seconds));
 
     const millis = Math.round(total.asMilliseconds());
     return Just(Duration.milliseconds(negative ? -millis : millis));

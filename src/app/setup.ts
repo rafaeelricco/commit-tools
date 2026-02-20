@@ -4,7 +4,13 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
+import {
+  CommitConvention,
+  type AuthMethod,
+  type Config,
+  performOAuthFlow,
+  validateOAuthTokens
+} from "@/app/services/googleAuth";
 import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Just, Nothing } from "@/libs/maybe";
@@ -71,7 +77,11 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
   });
 };
 
-const setupOAuth = (deps: Dependencies, convention: CommitConvention, customTemplate: string | undefined): Future<Error, void> => {
+const setupOAuth = (
+  deps: Dependencies,
+  convention: CommitConvention,
+  customTemplate: string | undefined
+): Future<Error, void> => {
   p.log.info("Opening browser for Google sign-in...");
 
   return performOAuthFlow(deps)

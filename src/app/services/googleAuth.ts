@@ -98,7 +98,11 @@ const findAvailablePort = (): Future<Error, number> =>
   Future.create<Error, number>((reject, resolve) => {
     const tryPort = (port: number): void => {
       if (port > PORT_RANGE_END) {
-        reject(new Error(`No available port found in range ${PORT_RANGE_START}-${PORT_RANGE_END}. Close other applications and try again.`));
+        reject(
+          new Error(
+            `No available port found in range ${PORT_RANGE_START}-${PORT_RANGE_END}. Close other applications and try again.`
+          )
+        );
         return;
       }
 
@@ -194,7 +198,12 @@ const openBrowser = async (url: string): Promise<void> => {
   }
 };
 
-const exchangeCodeForTokens = (client: OAuth2Client, code: string, codeVerifier: string, redirectUri: string): Future<Error, OAuthTokens> =>
+const exchangeCodeForTokens = (
+  client: OAuth2Client,
+  code: string,
+  codeVerifier: string,
+  redirectUri: string
+): Future<Error, OAuthTokens> =>
   Future.attemptP(async () => {
     const { tokens } = await client.getToken({
       code,
@@ -238,19 +247,30 @@ const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
         state
       });
 
-      return Future.bracket<Error, CallbackServer, OAuthTokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
-        const waitForCode: Future<Error, string> = Future.attemptP(async () => {
-          await openBrowser(authUrl);
-          return cs.codePromise;
-        });
+      return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
+        startCallbackServer(port, state),
+        stopCallbackServer,
+        (cs) => {
+          const waitForCode: Future<Error, string> = Future.attemptP(async () => {
+            await openBrowser(authUrl);
+            return cs.codePromise;
+          });
 
-        const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-          return () =>
-            clearTimeout(setTimeout(() => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")), OAUTH_TIMEOUT_MS));
-        });
+          const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
+            return () =>
+              clearTimeout(
+                setTimeout(
+                  () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
+                  OAUTH_TIMEOUT_MS
+                )
+              );
+          });
 
-        return Future.race(waitForCode, timeout).chain((code) => exchangeCodeForTokens(client, code, codeVerifier, redirectUri));
-      });
+          return Future.race(waitForCode, timeout).chain((code) =>
+            exchangeCodeForTokens(client, code, codeVerifier, redirectUri)
+          );
+        }
+      );
     })
   );
 
@@ -300,10 +320,14 @@ const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Erro
     .mapRej((err) => {
       const message = String(err);
       if (message.includes("invalid_grant")) {
-        return new Error("OAuth tokens have been revoked. Please run 'commit-tools setup' or 'commit-tools login' to re-authenticate.");
+        return new Error(
+          "OAuth tokens have been revoked. Please run 'commit-tools setup' or 'commit-tools login' to re-authenticate."
+        );
       }
       if (message.includes("invalid_client")) {
-        return new Error("OAuth client credentials are invalid. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file.");
+        return new Error(
+          "OAuth client credentials are invalid. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file."
+        );
       }
       return new Error(`Token refresh failed: ${message}`);
     });

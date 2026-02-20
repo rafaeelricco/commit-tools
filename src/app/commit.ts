@@ -7,8 +7,20 @@ import { loadConfig, updateTokens } from "@/app/storage";
 import { executeSetupFlow } from "@/app/setup";
 import { CommitConvention, type Config, ensureFreshTokens } from "@/app/services/googleAuth";
 import type { Dependencies } from "@/app/integrations";
-import { checkIsGitRepo, getStagedDiff, performCommit, performPush, getCurrentBranch, hasUpstream } from "@/app/services";
-import { generateCommitMessage, refineCommitMessage, getAuthCredentials, type AuthCredentials } from "@/app/services/gemini";
+import {
+  checkIsGitRepo,
+  getStagedDiff,
+  performCommit,
+  performPush,
+  getCurrentBranch,
+  hasUpstream
+} from "@/app/services";
+import {
+  generateCommitMessage,
+  refineCommitMessage,
+  getAuthCredentials,
+  type AuthCredentials
+} from "@/app/services/gemini";
 
 import color from "picocolors";
 
@@ -21,7 +33,8 @@ const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCred
 
   if (creds.method === "oauth") {
     return ensureFreshTokens(deps, creds.tokens).chain((freshTokens) => {
-      const tokensChanged = freshTokens.access_token !== creds.tokens.access_token || freshTokens.expiry_date !== creds.tokens.expiry_date;
+      const tokensChanged =
+        freshTokens.access_token !== creds.tokens.access_token || freshTokens.expiry_date !== creds.tokens.expiry_date;
 
       const persist = tokensChanged ? updateTokens(freshTokens) : Future.resolve<Error, void>(undefined);
 

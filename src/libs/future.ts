@@ -76,7 +76,10 @@ class Future<E, T> {
   }
 
   static traverse<A, E, T>(f: (_: A) => Future<E, T>, xs: Array<A>): Future<E, Array<T>> {
-    return xs.reduce((acc, x) => acc.chain((ys) => f(x).map((y) => [...ys, y])), Future.resolve([]) as Future<E, Array<T>>);
+    return xs.reduce(
+      (acc, x) => acc.chain((ys) => f(x).map((y) => [...ys, y])),
+      Future.resolve([]) as Future<E, Array<T>>
+    );
   }
 
   static resolveAfter<E, T>(milliseconds: number, value: T): Future<E, T> {

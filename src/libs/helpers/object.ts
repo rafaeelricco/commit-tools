@@ -1,6 +1,9 @@
 export { filterKeys, filterMap, mapValues };
 
-function filterKeys<O extends object, K extends keyof O>(obj: O, pred: <KK extends K>(key: KK, value: O[KK]) => boolean): Partial<O> {
+function filterKeys<O extends object, K extends keyof O>(
+  obj: O,
+  pred: <KK extends K>(key: KK, value: O[KK]) => boolean
+): Partial<O> {
   const result: Partial<O> = {};
   const keys = Object.keys(obj) as K[];
   for (const key of keys) {
@@ -27,7 +30,10 @@ function filterMap<O extends object, R>(
   return result;
 }
 
-function mapValues<T extends object, R>(obj: T, fn: <K extends keyof T>(key: K, value: T[K]) => R): { [K in keyof T]: R } {
+function mapValues<T extends object, R>(
+  obj: T,
+  fn: <K extends keyof T>(key: K, value: T[K]) => R
+): { [K in keyof T]: R } {
   const out = {} as { [K in keyof T]: R };
   const keys = Object.keys(obj) as Array<keyof T>;
   for (const k of keys) {

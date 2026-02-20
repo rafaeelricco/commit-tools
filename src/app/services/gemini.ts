@@ -4,10 +4,11 @@ import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/genera
 import { Future } from "@/libs/future";
 import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
 import { getPrompt } from "@/app/services/prompts";
+import { GEMINI_MODEL } from "@/const/gemini-model";
 
-const GEMINI_MODEL = "gemini-flash-lite-latest";
-
-type AuthCredentials = { readonly method: "byok"; readonly apiKey: string } | { readonly method: "oauth"; readonly tokens: OAuthTokens };
+type AuthCredentials =
+  | { readonly method: "byok"; readonly apiKey: string }
+  | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): AuthCredentials | null => {
   switch (config.auth_method.type) {
@@ -98,7 +99,12 @@ const generateCommitMessage = (
     prompt: getPrompt(diff, convention, customTemplate)
   });
 
-const refineCommitMessage = (auth: AuthCredentials, currentMessage: string, adjustment: string, diff: string): Future<Error, string> =>
+const refineCommitMessage = (
+  auth: AuthCredentials,
+  currentMessage: string,
+  adjustment: string,
+  diff: string
+): Future<Error, string> =>
   generateContent(auth, {
     prompt: `<diff>\n${diff}\n</diff>\n<current>\n${currentMessage}\n</current>\n<adjustment>\n${adjustment}\n</adjustment>`,
     systemInstruction:

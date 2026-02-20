@@ -2,7 +2,9 @@ export { type AuthCredentials, generateCommitMessage, refineCommitMessage, getAu
 
 import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
 import { Future } from "@/libs/future";
-import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
+import { CommitConvention, type Config, type OAuthTokens } from "@/app/services/config";
+import { getAccessToken } from "@/app/services/googleAuth";
+import { Just, type Maybe } from "@/libs/maybe";
 import { getPrompt } from "@/app/services/prompts";
 import { GEMINI_MODEL } from "@/const/gemini-model";
 
@@ -10,14 +12,12 @@ type AuthCredentials =
   | { readonly method: "byok"; readonly apiKey: string }
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
-const getAuthCredentials = (config: Config): AuthCredentials | null => {
+const getAuthCredentials = (config: Config): Maybe<AuthCredentials> => {
   switch (config.auth_method.type) {
     case "oauth":
-      return { method: "oauth", tokens: config.auth_method.content };
+      return Just({ method: "oauth", tokens: config.auth_method.content });
     case "api_key":
-      return { method: "byok", apiKey: config.auth_method.content };
-    default:
-      return null;
+      return Just({ method: "byok", apiKey: config.auth_method.content });
   }
 };
 

@@ -1,54 +1,22 @@
 export {
-  CommitConvention,
-  OAuthTokens,
-  Config,
-  type AuthMethod,
   performOAuthFlow,
   createAuthenticatedClient,
   ensureFreshTokens,
   validateOAuthTokens,
-  getAccessToken
+  getAccessToken,
+  COMMIT_CONVENTIONS,
+  type CommitConvention,
+  type OAuthTokens,
+  Config,
+  type AuthMethod
 };
 
-import * as s from "@/libs/json/schema";
+import { COMMIT_CONVENTIONS, type CommitConvention, type OAuthTokens, Config, type AuthMethod } from "./config";
 
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
 import { type Dependencies } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
-
-const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"];
-type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
-
-const schema_OAuthTokens = s.object({
-  access_token: s.string,
-  refresh_token: s.string,
-  expiry_date: s.number,
-  token_type: s.string,
-  scope: s.string
-});
-type OAuthTokens = s.Infer<typeof schema_OAuthTokens>;
-
-const schema_AuthMethod = s.discriminatedUnion([
-  s.variant({
-    type: "api_key",
-    content: s.string
-  }),
-  s.variant({
-    type: "oauth",
-    content: schema_OAuthTokens
-  })
-]);
-type schema_AuthMethod = s.Infer<typeof schema_AuthMethod>;
-
-type AuthMethod = schema_AuthMethod["type"];
-
-const Config = s.object({
-  auth_method: schema_AuthMethod,
-  commit_convention: s.stringEnum(COMMIT_CONVENTIONS),
-  custom_template: s.optionalMaybe(s.string)
-});
-type Config = s.Infer<typeof Config>;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
@@ -83,7 +51,7 @@ const SUCCESS_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-const ERROR_HTML = (message: string) => `<!DOCTYPE html>
+const ERROR_HTML = (message: string): string => `<!DOCTYPE html>
 <html>
 <head><title>Authentication Failed</title></head>
 <body style="font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#fef2f2;">
@@ -188,15 +156,15 @@ const stopCallbackServer = (cs: CallbackServer): Future<Error, void> =>
     resolve(undefined);
   });
 
-const openBrowser = async (url: string): Promise<void> => {
-  try {
+const openBrowser = (url: string): Future<Error, void> =>
+  Future.attemptP(async () => {
     const open = (await import("open")).default;
     await open(url);
-  } catch {
+  }).chainRej((_) => {
     console.log("\nCould not open browser automatically.");
     console.log(`Please open the following URL in your browser:\n${url}\n`);
-  }
-};
+    return Future.resolve(undefined);
+  });
 
 const exchangeCodeForTokens = (
   client: OAuth2Client,
@@ -251,10 +219,9 @@ const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
         startCallbackServer(port, state),
         stopCallbackServer,
         (cs) => {
-          const waitForCode: Future<Error, string> = Future.attemptP(async () => {
-            await openBrowser(authUrl);
-            return cs.codePromise;
-          });
+          const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() =>
+            Future.attemptP(() => cs.codePromise)
+          );
 
           const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
             return () =>

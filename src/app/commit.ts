@@ -5,7 +5,8 @@ import * as p from "@clack/prompts";
 import { Future } from "@/libs/future";
 import { loadConfig, updateTokens } from "@/app/storage";
 import { executeSetupFlow } from "@/app/setup";
-import { CommitConvention, type Config, ensureFreshTokens } from "@/app/services/googleAuth";
+import { CommitConvention, type Config } from "@/app/services/config";
+import { ensureFreshTokens } from "@/app/services/googleAuth";
 import type { Dependencies } from "@/app/integrations";
 import {
   checkIsGitRepo,
@@ -21,15 +22,18 @@ import {
   getAuthCredentials,
   type AuthCredentials
 } from "@/app/services/gemini";
+import { Nothing } from "@/libs/maybe";
 
 import color from "picocolors";
 
 const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCredentials> => {
-  const creds = getAuthCredentials(config);
+  const credentials = getAuthCredentials(config);
 
-  if (creds === null) {
+  if (credentials instanceof Nothing) {
     return Future.reject(new Error("No authentication configured. Run 'commit-tools setup' to configure."));
   }
+
+  const creds = credentials.value;
 
   if (creds.method === "oauth") {
     return ensureFreshTokens(deps, creds.tokens).chain((freshTokens) => {

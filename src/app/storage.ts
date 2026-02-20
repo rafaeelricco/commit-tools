@@ -6,7 +6,7 @@ import { Future } from "@/libs/future";
 import { resolve } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
-import { Config, type OAuthTokens } from "@/app/services/googleAuth";
+import { Config, type OAuthTokens } from "@/app/services/config";
 
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");

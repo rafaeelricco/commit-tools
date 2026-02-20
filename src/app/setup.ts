@@ -4,13 +4,8 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import {
-  CommitConvention,
-  type AuthMethod,
-  type Config,
-  performOAuthFlow,
-  validateOAuthTokens
-} from "@/app/services/googleAuth";
+import { CommitConvention, type AuthMethod, type Config } from "@/app/services/config";
+import { performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Just, Nothing } from "@/libs/maybe";

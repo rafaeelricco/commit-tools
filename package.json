@@ -13,6 +13,7 @@
     "compile": "bun run build",
     "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
     "install:global": "bun link",
+    "format": "npx prettier . --write",
     "typecheck": "tsc --noEmit"
   },
   "files": [

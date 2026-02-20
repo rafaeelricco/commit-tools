@@ -30,4 +30,8 @@ const saveConfig = (config: Config): Future<Error, void> =>
   });
 
 const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
-  loadConfig().chain(config => saveConfig({ ...config, tokens }));
+  loadConfig().chain(config =>
+    config.auth_method.type === "oauth"
+      ? saveConfig({ ...config, auth_method: { type: "oauth", content: tokens } })
+      : Future.reject(new Error("Cannot update tokens: not using OAuth authentication"))
+  );

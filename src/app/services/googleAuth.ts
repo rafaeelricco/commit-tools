@@ -1,8 +1,8 @@
 export {
   CommitConvention,
-  AuthMethod,
   OAuthTokens,
   Config,
+  type AuthMethod,
   performOAuthFlow,
   createAuthenticatedClient,
   ensureFreshTokens,
@@ -12,40 +12,49 @@ export {
 
 import * as s from "@/libs/json/schema";
 
-
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
 import { type Dependencies } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
 
-const CommitConvention = s.stringEnum(["conventional", "imperative", "custom"]);
-type CommitConvention = s.Infer<typeof CommitConvention>;
+const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"];
+type CommitConvention = typeof COMMIT_CONVENTIONS[number];
 
-const AuthMethod = s.stringEnum(["api_key", "oauth"]);
-type AuthMethod = s.Infer<typeof AuthMethod>;
-
-const OAuthTokens = s.object({
+const schema_OAuthTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
   expiry_date: s.number,
   token_type: s.string,
   scope: s.string,
 });
-type OAuthTokens = s.Infer<typeof OAuthTokens>;
+type OAuthTokens = s.Infer<typeof schema_OAuthTokens>;
+
+const schema_AuthMethod = s.discriminatedUnion([
+  s.variant({
+    type: "api_key",
+    content: s.string,
+  }),
+  s.variant({
+    type: "oauth",
+    content: schema_OAuthTokens,
+  }),
+]);
+type schema_AuthMethod = s.Infer<typeof schema_AuthMethod>;
+
+type AuthMethod = schema_AuthMethod["type"];
 
 const Config = s.object({
-  auth_method: s.optionalDefault("api_key" as AuthMethod, AuthMethod),
-  api_key: s.optional(s.string),
-  tokens: s.optional(OAuthTokens),
-  commit_convention: CommitConvention,
-  custom_template: s.optional(s.string),
+  auth_method: schema_AuthMethod,
+  commit_convention: s.stringEnum(COMMIT_CONVENTIONS),
+  custom_template: s.optionalMaybe(s.string),
 });
 type Config = s.Infer<typeof Config>;
 
 
-
 const SCOPES = [
-  "https://www.googleapis.com/auth/generative-language",
+  "https://www.googleapis.com/auth/cloud-platform",
+  "https://www.googleapis.com/auth/generative-language.retriever",
+  "https://www.googleapis.com/auth/generative-language.tuning",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 const OAUTH_TIMEOUT_MS = 300_000;

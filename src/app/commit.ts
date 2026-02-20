@@ -61,7 +61,7 @@ const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
       resolveAuth(deps, config).chain(auth =>
         checkIsGitRepo().chain(() =>
           getStagedDiff().chain(diff =>
-            generateWithSpinner(auth, diff, config.commit_convention, config.custom_template)
+            generateWithSpinner(auth, diff, config.commit_convention, config.custom_template.maybe(undefined, t => t))
               .chain(message => interactionLoop(auth, diff, message))
           )
         )
@@ -69,10 +69,8 @@ const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
     )
     .mapRej(e => {
       if (e instanceof Error) {
-        console.log(color.yellow("No staged changes found. Use 'git add' to stage files."));
-        return e;
+        p.log.error(color.red(e.message));
       }
-      p.log.error(color.red(e));
       return e;
     });
 

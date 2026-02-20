@@ -12,13 +12,14 @@ type AuthCredentials =
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): AuthCredentials | null => {
-  if (config.auth_method === "oauth" && config.tokens !== undefined) {
-    return { method: "oauth", tokens: config.tokens };
+  switch(config.auth_method.type){
+    case "oauth":
+      return { method: "oauth", tokens: config.auth_method.content };
+    case "api_key":
+      return { method: "byok", apiKey: config.auth_method.content };
+    default:
+      return null;
   }
-  if (config.api_key !== undefined) {
-    return { method: "byok", apiKey: config.api_key };
-  }
-  return null;
 };
 
 type GenerateContentParams = {

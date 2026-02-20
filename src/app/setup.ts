@@ -7,6 +7,7 @@ import { saveConfig } from "@/app/storage";
 import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Just, Nothing } from "@/libs/maybe";
 
 import color from "picocolors";
 
@@ -79,11 +80,9 @@ const setupOAuth = (
           s.stop("OAuth tokens validated!");
 
           const config: Config = {
-            auth_method: "oauth",
-            api_key: undefined,
-            tokens,
+            auth_method: { type: "oauth", content: tokens },
             commit_convention: convention,
-            custom_template: customTemplate,
+            custom_template: customTemplate ? Just(customTemplate) : Nothing(),
           };
 
           return saveConfig(config);
@@ -123,11 +122,9 @@ const setupApiKey = (
         s.stop("API key validated!");
 
         const config: Config = {
-          auth_method: "api_key",
-          api_key: apiKey,
-          tokens: undefined,
+          auth_method: { type: "api_key", content: apiKey },
           commit_convention: convention,
-          custom_template: customTemplate,
+          custom_template: customTemplate ? Just(customTemplate) : Nothing(),
         };
 
         return saveConfig(config);

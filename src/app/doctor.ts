@@ -40,7 +40,7 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
       configResult.either(
         () => {},
         config => {
-          const authMethod = config.auth_method ?? "api_key";
+          const authMethod = config.auth_method.type;
 
           table.push([
             "Auth Method",
@@ -50,9 +50,9 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
               : "Google AI Studio API Key",
           ]);
 
-          if (authMethod === "oauth" && config.tokens !== undefined) {
+          if (config.auth_method.type === "oauth") {
             const now = Date.now();
-            const expiryDate = config.tokens.expiry_date;
+            const expiryDate = config.auth_method.content.expiry_date;
             const isExpired = expiryDate <= now;
             const expiryStr = new Date(expiryDate).toLocaleString();
 

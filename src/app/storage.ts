@@ -19,27 +19,22 @@ const loadConfig = (): Future<Error, Config> =>
       const result = s.decode(Config, json);
       return result.either(
         (err) => Future.reject(new Error(`Invalid config: ${err}`)),
-        (ok) => Future.resolve(ok),
+        (ok) => Future.resolve(ok)
       );
     });
 
 const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
     await mkdir(CONFIG_DIR, { recursive: true });
-    await Bun.write(
-      CONFIG_FILE,
-      JSON.stringify(s.encode(Config, config), null, 2),
-    );
+    await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
   });
 
 const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
   loadConfig().chain((config) =>
-    config.auth_method.type === "oauth"
-      ? saveConfig({
-          ...config,
-          auth_method: { type: "oauth", content: tokens },
-        })
-      : Future.reject(
-          new Error("Cannot update tokens: not using OAuth authentication"),
-        ),
+    config.auth_method.type === "oauth" ?
+      saveConfig({
+        ...config,
+        auth_method: { type: "oauth", content: tokens }
+      })
+    : Future.reject(new Error("Cannot update tokens: not using OAuth authentication"))
   );

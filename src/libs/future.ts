@@ -12,25 +12,21 @@ type Fut<E, C> = { [K in keyof C]: Future<E, C[K]> };
 class Future<E, T> {
   readonly inner: FutureInstance<E, T>;
 
-  static create<E, T>(
-    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => Cancel | void,
-  ): Future<E, T> {
+  static create<E, T>(f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => Cancel | void): Future<E, T> {
     return new Future(
       F.Future((r, a) => {
         const cancel = f(r, a);
         return cancel === undefined ? () => {} : cancel;
-      }),
+      })
     );
   }
 
-  static createUncancellable<E, T>(
-    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => void,
-  ): Future<E, T> {
+  static createUncancellable<E, T>(f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => void): Future<E, T> {
     return new Future(
       F.Future((r, a) => {
         f(r, a);
         return () => {}; // No-op cancel function
-      }),
+      })
     );
   }
 
@@ -46,26 +42,15 @@ class Future<E, T> {
     return new Future(F.attemptP(f));
   }
 
-  static bracket<E, A, B, C>(
-    acquire: Future<E, A>,
-    release: (_: A) => Future<E, C>,
-    consume: (_: A) => Future<E, B>,
-  ) {
-    return new Future(
-      F.hook(acquire.inner)((x) => release(x).inner)((x) => consume(x).inner),
-    );
+  static bracket<E, A, B, C>(acquire: Future<E, A>, release: (_: A) => Future<E, C>, consume: (_: A) => Future<E, B>) {
+    return new Future(F.hook(acquire.inner)((x) => release(x).inner)((x) => consume(x).inner));
   }
 
-  static parallel<E, T>(
-    n: number,
-    xs: Array<Future<E, T>>,
-  ): Future<E, Array<T>> {
+  static parallel<E, T>(n: number, xs: Array<Future<E, T>>): Future<E, Array<T>> {
     return new Future(F.parallel(n)(xs.map((f) => f.inner)));
   }
 
-  static concurrently<E, C extends { [k: string]: any }>(
-    obj: Fut<E, C>,
-  ): Future<E, C> {
+  static concurrently<E, C extends { [k: string]: any }>(obj: Fut<E, C>): Future<E, C> {
     const futures: Future<E, Record<string, unknown>>[] = [];
 
     Object.keys(obj).forEach(<K extends string & keyof C>(key: K) => {
@@ -74,17 +59,11 @@ class Future<E, T> {
     });
 
     return Future.parallel(Infinity, futures).map((results) =>
-      results.reduce(
-        (acc, x) => Object.assign(acc, x),
-        {} as Record<string, unknown>,
-      ),
+      results.reduce((acc, x) => Object.assign(acc, x), {} as Record<string, unknown>)
     ) as Future<E, C>;
   }
 
-  static mapConcurrently<A, E, T>(
-    f: (_: A) => Future<E, T>,
-    xs: Array<A>,
-  ): Future<E, Array<T>> {
+  static mapConcurrently<A, E, T>(f: (_: A) => Future<E, T>, xs: Array<A>): Future<E, Array<T>> {
     return Future.parallel(Infinity, xs.map(f));
   }
 
@@ -96,14 +75,8 @@ class Future<E, T> {
     return new Future(F.race(x.inner)(y.inner));
   }
 
-  static traverse<A, E, T>(
-    f: (_: A) => Future<E, T>,
-    xs: Array<A>,
-  ): Future<E, Array<T>> {
-    return xs.reduce(
-      (acc, x) => acc.chain((ys) => f(x).map((y) => [...ys, y])),
-      Future.resolve([]) as Future<E, Array<T>>,
-    );
+  static traverse<A, E, T>(f: (_: A) => Future<E, T>, xs: Array<A>): Future<E, Array<T>> {
+    return xs.reduce((acc, x) => acc.chain((ys) => f(x).map((y) => [...ys, y])), Future.resolve([]) as Future<E, Array<T>>);
   }
 
   static resolveAfter<E, T>(milliseconds: number, value: T): Future<E, T> {
@@ -141,10 +114,7 @@ class Future<E, T> {
     return new Future(F.chainRej(g)(this.inner));
   }
 
-  bichain<F, W>(
-    f: (_: E) => Future<F, W>,
-    g: (_: T) => Future<F, W>,
-  ): Future<F, W> {
+  bichain<F, W>(f: (_: E) => Future<F, W>, g: (_: T) => Future<F, W>): Future<F, W> {
     const h = (x: E): FutureInstance<F, W> => f(x).inner;
     const i = (x: T): FutureInstance<F, W> => g(x).inner;
     return new Future(F.bichain(h)(i)(this.inner));
@@ -163,9 +133,7 @@ class Future<E, T> {
   }
 
   promiseR(): Promise<Result<E, T>> {
-    const f: Future<never, Result<E, T>> = this.map<Result<E, T>>(
-      Success,
-    ).chainRej((e) => Future.resolve(Failure(e)));
+    const f: Future<never, Result<E, T>> = this.map<Result<E, T>>(Success).chainRej((e) => Future.resolve(Failure(e)));
     return F.promise(f.inner);
   }
 }

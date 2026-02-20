@@ -34,7 +34,7 @@ export {
   encode,
   decoder,
   encoder,
-  recursive,
+  recursive
 };
 
 import * as decoder from "@/libs/json/decoder";
@@ -92,20 +92,16 @@ const boolean: Schema<boolean> = new Schema(D.boolean, E.boolean);
 const number: Schema<number> = new Schema(D.number, E.number);
 const string: Schema<string> = new Schema(D.string, E.string);
 
-const array = <A>(schema: Schema<A>): Schema<Array<A>> =>
-  new Schema(D.array(schema.decoder), E.array(schema.encoder));
+const array = <A>(schema: Schema<A>): Schema<Array<A>> => new Schema(D.array(schema.decoder), E.array(schema.encoder));
 
 const both = <T, U>(left: Schema<T>, right: Schema<U>): Schema<[T, U]> =>
-  new Schema(
-    D.both(left.decoder, right.decoder),
-    E.both(left.encoder, right.encoder),
-  );
+  new Schema(D.both(left.decoder, right.decoder), E.both(left.encoder, right.encoder));
 
 // Schema for an object field that may not be present.
 class SchemaOptional<A> {
   constructor(
     readonly decoder: D.DecoderOptional<A>,
-    readonly encoder: E.EncoderOptional<A>,
+    readonly encoder: E.EncoderOptional<A>
   ) {}
 
   dimap<W>(p: (v: A) => W, s: (v: W) => A): SchemaOptional<W> {
@@ -114,30 +110,18 @@ class SchemaOptional<A> {
 }
 
 // An object field that may be absent.
-const optional = <A>(s: Schema<A>): SchemaOptional<A | undefined> =>
-  new SchemaOptional(D.optional(s.decoder), E.optional(s.encoder));
+const optional = <A>(s: Schema<A>): SchemaOptional<A | undefined> => new SchemaOptional(D.optional(s.decoder), E.optional(s.encoder));
 
-const optionalNullable = <A>(
-  schema: Schema<NonNullable<A>>,
-): SchemaOptional<Nullable<A>> =>
-  new SchemaOptional(
-    D.optionalNullable(schema.decoder),
-    E.optionalNullable(schema.encoder),
-  );
+const optionalNullable = <A>(schema: Schema<NonNullable<A>>): SchemaOptional<Nullable<A>> =>
+  new SchemaOptional(D.optionalNullable(schema.decoder), E.optionalNullable(schema.encoder));
 
 const optionalMaybe = <A>(schema: Schema<A>): SchemaOptional<Maybe<A>> =>
-  new SchemaOptional(
-    D.optionalMaybe(schema.decoder),
-    E.optionalMaybe(schema.encoder),
-  );
+  new SchemaOptional(D.optionalMaybe(schema.decoder), E.optionalMaybe(schema.encoder));
 
 // When decoding, if the field is absent, then the default will be used.
 // When encoding, the field is required.
 const optionalDefault = <A>(def: A, schema: Schema<A>): SchemaOptional<A> =>
-  new SchemaOptional(
-    D.optionalDefault(def, schema.decoder),
-    E.optional(schema.encoder),
-  );
+  new SchemaOptional(D.optionalDefault(def, schema.decoder), E.optional(schema.encoder));
 
 function object<A>(def: SchemaDef<A>): Schema<A> {
   const pdef = {} as DecoderDef<A>;
@@ -159,11 +143,7 @@ const pair = <L, R>(l: Schema<L>, r: Schema<R>): Schema<[L, R]> => {
   return new Schema(decoder, encoder);
 };
 
-const triple = <A, B, C>(
-  a: Schema<A>,
-  b: Schema<B>,
-  c: Schema<C>,
-): Schema<[A, B, C]> => {
+const triple = <A, B, C>(a: Schema<A>, b: Schema<B>, c: Schema<C>): Schema<[A, B, C]> => {
   const decoder = D.triple(a.decoder, b.decoder, c.decoder);
   const encoder = E.triple(a.encoder, b.encoder, c.encoder);
   return new Schema(decoder, encoder);
@@ -172,14 +152,12 @@ const triple = <A, B, C>(
 const map = <A>(s: Schema<A>): Schema<Map<string, A>> =>
   array(pair(string, s)).dimap(
     (xs) => xs.reduce((acc, [k, v]) => acc.set(k, v), new Map<string, A>()),
-    (m) => Array.from(m.entries()),
+    (m) => Array.from(m.entries())
   );
 
-const maybe = <A>(s: Schema<A>): Schema<Maybe<A>> =>
-  new Schema(D.maybe(s.decoder), E.maybe(s.encoder));
+const maybe = <A>(s: Schema<A>): Schema<Maybe<A>> => new Schema(D.maybe(s.decoder), E.maybe(s.encoder));
 
-const nullable = <A>(s: Schema<A>): Schema<Nullable<A>> =>
-  new Schema(D.nullable(s.decoder), E.nullable(s.encoder));
+const nullable = <A>(s: Schema<A>): Schema<Nullable<A>> => new Schema(D.nullable(s.decoder), E.nullable(s.encoder));
 
 const stringLiteral = <T extends string>(str: T): Schema<T> =>
   new Schema(
@@ -189,21 +167,18 @@ const stringLiteral = <T extends string>(str: T): Schema<T> =>
         throw new Error(`Cannot encode '${input}'. Expected literal '${str}'"`);
       }
       return input;
-    }),
+    })
   );
 
-const stringEnum = <const T extends string[]>(strs: T): Schema<T[number]> =>
-  new Schema(D.stringEnum(strs), E.stringEnum(strs));
+const stringEnum = <const T extends string[]>(strs: T): Schema<T[number]> => new Schema(D.stringEnum(strs), E.stringEnum(strs));
 
 const oneOf = <V>(f: (v: V) => Schema<V>, ss: Array<Schema<V>>): Schema<V> =>
   new Schema(
     D.oneOf(ss.map((s) => s.decoder)),
-    E.oneOf((v) => f(v).encoder),
+    E.oneOf((v) => f(v).encoder)
   );
 
-const discriminatedUnion = <const Variants extends readonly Variant<any>[]>(
-  vars: Variants,
-): Schema<Infer<Variants[number]["schema"]>> => {
+const discriminatedUnion = <const Variants extends readonly Variant<any>[]>(vars: Variants): Schema<Infer<Variants[number]["schema"]>> => {
   type Ty = Infer<Variants[number]["schema"]>;
   const d: D.Decoder<Ty> = D.oneOf(vars.map((v) => v.schema.decoder));
   const e: E.Encoder<Ty> = E.oneOf<Ty>((v) => {
@@ -241,7 +216,7 @@ const matches = (pattern: Record<string, string>, val: unknown): boolean => {
 class Variant<T> {
   constructor(
     readonly pattern: Record<string, string>,
-    readonly schema: Schema<T>,
+    readonly schema: Schema<T>
   ) {}
 }
 
@@ -249,22 +224,16 @@ type VariantDef<T extends string, A> = {
   [D in keyof A]: Schema<A[D]> | SchemaOptional<A[D]> | (A[D] & T);
 };
 
-const variant = <const T extends string, const A>(
-  def: VariantDef<T, A>,
-): Variant<A> => {
-  const pattern = filterMap(def, (_, v): string | undefined =>
-    typeof v == "string" ? v : undefined,
-  ) as Record<string, string>;
+const variant = <const T extends string, const A>(def: VariantDef<T, A>): Variant<A> => {
+  const pattern = filterMap(def, (_, v): string | undefined => (typeof v == "string" ? v : undefined)) as Record<string, string>;
 
   if (Object.keys(pattern).length == 0) {
-    throw new Error(
-      "Invalid variant definition. No discriminant identified. Discriminant must be provided as a string",
-    );
+    throw new Error("Invalid variant definition. No discriminant identified. Discriminant must be provided as a string");
   }
 
   const schemaDef: SchemaDef<A> = mapValues(def, (_, value) =>
     // @ts-expect-error hard to prove the types, but this is correct.
-    typeof value == "string" ? stringLiteral<T>(value) : value,
+    typeof value == "string" ? stringLiteral<T>(value) : value
   );
 
   const schema: Schema<A> = object(schemaDef);
@@ -273,16 +242,13 @@ const variant = <const T extends string, const A>(
 };
 
 // Schema for a stringified JSON representation.
-const stringified = <T>(inner: Schema<T>): Schema<T> =>
-  new Schema(D.stringified(inner.decoder), E.stringified(inner.encoder));
+const stringified = <T>(inner: Schema<T>): Schema<T> => new Schema(D.stringified(inner.decoder), E.stringified(inner.encoder));
 
 const recursive = <T>(f: (s: Schema<T>) => Schema<T>): Schema<T> => {
   const baseEncoder: Encoder<T> = new Encoder((_) => {
     throw new Error("A recursive encoder cannot immediately call itself.");
   });
-  const baseDecoder: Decoder<T> = decoder.fail(
-    "A recursive decoder cannot immediately call itself.",
-  );
+  const baseDecoder: Decoder<T> = decoder.fail("A recursive decoder cannot immediately call itself.");
   const base: Schema<T> = new Schema(baseDecoder, baseEncoder);
   const top = f(base);
   // @ts-expect-error assigning to read-only prop

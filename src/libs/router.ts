@@ -36,7 +36,7 @@ export {
 
   // SSE types
   type SendMessage,
-  type OnError,
+  type OnError
 };
 
 import * as express from "express";
@@ -65,7 +65,7 @@ class JSON {
       status: number;
       headers: Headers;
       content: Json;
-    },
+    }
   ) {}
 }
 
@@ -73,7 +73,7 @@ class Redirect {
   constructor(
     public values: {
       path: string;
-    },
+    }
   ) {}
 }
 
@@ -83,7 +83,7 @@ class Render {
       status: number;
       headers: Headers;
       content: string | Json;
-    },
+    }
   ) {}
 }
 
@@ -94,7 +94,7 @@ class SSE {
     public values: {
       headers: Headers;
       stream: (emit: SendMessage, onError: OnError) => Future<Error, null>;
-    },
+    }
   ) {}
 }
 type SendMessage = (json: Json) => boolean;
@@ -104,31 +104,17 @@ type Response = Render | JSON | Redirect | SSE;
 
 // Convenience constructors for responses.
 
-const json = ({
-  status = 200,
-  headers = {},
-  content,
-}: {
-  status?: number;
-  headers?: Headers;
-  content: Json;
-}): Response => new JSON({ status, headers, content });
+const json = ({ status = 200, headers = {}, content }: { status?: number; headers?: Headers; content: Json }): Response =>
+  new JSON({ status, headers, content });
 
 const redirect = (path: string): Response => new Redirect({ path });
 
-const render = ({
-  status = 200,
-  headers = {},
-  content,
-}: {
-  status?: number;
-  headers?: Headers;
-  content: string | Json;
-}): Response => new Render({ status, headers, content });
+const render = ({ status = 200, headers = {}, content }: { status?: number; headers?: Headers; content: string | Json }): Response =>
+  new Render({ status, headers, content });
 
 const sse = ({
   headers = {},
-  stream,
+  stream
 }: {
   headers?: Headers;
   stream: (emit: SendMessage, onError: OnError) => Future<Error, null>;
@@ -138,8 +124,7 @@ const sse = ({
 type Middleware<A, B> = (req: express.Request, env: A) => Future<Response, B>;
 
 function middleware<A, B>(fun: Middleware<A, B>, route: Route<B>): Route<A> {
-  return (req: express.Request, env: A) =>
-    fun(req, env).chain((res) => route(req, res));
+  return (req: express.Request, env: A) => fun(req, env).chain((res) => route(req, res));
 }
 
 function send(response: Response, res: express.Response): void {
@@ -161,7 +146,7 @@ function send(response: Response, res: express.Response): void {
         ...response.values.headers,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        Connection: "keep-alive",
+        Connection: "keep-alive"
       });
       res.flushHeaders();
       streamSSEResponse(res, response.values.stream);
@@ -170,10 +155,7 @@ function send(response: Response, res: express.Response): void {
   }
 }
 
-function streamSSEResponse(
-  res: express.Response,
-  stream: (emit: SendMessage, onError: OnError) => Future<Error, null>,
-): void {
+function streamSSEResponse(res: express.Response, stream: (emit: SendMessage, onError: OnError) => Future<Error, null>): void {
   let connectionClosed = false;
   let endStream: Cancel = () => {};
   const closeConnection = () => {
@@ -202,18 +184,14 @@ function streamSSEResponse(
     },
     function onError(handler) {
       errorHandlers.push(handler);
-    },
+    }
   ).fork(handleError, closeConnection);
 }
 
-function sendResponse(
-  routeHandler: Route<{}>,
-  req: express.Request,
-  res: express.Response,
-): void {
+function sendResponse(routeHandler: Route<{}>, req: express.Request, res: express.Response): void {
   routeHandler(req, {}).fork(
     (r) => send(r, res),
-    (r) => send(r, res),
+    (r) => send(r, res)
   );
 }
 

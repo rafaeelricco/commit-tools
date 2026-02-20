@@ -1,19 +1,9 @@
-export {
-  type RemoteData,
-  CallableSuccess as Ready,
-  CallableFailure as Failed,
-  CallableNotAsked as NotAsked,
-  CallableLoading as Loading,
-};
+export { type RemoteData, CallableSuccess as Ready, CallableFailure as Failed, CallableNotAsked as NotAsked, CallableLoading as Loading };
 
 import { Nullable, Maybe, Nothing, Just } from "@/libs/maybe";
 import Callable from "@/libs/callable";
 
-type RemoteData<E, T> =
-  | NotAsked<E, T>
-  | Loading<E, T>
-  | Failed<E, T>
-  | Ready<E, T>;
+type RemoteData<E, T> = NotAsked<E, T> | Loading<E, T> | Failed<E, T> | Ready<E, T>;
 
 interface IRemoteData<E, T> {
   map<W>(f: (t: T) => W): RemoteData<E, W>;
@@ -146,8 +136,7 @@ class Ready<E, T> implements IRemoteData<E, T> {
   readonly isFailed = false;
 }
 
-var CallableNotAsked = Callable(NotAsked) as typeof NotAsked &
-  typeof NotAsked.new;
+var CallableNotAsked = Callable(NotAsked) as typeof NotAsked & typeof NotAsked.new;
 
 var CallableLoading = Callable(Loading) as typeof Loading & typeof Loading.new;
 

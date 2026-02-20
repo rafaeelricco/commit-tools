@@ -21,12 +21,12 @@ function configureDependencies(): Dependencies {
         return Future.reject(
           new Error(
             "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for OAuth authentication.\n" +
-              "Set them in your environment or use 'commit-tools setup' with the API Key method instead.",
-          ),
+              "Set them in your environment or use 'commit-tools setup' with the API Key method instead."
+          )
         );
       }
 
       return Future.resolve({ clientId, clientSecret });
-    },
+    }
   };
 }

@@ -44,23 +44,15 @@ class Rec<A> {
 
 type Fun<A extends unknown[], B> = (...args: A) => B;
 
-function fix<A extends unknown[], R>(
-  f: Fun<
-    [Fun<A, Trampoline<R>>, (r: R) => Trampoline<R>],
-    Fun<A, Trampoline<R>>
-  >,
-): Fun<A, R> {
+function fix<A extends unknown[], R>(f: Fun<[Fun<A, Trampoline<R>>, (r: R) => Trampoline<R>], Fun<A, Trampoline<R>>>): Fun<A, R> {
   let lazy_f: Fun<A, Trampoline<R>> = (..._: A) => {
     throw new Error("recursion error");
   };
-  const recurse: Fun<A, Trampoline<R>> = (...args: A) =>
-    rec(() => lazy_f(...args));
+  const recurse: Fun<A, Trampoline<R>> = (...args: A) => rec(() => lazy_f(...args));
   lazy_f = f(recurse, end);
   return (...args: A) => lazy_f(...args).run();
 }
 
-function tailRecursive<A extends unknown[], R>(
-  f: Fun<A, Trampoline<R>>,
-): Fun<A, Trampoline<R>> {
+function tailRecursive<A extends unknown[], R>(f: Fun<A, Trampoline<R>>): Fun<A, Trampoline<R>> {
   return (...args: A) => rec(() => f(...args));
 }

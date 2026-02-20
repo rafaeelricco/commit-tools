@@ -1,11 +1,4 @@
-export {
-  checkIsGitRepo,
-  getStagedDiff,
-  performCommit,
-  performPush,
-  getCurrentBranch,
-  hasUpstream,
-};
+export { checkIsGitRepo, getStagedDiff, performCommit, performPush, getCurrentBranch, hasUpstream };
 
 import { Future } from "@/libs/future";
 import { unlink } from "fs/promises";
@@ -15,7 +8,7 @@ import { join } from "path";
 const checkIsGitRepo = (): Future<Error, void> =>
   Future.attemptP(async () => {
     const proc = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], {
-      stderr: "pipe",
+      stderr: "pipe"
     });
     const exitCode = await proc.exited;
     if (exitCode !== 0) throw new Error("Not a git repository");
@@ -42,7 +35,7 @@ const performCommit = (message: string): Future<Error, string> =>
     await Bun.write(tmpPath, message);
 
     const proc = Bun.spawn(["git", "commit", "-F", tmpPath], {
-      stderr: "pipe",
+      stderr: "pipe"
     });
     const stdout = await new Response(proc.stdout).text();
     const exitCode = await proc.exited;
@@ -64,10 +57,7 @@ const performCommit = (message: string): Future<Error, string> =>
 
 const performPush = (branch?: string, publish = false): Future<Error, string> =>
   Future.attemptP(async () => {
-    const args =
-      publish && branch
-        ? ["push", "--set-upstream", "origin", branch]
-        : ["push"];
+    const args = publish && branch ? ["push", "--set-upstream", "origin", branch] : ["push"];
 
     const proc = Bun.spawn(["git", ...args], { stderr: "pipe" });
     const stdout = await new Response(proc.stdout).text();
@@ -84,7 +74,7 @@ const performPush = (branch?: string, publish = false): Future<Error, string> =>
 const getCurrentBranch = (): Future<Error, string> =>
   Future.attemptP(async () => {
     const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
-      stderr: "pipe",
+      stderr: "pipe"
     });
     const stdout = await new Response(proc.stdout).text();
     const exitCode = await proc.exited;
@@ -95,7 +85,7 @@ const getCurrentBranch = (): Future<Error, string> =>
 const hasUpstream = (): Future<Error, boolean> =>
   Future.attemptP(async () => {
     const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "@{u}"], {
-      stderr: "pipe",
+      stderr: "pipe"
     });
     const exitCode = await proc.exited;
     return exitCode === 0;

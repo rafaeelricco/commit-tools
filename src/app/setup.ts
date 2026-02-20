@@ -4,13 +4,7 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import {
-  CommitConvention,
-  type AuthMethod,
-  type Config,
-  performOAuthFlow,
-  validateOAuthTokens,
-} from "@/app/services/googleAuth";
+import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Just, Nothing } from "@/libs/maybe";
@@ -26,9 +20,9 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
       options: [
         { value: "conventional", label: "Conventional (feat:, fix:)" },
         { value: "imperative", label: "Imperative (add, fix, update)" },
-        { value: "custom", label: "Custom template" },
+        { value: "custom", label: "Custom template" }
       ],
-      initialValue: "imperative",
+      initialValue: "imperative"
     });
 
     if (p.isCancel(convention)) throw new Error("Setup cancelled");
@@ -37,10 +31,7 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
     if (convention === "custom") {
       const template = await p.text({
         message: "Enter custom template (use {diff} as placeholder):",
-        validate: (value) =>
-          !value || !value.includes("{diff}")
-            ? "Template must include {diff}"
-            : undefined,
+        validate: (value) => (!value || !value.includes("{diff}") ? "Template must include {diff}" : undefined)
       });
       if (p.isCancel(template)) throw new Error("Setup cancelled");
       customTemplate = template;
@@ -52,15 +43,15 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
         {
           value: "oauth",
           label: "Google OAuth (recommended)",
-          hint: "Opens browser for Google sign-in",
+          hint: "Opens browser for Google sign-in"
         },
         {
           value: "api_key",
           label: "API Key",
-          hint: "Paste a Google AI Studio API key",
-        },
+          hint: "Paste a Google AI Studio API key"
+        }
       ],
-      initialValue: "oauth",
+      initialValue: "oauth"
     });
 
     if (p.isCancel(authMethod)) throw new Error("Setup cancelled");
@@ -68,7 +59,7 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
     return {
       convention: convention as CommitConvention,
       customTemplate,
-      authMethod: authMethod as AuthMethod,
+      authMethod: authMethod as AuthMethod
     };
   }).chain(({ convention, customTemplate, authMethod }) => {
     switch (authMethod) {
@@ -80,11 +71,7 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
   });
 };
 
-const setupOAuth = (
-  deps: Dependencies,
-  convention: CommitConvention,
-  customTemplate: string | undefined,
-): Future<Error, void> => {
+const setupOAuth = (deps: Dependencies, convention: CommitConvention, customTemplate: string | undefined): Future<Error, void> => {
   p.log.info("Opening browser for Google sign-in...");
 
   return performOAuthFlow(deps)
@@ -99,15 +86,13 @@ const setupOAuth = (
           const config: Config = {
             auth_method: { type: "oauth", content: tokens },
             commit_convention: convention,
-            custom_template: customTemplate ? Just(customTemplate) : Nothing(),
+            custom_template: customTemplate ? Just(customTemplate) : Nothing()
           };
 
           return saveConfig(config);
         })
         .map(() => {
-          p.outro(
-            color.green("Setup complete! Authenticated via Google OAuth."),
-          );
+          p.outro(color.green("Setup complete! Authenticated via Google OAuth."));
         })
         .mapRej((e) => {
           s.stop(color.red("OAuth validation failed."));
@@ -120,15 +105,11 @@ const setupOAuth = (
     });
 };
 
-const setupApiKey = (
-  convention: CommitConvention,
-  customTemplate: string | undefined,
-): Future<Error, void> =>
+const setupApiKey = (convention: CommitConvention, customTemplate: string | undefined): Future<Error, void> =>
   Future.attemptP(async () => {
     const apiKey = await p.password({
       message: "Enter your GOOGLE_API_KEY:",
-      validate: (value) =>
-        !value || value.length < 10 ? "API Key is too short" : undefined,
+      validate: (value) => (!value || value.length < 10 ? "API Key is too short" : undefined)
     });
 
     if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
@@ -144,7 +125,7 @@ const setupApiKey = (
         const config: Config = {
           auth_method: { type: "api_key", content: apiKey },
           commit_convention: convention,
-          custom_template: customTemplate ? Just(customTemplate) : Nothing(),
+          custom_template: customTemplate ? Just(customTemplate) : Nothing()
         };
 
         return saveConfig(config);

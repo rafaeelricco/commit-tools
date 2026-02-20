@@ -23,7 +23,7 @@ export {
   fromOptional,
   fromNullable,
   catMaybes,
-  mapMaybe,
+  mapMaybe
 };
 
 import Callable from "@/libs/callable";

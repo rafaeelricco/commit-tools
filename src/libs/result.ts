@@ -1,10 +1,4 @@
-export {
-  type Result,
-  CallableSuccess as Success,
-  CallableFailure as Failure,
-  traverse,
-  traverse_,
-};
+export { type Result, CallableSuccess as Success, CallableFailure as Failure, traverse, traverse_ };
 
 import { Trampoline, end, tailRecursive } from "@/libs/trampoline";
 import { List } from "@/libs/list";
@@ -96,41 +90,34 @@ class Failure<E, T> implements IResult<E, T> {
   }
 }
 
-function traverse<T, A, E>(
-  xs: List<A>,
-  f: (v: A) => Result<E, T>,
-): Result<E, List<T>> {
-  const go: (done: List<T>, todo: List<A>) => Trampoline<Result<E, List<T>>> =
-    tailRecursive((done, todo) => {
-      switch (true) {
-        case "head" in todo.value: {
-          const { head, tail } = todo.value;
-          const r = f(head);
-          switch (true) {
-            case r instanceof Success: {
-              const value = r.value;
-              return go(List.cons(value, done), tail);
-            }
-            case r instanceof Failure:
-              return end(new Failure(r.error));
-            default:
-              return r satisfies never;
+function traverse<T, A, E>(xs: List<A>, f: (v: A) => Result<E, T>): Result<E, List<T>> {
+  const go: (done: List<T>, todo: List<A>) => Trampoline<Result<E, List<T>>> = tailRecursive((done, todo) => {
+    switch (true) {
+      case "head" in todo.value: {
+        const { head, tail } = todo.value;
+        const r = f(head);
+        switch (true) {
+          case r instanceof Success: {
+            const value = r.value;
+            return go(List.cons(value, done), tail);
           }
+          case r instanceof Failure:
+            return end(new Failure(r.error));
+          default:
+            return r satisfies never;
         }
-        case "empty" in todo.value:
-          return end(new Success(done.reverse()));
-        default:
-          return todo.value satisfies never;
       }
-    });
+      case "empty" in todo.value:
+        return end(new Success(done.reverse()));
+      default:
+        return todo.value satisfies never;
+    }
+  });
 
   return go(List.empty(), xs).run();
 }
 
-function traverse_<T, A, E>(
-  xs: Array<A>,
-  f: (v: A) => Result<E, T>,
-): Result<E, Array<T>> {
+function traverse_<T, A, E>(xs: Array<A>, f: (v: A) => Result<E, T>): Result<E, Array<T>> {
   return traverse(List.from(xs), f).map((r) => r.toArray());
 }
 

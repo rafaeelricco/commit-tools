@@ -53,10 +53,7 @@ interface State {
 }
 
 // Good Pattern
-type State =
-  | { status: "loading" }
-  | { status: "error"; error: Error }
-  | { status: "success"; data: { id: string } };
+type State = { status: "loading" } | { status: "error"; error: Error } | { status: "success"; data: { id: string } };
 ```
 
 This ensures impossible states become unrepresentable at the type level, preventing bugs. Exhaustive checking in switch statements forces you to handle all cases logically.
@@ -103,14 +100,14 @@ Avoid TypeScript `enum`. Numeric enums generate unexpected reverse mappings, and
 // Bad Pattern
 enum PackStatus {
   Draft = "Draft",
-  Approved = "Approved",
+  Approved = "Approved"
 }
 
 // Good Pattern
 const PackStatus = {
   Draft: "Draft",
   Approved: "Approved",
-  Shipped: "Shipped",
+  Shipped: "Shipped"
 } as const;
 
 type PackStatus = (typeof PackStatus)[keyof typeof PackStatus];
@@ -195,19 +192,19 @@ For example, representing rich content streams inside an Assistant message:
 const schema_AgentExecutionTrace = s.discriminatedUnion([
   s.variant({
     type: "text",
-    text: s.string,
+    text: s.string
   }),
   s.variant({
     type: "tool_call",
     name: s.string,
     input: s.json,
-    result: schema_Result(schema_Error, s.json),
+    result: schema_Result(schema_Error, s.json)
   }),
   s.variant({
     type: "error",
     message: s.string,
-    code: s.optional(s.string),
-  }),
+    code: s.optional(s.string)
+  })
 ]);
 ```
 
@@ -224,7 +221,7 @@ const schema_ConversationEvents = s.discriminatedUnion([
     conversationId: ConversationId.schema,
     createdAt: schema_Timestamp,
     content: s.string,
-    inputMode: schema_MessageChannel,
+    inputMode: schema_MessageChannel
   }),
 
   // 2. Assistant Message
@@ -236,8 +233,8 @@ const schema_ConversationEvents = s.discriminatedUnion([
     content: s.array(schema_ContentPart),
     metadata: s.object({
       // Telemetry or backend-specific data stored here
-    }),
-  }),
+    })
+  })
 ]);
 
 export type Message = s.Infer<typeof schema_Message>;
@@ -254,7 +251,7 @@ const schema_PropertySnapshot = s.object({
   id: PropertyId.schema,
   title: s.string,
   price: s.string,
-  images: s.optional(s.array(s.string)),
+  images: s.optional(s.array(s.string))
 });
 
 const schema_UserActions = s.discriminatedUnion([
@@ -262,10 +259,10 @@ const schema_UserActions = s.discriminatedUnion([
   s.variant({
     type: "start_booking",
     property: schema_PropertySnapshot,
-    draftId: DraftId.schema,
+    draftId: DraftId.schema
   }),
   s.variant({ type: "confirm_booking", draftId: DraftId.schema }),
-  s.variant({ type: "cancel_booking", draftId: DraftId.schema }),
+  s.variant({ type: "cancel_booking", draftId: DraftId.schema })
 ]);
 ```
 
@@ -300,9 +297,7 @@ type VoiceConnection =
   | { type: "transcribing"; transcription: string }
   | { type: "error"; error: FetchErrorResponse };
 
-type UserInput =
-  | { type: "text"; content: string }
-  | { type: "voice"; connection: VoiceConnection };
+type UserInput = { type: "text"; content: string } | { type: "voice"; connection: VoiceConnection };
 
 // Unified conversation state
 interface ActiveConversation {
@@ -396,14 +391,10 @@ const name = maybeUser.map((user) => user.name);
 
 ```typescript
 // Bad - nested map creating Maybe<Maybe<T>>
-const dept: Maybe<Maybe<Department>> = maybeUser.map((user) =>
-  findDepartment(user.departmentId),
-);
+const dept: Maybe<Maybe<Department>> = maybeUser.map((user) => findDepartment(user.departmentId));
 
 // Good - chain flattens the nested Maybe
-const dept: Maybe<Department> = maybeUser.chain((user) =>
-  findDepartment(user.departmentId),
-);
+const dept: Maybe<Department> = maybeUser.chain((user) => findDepartment(user.departmentId));
 ```
 
 #### Providing default values
@@ -413,10 +404,7 @@ const dept: Maybe<Department> = maybeUser.chain((user) =>
 const name = maybeUser.map((u) => u.name).withDefault("Anonymous");
 
 // Good - maybe for default with transformation in one step
-const greeting = maybeUser.maybe(
-  "Hello, stranger",
-  (user) => `Hello, ${user.name}`,
-);
+const greeting = maybeUser.maybe("Hello, stranger", (user) => `Hello, ${user.name}`);
 ```
 
 #### Alternative values with alt
@@ -440,9 +428,7 @@ const maybe = fromOptional(undefinedValue); // for undefined
 const users = catMaybes(results);
 
 // mapMaybe combines map and filter
-const adults = mapMaybe(users, (user) =>
-  user.age >= 18 ? Just(user) : Nothing(),
-);
+const adults = mapMaybe(users, (user) => (user.age >= 18 ? Just(user) : Nothing()));
 ```
 
 #### Common Mistakes
@@ -479,7 +465,7 @@ const failure = Failure<string, number>("validation failed");
 const handle = (result: Result<Error, User>): string =>
   result.either(
     (e) => e.message, // failure case
-    (user) => user.name, // success case
+    (user) => user.name // success case
   );
 ```
 
@@ -503,13 +489,11 @@ const result = getUser(id).chain(validateUser);
 #### Error transformation with mapFailure
 
 ```typescript
-const domainResult: Result<DomainError, User> = httpResult.mapFailure(
-  (httpErr) => ({
-    code: httpErr.status,
-    message: httpErr.body,
-    original: httpErr,
-  }),
-);
+const domainResult: Result<DomainError, User> = httpResult.mapFailure((httpErr) => ({
+  code: httpErr.status,
+  message: httpErr.body,
+  original: httpErr
+}));
 ```
 
 #### Common Mistakes
@@ -570,14 +554,10 @@ switch (true) {
 
 ```typescript
 // map transforms only Ready state
-const displayName: RemoteData<E, string> = state.map(
-  (user) => `${user.firstName} ${user.lastName}`,
-);
+const displayName: RemoteData<E, string> = state.map((user) => `${user.firstName} ${user.lastName}`);
 
 // chain sequences RemoteData operations
-const posts: RemoteData<ApiError, Post[]> = userState.chain((user) =>
-  fetchPosts(user.id),
-);
+const posts: RemoteData<ApiError, Post[]> = userState.chain((user) => fetchPosts(user.id));
 ```
 
 #### Common Mistakes
@@ -656,16 +636,14 @@ const users = Future.parallel(5, ids.map(fetchUser));
 const result = Future.concurrently({
   user: fetchUser(userId),
   posts: fetchPosts(userId),
-  settings: fetchSettings(userId),
+  settings: fetchSettings(userId)
 });
 ```
 
 #### Recovery with chainRej
 
 ```typescript
-future.chainRej((error) =>
-  error.code === 404 ? Future.resolve(defaultValue) : Future.reject(error),
-);
+future.chainRej((error) => (error.code === 404 ? Future.resolve(defaultValue) : Future.reject(error)));
 ```
 
 #### Resource management with bracket
@@ -674,7 +652,7 @@ future.chainRej((error) =>
 Future.bracket(
   acquireConnection(), // acquire
   (conn) => releaseConnection(conn), // release (always runs)
-  (conn) => useConnection(conn), // consume
+  (conn) => useConnection(conn) // consume
 );
 ```
 
@@ -683,9 +661,7 @@ Future.bracket(
 ```typescript
 const result = Future.race(
   longOperation(),
-  Future.resolveAfter<OperationError, never>(5000, null).chain(() =>
-    Future.reject(new TimeoutError()),
-  ),
+  Future.resolveAfter<OperationError, never>(5000, null).chain(() => Future.reject(new TimeoutError()))
 );
 ```
 
@@ -728,7 +704,11 @@ Utilize BTree-wrapped persistent representations replacing un-ordered JS Maps to
 #### Creating Maps with explicit comparators
 
 ```typescript
-const map = TreeMap.new<string, number>((x, y) => (x > y ? 1 : x < y ? -1 : 0));
+const map = TreeMap.new<string, number>((x, y) =>
+  x > y ? 1
+  : x < y ? -1
+  : 0
+);
 
 // Or use stringMap factory
 const map = stringMap<User>();
@@ -828,11 +808,11 @@ const iterable: AsyncIterable<string> = {
       async next() {
         return Promise.race([
           textBuffer.dequeue().then((value) => ({ done: false, value })),
-          endSignal.take().then(() => ({ done: true, value: undefined })),
+          endSignal.take().then(() => ({ done: true, value: undefined }))
         ]);
-      },
+      }
     };
-  },
+  }
 };
 
 // 2. Producer: asynchronously push items
@@ -890,7 +870,7 @@ const result = Decoder.decode(JSON.parse(input), Decoder.string);
 const userDecoder: Decoder<User> = Decoder.object({
   id: Decoder.number,
   name: Decoder.string,
-  email: Decoder.string,
+  email: Decoder.string
 });
 ```
 
@@ -916,13 +896,13 @@ Decoder.optionalMaybe(Decoder.string);
 const shapeDecoder: Decoder<Shape> = Decoder.oneOf([
   Decoder.object({
     type: Decoder.stringLiteral("circle"),
-    radius: Decoder.number,
+    radius: Decoder.number
   }),
   Decoder.object({
     type: Decoder.stringLiteral("rect"),
     width: Decoder.number,
-    height: Decoder.number,
-  }),
+    height: Decoder.number
+  })
 ]);
 ```
 
@@ -931,7 +911,7 @@ const shapeDecoder: Decoder<Shape> = Decoder.oneOf([
 ```typescript
 const userDecoder = Decoder.object({
   id: Decoder.number,
-  name: Decoder.string,
+  name: Decoder.string
 });
 type User = Decoder.Infer<typeof userDecoder>;
 ```
@@ -939,18 +919,16 @@ type User = Decoder.Infer<typeof userDecoder>;
 #### Sequential decoding with chain
 
 ```typescript
-const versionedDecoder = Decoder.object({ version: Decoder.number }).chain(
-  ({ version }) => {
-    switch (version) {
-      case 1:
-        return v1Decoder;
-      case 2:
-        return v2Decoder;
-      default:
-        return Decoder.fail(`Unknown version: ${version}`);
-    }
-  },
-);
+const versionedDecoder = Decoder.object({ version: Decoder.number }).chain(({ version }) => {
+  switch (version) {
+    case 1:
+      return v1Decoder;
+    case 2:
+      return v2Decoder;
+    default:
+      return Decoder.fail(`Unknown version: ${version}`);
+  }
+});
 ```
 
 #### Common Mistakes
@@ -977,7 +955,7 @@ A contravariant functor enabling reliable serialization of explicit structures b
 const userEncoder = E.object<User>({
   id: E.string,
   name: E.string,
-  age: E.number,
+  age: E.number
 });
 ```
 
@@ -986,7 +964,7 @@ const userEncoder = E.object<User>({
 ```typescript
 const profileEncoder = E.object<Profile>({
   name: E.string,
-  bio: E.optional(E.string),
+  bio: E.optional(E.string)
 });
 // { name: "Bob" } — no bio field when undefined
 ```
@@ -1001,9 +979,7 @@ const userIdEncoder = E.string.rmap((id: UserId) => id.value);
 #### Dynamic encoder selection with oneOf
 
 ```typescript
-const shapeEncoder = E.oneOf<Shape>((shape) =>
-  shape.type === "circle" ? circleEncoder : rectEncoder,
-);
+const shapeEncoder = E.oneOf<Shape>((shape) => (shape.type === "circle" ? circleEncoder : rectEncoder));
 ```
 
 #### Merging encoders with both
@@ -1037,7 +1013,7 @@ A combined bidirectional boundary encapsulating both `Decoder` and `Encoder` in 
 
     static schema = s.string.dimap(
       (v) => new MessageId(v),
-      (id) => id.value,
+      (id) => id.value
     );
   }
   ```
@@ -1052,7 +1028,7 @@ A combined bidirectional boundary encapsulating both `Decoder` and `Encoder` in 
 ```typescript
 const User = s.object({
   name: s.string,
-  age: s.number,
+  age: s.number
 });
 const decoded = s.decode(User, input);
 const encoded = s.encode(User, user);
@@ -1063,7 +1039,7 @@ const encoded = s.encode(User, user);
 ```typescript
 const Timestamp = s.number.dimap(
   (n) => new Date(n), // decode: number → Date
-  (d) => d.valueOf(), // encode: Date → number
+  (d) => d.valueOf() // encode: Date → number
 );
 ```
 
@@ -1088,12 +1064,12 @@ const Message = s.discriminatedUnion([
   s.variant({
     type: "error" as const,
     code: s.number,
-    message: s.string,
+    message: s.string
   }),
   s.variant({
     type: "success" as const,
-    value: s.string,
-  }),
+    value: s.string
+  })
 ]);
 
 type Message = s.Infer<typeof Message>;
@@ -1107,7 +1083,7 @@ class POSIX {
 
   static schema: s.Schema<POSIX> = s.number.dimap(
     (n) => new POSIX(n),
-    (p) => p.value,
+    (p) => p.value
   );
 }
 ```

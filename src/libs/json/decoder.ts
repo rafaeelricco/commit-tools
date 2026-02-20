@@ -59,7 +59,7 @@ export {
   optionalMaybe,
   optionalDefault,
   stringified,
-  recursive,
+  recursive
 };
 
 import { Result, Success, Failure, traverse } from "@/libs/result";
@@ -101,11 +101,9 @@ function showPath([path, error]: [Path, string]): string {
 type DecodeResult<T> = Result<[Path, string], T>;
 type Path = List<string>;
 
-const failure = <T>(msg: string): DecodeResult<T> =>
-  Failure([List.empty(), msg]);
+const failure = <T>(msg: string): DecodeResult<T> => Failure([List.empty(), msg]);
 
-const fail = <T>(msg: string): Decoder<T> =>
-  new Decoder((_) => Failure([List.empty(), msg]));
+const fail = <T>(msg: string): Decoder<T> => new Decoder((_) => Failure([List.empty(), msg]));
 
 const always = <T>(v: T): Decoder<T> => new Decoder((_) => Success(v));
 
@@ -129,17 +127,9 @@ const both = <T, U>(left: Decoder<T>, right: Decoder<U>): Decoder<[T, U]> =>
     return Success([l.value, r.value]);
   });
 
-const string: Decoder<string> = new Decoder((v) =>
-  typeof v === "string"
-    ? Success(v)
-    : failure("expected string but found " + typeof v),
-);
+const string: Decoder<string> = new Decoder((v) => (typeof v === "string" ? Success(v) : failure("expected string but found " + typeof v)));
 
-const number: Decoder<number> = new Decoder((v) =>
-  typeof v === "number"
-    ? Success(v)
-    : failure("expected number but found " + typeof v),
-);
+const number: Decoder<number> = new Decoder((v) => (typeof v === "number" ? Success(v) : failure("expected number but found " + typeof v)));
 
 const stringNumber: Decoder<number> = string.chain((s) => {
   const v = parseInt(s, 10);
@@ -147,9 +137,7 @@ const stringNumber: Decoder<number> = string.chain((s) => {
 });
 
 const boolean: Decoder<boolean> = new Decoder((v) =>
-  typeof v === "boolean"
-    ? Success(v)
-    : failure("expected boolean but found " + typeof v),
+  typeof v === "boolean" ? Success(v) : failure("expected boolean but found " + typeof v)
 );
 
 const array = <V>(decodeValue: Decoder<V>): Decoder<Array<V>> =>
@@ -158,9 +146,7 @@ const array = <V>(decodeValue: Decoder<V>): Decoder<Array<V>> =>
       return failure("expected array but found " + typeof input);
     }
 
-    return traverse(List.from(input), decodeValue.run).map((list) =>
-      Array.from(list),
-    );
+    return traverse(List.from(input), decodeValue.run).map((list) => Array.from(list));
   });
 
 type DecoderDef<A> = {
@@ -180,11 +166,11 @@ const object = <A>(decoders: DecoderDef<A>): Decoder<A> =>
       const decoder = decoders[field];
 
       const decoded =
-        decoder instanceof DecoderOptional
-          ? obj[field] === undefined
-            ? decoder.decoder.run({ nothing: {} })
-            : decoder.decoder.run({ just: obj[field] })
-          : decoder.run(obj[field]);
+        decoder instanceof DecoderOptional ?
+          obj[field] === undefined ?
+            decoder.decoder.run({ nothing: {} })
+          : decoder.decoder.run({ just: obj[field] })
+        : decoder.run(obj[field]);
 
       switch (true) {
         case decoded instanceof Success:
@@ -231,47 +217,30 @@ const objectMap = <A>(decoder: Decoder<A>): Decoder<ObjectMap<A>> =>
     return Success(result);
   });
 
-const pair = <L, R>(
-  ldecode: Decoder<L>,
-  rdecode: Decoder<R>,
-): Decoder<[L, R]> =>
+const pair = <L, R>(ldecode: Decoder<L>, rdecode: Decoder<R>): Decoder<[L, R]> =>
   new Decoder((input) => {
     if (!Array.isArray(input)) {
       return failure("expected array but found " + typeof input);
     }
     if (input.length !== 2) {
-      return failure(
-        "expected array with 2 elements but it found " + input.length,
-      );
+      return failure("expected array with 2 elements but it found " + input.length);
     }
     const [l, r] = input;
 
-    return ldecode
-      .run(l)
-      .chain((left) => rdecode.run(r).chain((right) => Success([left, right])));
+    return ldecode.run(l).chain((left) => rdecode.run(r).chain((right) => Success([left, right])));
   });
 
-const triple = <A, B, C>(
-  pA: Decoder<A>,
-  pB: Decoder<B>,
-  pC: Decoder<C>,
-): Decoder<[A, B, C]> =>
+const triple = <A, B, C>(pA: Decoder<A>, pB: Decoder<B>, pC: Decoder<C>): Decoder<[A, B, C]> =>
   new Decoder((input) => {
     if (!Array.isArray(input)) {
       return failure("expected array but found " + typeof input);
     }
     if (input.length !== 3) {
-      return failure(
-        "expected array with 3 elements but it found " + input.length,
-      );
+      return failure("expected array with 3 elements but it found " + input.length);
     }
     const [ia, ib, ic] = input;
 
-    return pA
-      .run(ia)
-      .chain((a) =>
-        pB.run(ib).chain((b) => pC.run(ic).chain((c) => Success([a, b, c]))),
-      );
+    return pA.run(ia).chain((a) => pB.run(ib).chain((b) => pC.run(ic).chain((c) => Success([a, b, c]))));
   });
 
 const oneOf = <T extends Decoder<any>[]>(decoders: T): T[number] =>
@@ -289,36 +258,23 @@ const oneOf = <T extends Decoder<any>[]>(decoders: T): T[number] =>
       errors.push(decoded.error);
     }
 
-    return Failure<[Path, string], V>([
-      List.empty(),
-      errors.map(showPath).join("\n"),
-    ]);
+    return Failure<[Path, string], V>([List.empty(), errors.map(showPath).join("\n")]);
   });
 
 const maybe = <V>(decoder: Decoder<V>): Decoder<Maybe<V>> =>
-  oneOf([
-    object({ nothing: object({}) }).map((_) => Nothing<V>()),
-    object({ just: decoder }).map((v) => Just(v.just)),
-  ]);
+  oneOf([object({ nothing: object({}) }).map((_) => Nothing<V>()), object({ just: decoder }).map((v) => Just(v.just))]);
 
-const nullable = <V>(decoder: Decoder<V>): Decoder<Nullable<V>> =>
-  oneOf([nullP, decoder]);
+const nullable = <V>(decoder: Decoder<V>): Decoder<Nullable<V>> => oneOf([nullP, decoder]);
 
-const nullP: Decoder<null> = new Decoder((v) =>
-  v === null ? Success(null) : failure("expected null but found " + typeof v),
-);
+const nullP: Decoder<null> = new Decoder((v) => (v === null ? Success(null) : failure("expected null but found " + typeof v)));
 
 const undefinedP: Decoder<undefined> = new Decoder((v) =>
-  v === undefined
-    ? Success(undefined)
-    : failure("expected `undefined` " + typeof v),
+  v === undefined ? Success(undefined) : failure("expected `undefined` " + typeof v)
 );
 
 // Useful for parsing tag names in discriminated unions.
 const stringLiteral = <T extends string>(str: T): Decoder<T> =>
-  new Decoder((v) =>
-    v === str ? Success(v as T) : failure(`expected '${str}' but found '${v}'`),
-  );
+  new Decoder((v) => (v === str ? Success(v as T) : failure(`expected '${str}' but found '${v}'`)));
 
 // Decoder for a field that may not be present.
 // If it is absent it will be decoded as 'Nothing()'.
@@ -333,45 +289,32 @@ class DecoderOptional<A> {
   }
 }
 
-const optionalMaybe = <V>(decoder: Decoder<V>): DecoderOptional<Maybe<V>> =>
-  DecoderOptional.from(decoder);
+const optionalMaybe = <V>(decoder: Decoder<V>): DecoderOptional<Maybe<V>> => DecoderOptional.from(decoder);
 
-const optionalNullable = <V>(
-  decoder: Decoder<NonNullable<V>>,
-): DecoderOptional<Nullable<V>> =>
+const optionalNullable = <V>(decoder: Decoder<NonNullable<V>>): DecoderOptional<Nullable<V>> =>
   optionalMaybe(decoder).map((v) => v.asNullable());
 
 // An object field that may be absent.
 const optional = <V>(decoder: Decoder<V>): DecoderOptional<V | undefined> =>
-  optionalMaybe(decoder).map((v) =>
-    v instanceof Nothing ? undefined : v.value,
-  );
+  optionalMaybe(decoder).map((v) => (v instanceof Nothing ? undefined : v.value));
 
 // If the field is absent, the default value will be used.
-const optionalDefault = <V>(
-  def: V,
-  decoder: Decoder<V>,
-): DecoderOptional<V> => {
+const optionalDefault = <V>(def: V, decoder: Decoder<V>): DecoderOptional<V> => {
   return optionalMaybe(decoder).map((v) => v.withDefault(def));
 };
 
 // Define a recursive decoder
 function recursive<A>(f: (p: Decoder<A>) => Decoder<A>): Decoder<A> {
-  const base: Decoder<A> = fail(
-    "A recursive decoder cannot immediately call itself.",
-  );
+  const base: Decoder<A> = fail("A recursive decoder cannot immediately call itself.");
   const top = f(base);
   // @ts-expect-error will complain that 'run' is readonly. But we are doing this on purpose here.
   base.run = top.run;
   return top;
 }
 
-const json: Decoder<Json> = recursive((json) =>
-  oneOf([nullP, string, number, boolean, array(json), objectMap(json)]),
-);
+const json: Decoder<Json> = recursive((json) => oneOf([nullP, string, number, boolean, array(json), objectMap(json)]));
 
-const stringEnum = <const T extends string[]>(strs: T): Decoder<T[number]> =>
-  oneOf(strs.map(stringLiteral));
+const stringEnum = <const T extends string[]>(strs: T): Decoder<T[number]> => oneOf(strs.map(stringLiteral));
 
 // Decode a value from a string by treating the string as a stringified JSON value.
 const stringified = <T>(inner: Decoder<T>): Decoder<T> =>

@@ -24,7 +24,7 @@ export {
   stringified,
   optionalNullable,
   optionalMaybe,
-  recursive,
+  recursive
 };
 
 import { Maybe, Nothing, Just, Nullable } from "@/libs/maybe";
@@ -69,8 +69,7 @@ const number: Encoder<number> = new Encoder((input) => {
 
 const string: Encoder<string> = toAny();
 
-const array = <A>(encoder: Encoder<A>): Encoder<Array<A>> =>
-  new Encoder((input: Array<A>) => input.map(encoder.run));
+const array = <A>(encoder: Encoder<A>): Encoder<Array<A>> => new Encoder((input: Array<A>) => input.map(encoder.run));
 
 const object = <A>(encoders: EncoderDef<A>): Encoder<A> =>
   new Encoder((input) => {
@@ -80,11 +79,7 @@ const object = <A>(encoders: EncoderDef<A>): Encoder<A> =>
       switch (true) {
         case encoder instanceof EncoderOptional: {
           const encoded = encoder.encoder.run(input[field]);
-          if (
-            typeof encoded != "object" ||
-            encoded === null ||
-            !("nothing" in encoded || "just" in encoded)
-          ) {
+          if (typeof encoded != "object" || encoded === null || !("nothing" in encoded || "just" in encoded)) {
             throw new Error(`Invalid output of EncoderOptional: ${encoded}`);
           }
 
@@ -111,26 +106,16 @@ const pair = <L, R>(sleft: Encoder<L>, sright: Encoder<R>): Encoder<[L, R]> =>
     return [sleft.run(left), sright.run(right)];
   });
 
-const triple = <A, B, C>(
-  sA: Encoder<A>,
-  sB: Encoder<B>,
-  sC: Encoder<C>,
-): Encoder<[A, B, C]> =>
+const triple = <A, B, C>(sA: Encoder<A>, sB: Encoder<B>, sC: Encoder<C>): Encoder<[A, B, C]> =>
   new Encoder((input) => {
     const [a, b, c] = input;
     return [sA.run(a), sB.run(b), sC.run(c)];
   });
 
 const maybe = <V>(encoder: Encoder<V>): Encoder<Maybe<V>> =>
-  new Encoder(
-    (input) =>
-      (input instanceof Nothing
-        ? { nothing: {} }
-        : { just: encoder.run(input.value) }) as Json,
-  );
+  new Encoder((input) => (input instanceof Nothing ? { nothing: {} } : { just: encoder.run(input.value) }) as Json);
 
-const nullable = <V>(encoder: Encoder<V>): Encoder<Nullable<V>> =>
-  new Encoder((input) => (input === null ? null : encoder.run(input)));
+const nullable = <V>(encoder: Encoder<V>): Encoder<Nullable<V>> => new Encoder((input) => (input === null ? null : encoder.run(input)));
 
 // An encoder for object keys that omits the field if the value is Nothing.
 class EncoderOptional<A> {
@@ -145,18 +130,13 @@ class EncoderOptional<A> {
   }
 }
 
-const optionalMaybe = <V>(encoder: Encoder<V>): EncoderOptional<Maybe<V>> =>
-  EncoderOptional.from(maybe(encoder));
+const optionalMaybe = <V>(encoder: Encoder<V>): EncoderOptional<Maybe<V>> => EncoderOptional.from(maybe(encoder));
 
-const optionalNullable = <V>(
-  encoder: Encoder<NonNullable<V>>,
-): EncoderOptional<Nullable<V>> =>
+const optionalNullable = <V>(encoder: Encoder<NonNullable<V>>): EncoderOptional<Nullable<V>> =>
   optionalMaybe(encoder).rmap((v) =>
-    v === null
-      ? Nothing()
-      : v === undefined
-        ? Nothing()
-        : Just<NonNullable<V>>(v),
+    v === null ? Nothing()
+    : v === undefined ? Nothing()
+    : Just<NonNullable<V>>(v)
   );
 
 const optional = <V>(encoder: Encoder<V>): EncoderOptional<V | undefined> =>
@@ -176,16 +156,13 @@ const oneOf = <V>(f: (v: V) => Encoder<V>): Encoder<V> =>
 const stringEnum = <const T extends string[]>(strs: T): Encoder<T[number]> =>
   string.rmap((input) => {
     if (!strs.includes(input)) {
-      throw new Error(
-        `Cannot encode '${input}'. Expected one of '${strs.join(", ")}'"`,
-      );
+      throw new Error(`Cannot encode '${input}'. Expected one of '${strs.join(", ")}'"`);
     }
     return input;
   });
 
 // Encode a value into a JSON string by stringifying its JSON representation.
-const stringified = <T>(inner: Encoder<T>): Encoder<T> =>
-  string.rmap((v) => JSON.stringify(inner.run(v)));
+const stringified = <T>(inner: Encoder<T>): Encoder<T> => string.rmap((v) => JSON.stringify(inner.run(v)));
 
 // Define a recursive encoder
 function recursive<A>(f: (p: Encoder<A>) => Encoder<A>): Encoder<A> {

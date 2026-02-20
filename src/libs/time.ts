@@ -44,7 +44,11 @@ class POSIX {
   }
 
   compare(other: POSIX): number {
-    return this.value > other.value ? 1 : this.value < other.value ? -1 : 0;
+    return (
+      this.value > other.value ? 1
+      : this.value < other.value ? -1
+      : 0
+    );
   }
 
   addDuration(d: Duration) {
@@ -59,11 +63,7 @@ class POSIX {
     return Duration.milliseconds(this.value - other.value);
   }
 
-  static fromLocalDateAndTime(
-    date: DateOnly,
-    time: TimeOfDay,
-    timezone: Timezone,
-  ): POSIX {
+  static fromLocalDateAndTime(date: DateOnly, time: TimeOfDay, timezone: Timezone): POSIX {
     const s = `${date.pretty()}T${time.pretty()}`;
     const luxonDate = DateTime.fromISO(s, { zone: timezone });
     return new POSIX(luxonDate.toMillis());
@@ -75,27 +75,25 @@ class POSIX {
     const time = TimeOfDay.fromParts({
       hours: dt.hour,
       minutes: dt.minute,
-      seconds: dt.second,
+      seconds: dt.second
     });
     return { date, time };
   }
 
   toLocalDateAndTime(timezone: Timezone): { date: DateOnly; time: TimeOfDay } {
-    const dt = DateTime.fromMillis(this.value, { zone: "UTC" }).setZone(
-      timezone,
-    );
+    const dt = DateTime.fromMillis(this.value, { zone: "UTC" }).setZone(timezone);
     const date = new DateOnly(dt.year, dt.month, dt.day);
     const time = TimeOfDay.fromParts({
       hours: dt.hour,
       minutes: dt.minute,
-      seconds: dt.second,
+      seconds: dt.second
     });
     return { date, time };
   }
 
   static schema: s.Schema<POSIX> = s.number.dimap(
     (n) => new POSIX(n),
-    (p) => p.value,
+    (p) => p.value
   );
 }
 
@@ -123,11 +121,7 @@ class DateOnly {
   }
 
   static fromDate(date: Date): DateOnly {
-    return new DateOnly(
-      date.getFullYear(),
-      date.getMonth() + 1,
-      date.getDate(),
-    );
+    return new DateOnly(date.getFullYear(), date.getMonth() + 1, date.getDate());
   }
 
   pretty() {
@@ -150,7 +144,7 @@ class DateOnly {
 
       return always(new DateOnly(year, month, day));
     },
-    (date) => date.pretty(),
+    (date) => date.pretty()
   );
 
   greaterThan(other: DateOnly) {
@@ -158,49 +152,33 @@ class DateOnly {
   }
 
   compare(other: DateOnly): number {
-    return this.year > other.year
-      ? 1
-      : this.year < other.year
-        ? -1
-        : this.month > other.month
-          ? 1
-          : this.month < other.month
-            ? -1
-            : this.day > other.day
-              ? 1
-              : this.day < other.day
-                ? -1
-                : 0;
+    return (
+      this.year > other.year ? 1
+      : this.year < other.year ? -1
+      : this.month > other.month ? 1
+      : this.month < other.month ? -1
+      : this.day > other.day ? 1
+      : this.day < other.day ? -1
+      : 0
+    );
   }
 
   addMonths(months: number): DateOnly {
     const luxonDate = DateTime.fromObject({
       year: this.year,
       month: this.month,
-      day: this.day,
+      day: this.day
     });
     const newLuxonDate = luxonDate.plus({ months });
 
-    return new DateOnly(
-      newLuxonDate.year,
-      newLuxonDate.month,
-      newLuxonDate.day,
-    );
+    return new DateOnly(newLuxonDate.year, newLuxonDate.month, newLuxonDate.day);
   }
 }
 
 class TimeOfDay {
   constructor(readonly seconds: number) {}
 
-  static fromParts({
-    hours,
-    minutes,
-    seconds,
-  }: {
-    hours: number;
-    minutes: number;
-    seconds: number;
-  }): TimeOfDay {
+  static fromParts({ hours, minutes, seconds }: { hours: number; minutes: number; seconds: number }): TimeOfDay {
     return new TimeOfDay(hours * 60 * 60 + minutes * 60 + seconds);
   }
 
@@ -281,7 +259,11 @@ class Duration {
   }
 
   compare(other: Duration): number {
-    return this.millis > other.millis ? 1 : this.millis < other.millis ? -1 : 0;
+    return (
+      this.millis > other.millis ? 1
+      : this.millis < other.millis ? -1
+      : 0
+    );
   }
 
   /* Quantisation. Divide a duration into buckets of a fixed length
@@ -296,13 +278,11 @@ class Duration {
 
     const count = Math.floor(abs.millis / length.millis);
     const remainderStart = length.multiplyBy(count).multiplyBy(sign);
-    const remainder = Duration.milliseconds(
-      abs.millis % length.millis,
-    ).multiplyBy(sign);
+    const remainder = Duration.milliseconds(abs.millis % length.millis).multiplyBy(sign);
     return {
       count: count * sign,
       remainderStart,
-      remainder,
+      remainder
     };
   }
 
@@ -326,7 +306,7 @@ class Duration {
       hours: Math.floor(d.asHours()) % 24,
       minutes: Math.floor(d.asMinutes()) % 60,
       seconds: Math.floor(d.asSeconds()) % 60,
-      milliseconds: Math.floor(d.asMilliseconds() % 1_000),
+      milliseconds: Math.floor(d.asMilliseconds() % 1_000)
     };
   }
 
@@ -335,8 +315,7 @@ class Duration {
     const { days, hours, minutes } = this.parts();
     const seconds = Math.abs(this.asSeconds()) % 60;
 
-    const formatSeconds = (s: number): string =>
-      s % 1 === 0 ? s.toString() : s.toFixed(3).replace(/\.?0+$/, "");
+    const formatSeconds = (s: number): string => (s % 1 === 0 ? s.toString() : s.toFixed(3).replace(/\.?0+$/, ""));
 
     const prefix = this.millis < 0 ? "-P" : "P";
     const dayPart = days > 0 ? `${days}D` : "";
@@ -344,9 +323,7 @@ class Duration {
     const timeParts = [
       hours > 0 ? `${hours}H` : "",
       minutes > 0 ? `${minutes}M` : "",
-      seconds > 0 || (days === 0 && hours === 0 && minutes === 0)
-        ? `${formatSeconds(seconds)}S`
-        : "",
+      seconds > 0 || (days === 0 && hours === 0 && minutes === 0) ? `${formatSeconds(seconds)}S` : ""
     ].join("");
 
     return prefix + dayPart + (hasTimePart ? "T" + timeParts : "");
@@ -355,8 +332,7 @@ class Duration {
   // Parses ISO-8601 duration string (e.g., "P1DT2H30M45.123S")
   static fromISO8601(str: string): Maybe<Duration> {
     // Supports: P[nD]T[nH][nM][nS] with optional decimals on any component
-    const regex =
-      /^(-)?P(?:(\d+(?:\.\d+)?)D)?(T)?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/;
+    const regex = /^(-)?P(?:(\d+(?:\.\d+)?)D)?(T)?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/;
     const match = str.match(regex);
 
     if (!match) {
@@ -389,10 +365,7 @@ class Duration {
     // Chained factory methods (seconds → milliseconds) accumulate
     // IEEE-754 floating point errors (~10⁻¹⁵). Rounding to milliseconds is safe
     // as it's our internal precision and the error is far below this threshold.
-    const total = Duration.days(days)
-      .add(Duration.hours(hours))
-      .add(Duration.minutes(minutes))
-      .add(Duration.seconds(seconds));
+    const total = Duration.days(days).add(Duration.hours(hours)).add(Duration.minutes(minutes)).add(Duration.seconds(seconds));
 
     const millis = Math.round(total.asMilliseconds());
     return Just(Duration.milliseconds(negative ? -millis : millis));
@@ -403,8 +376,8 @@ class Duration {
     (str) =>
       Duration.fromISO8601(str).unwrap(
         () => fail("Invalid ISO-8601 duration format"),
-        (d) => always(d),
+        (d) => always(d)
       ),
-    (d) => d.toISO8601(),
+    (d) => d.toISO8601()
   );
 }

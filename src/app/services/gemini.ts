@@ -1,28 +1,13 @@
-export {
-  type AuthCredentials,
-  generateCommitMessage,
-  refineCommitMessage,
-  getAuthCredentials,
-};
+export { type AuthCredentials, generateCommitMessage, refineCommitMessage, getAuthCredentials };
 
-import {
-  GoogleGenerativeAI,
-  type GenerateContentResponse,
-} from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
 import { Future } from "@/libs/future";
-import {
-  CommitConvention,
-  type Config,
-  type OAuthTokens,
-  getAccessToken,
-} from "@/app/services/googleAuth";
+import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
 import { getPrompt } from "@/app/services/prompts";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
 
-type AuthCredentials =
-  | { readonly method: "byok"; readonly apiKey: string }
-  | { readonly method: "oauth"; readonly tokens: OAuthTokens };
+type AuthCredentials = { readonly method: "byok"; readonly apiKey: string } | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): AuthCredentials | null => {
   switch (config.auth_method.type) {
@@ -40,16 +25,11 @@ type GenerateContentParams = {
   readonly systemInstruction?: string;
 };
 
-const generateContentWithApiKey = (
-  apiKey: string,
-  params: GenerateContentParams,
-): Future<Error, string> => {
+const generateContentWithApiKey = (apiKey: string, params: GenerateContentParams): Future<Error, string> => {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    ...(params.systemInstruction !== undefined
-      ? { systemInstruction: params.systemInstruction }
-      : {}),
+    ...(params.systemInstruction !== undefined ? { systemInstruction: params.systemInstruction } : {})
   });
 
   return Future.attemptP(async () => {
@@ -60,10 +40,7 @@ const generateContentWithApiKey = (
   }).mapRej((e) => new Error(String(e)));
 };
 
-const generateContentWithOAuth = (
-  tokens: OAuthTokens,
-  params: GenerateContentParams,
-): Future<Error, string> =>
+const generateContentWithOAuth = (tokens: OAuthTokens, params: GenerateContentParams): Future<Error, string> =>
   getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -73,7 +50,7 @@ const generateContentWithOAuth = (
 
       if (params.systemInstruction !== undefined) {
         body["system_instruction"] = {
-          parts: [{ text: params.systemInstruction }],
+          parts: [{ text: params.systemInstruction }]
         };
       }
 
@@ -81,9 +58,9 @@ const generateContentWithOAuth = (
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -99,13 +76,10 @@ const generateContentWithOAuth = (
       }
 
       return text.trim();
-    }).mapRej((e) => new Error(String(e))),
+    }).mapRej((e) => new Error(String(e)))
   );
 
-const generateContent = (
-  auth: AuthCredentials,
-  params: GenerateContentParams,
-): Future<Error, string> => {
+const generateContent = (auth: AuthCredentials, params: GenerateContentParams): Future<Error, string> => {
   switch (auth.method) {
     case "byok":
       return generateContentWithApiKey(auth.apiKey, params);
@@ -118,20 +92,15 @@ const generateCommitMessage = (
   auth: AuthCredentials,
   diff: string,
   convention: CommitConvention,
-  customTemplate?: string,
+  customTemplate?: string
 ): Future<Error, string> =>
   generateContent(auth, {
-    prompt: getPrompt(diff, convention, customTemplate),
+    prompt: getPrompt(diff, convention, customTemplate)
   });
 
-const refineCommitMessage = (
-  auth: AuthCredentials,
-  currentMessage: string,
-  adjustment: string,
-  diff: string,
-): Future<Error, string> =>
+const refineCommitMessage = (auth: AuthCredentials, currentMessage: string, adjustment: string, diff: string): Future<Error, string> =>
   generateContent(auth, {
     prompt: `<diff>\n${diff}\n</diff>\n<current>\n${currentMessage}\n</current>\n<adjustment>\n${adjustment}\n</adjustment>`,
     systemInstruction:
-      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '.",
+      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
   });

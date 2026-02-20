@@ -4,7 +4,13 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import { CommitConvention, type AuthMethod, type Config, performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
+import {
+  CommitConvention,
+  type AuthMethod,
+  type Config,
+  performOAuthFlow,
+  validateOAuthTokens,
+} from "@/app/services/googleAuth";
 import { type Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Just, Nothing } from "@/libs/maybe";
@@ -31,7 +37,10 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
     if (convention === "custom") {
       const template = await p.text({
         message: "Enter custom template (use {diff} as placeholder):",
-        validate: value => (!value || !value.includes("{diff}") ? "Template must include {diff}" : undefined),
+        validate: (value) =>
+          !value || !value.includes("{diff}")
+            ? "Template must include {diff}"
+            : undefined,
       });
       if (p.isCancel(template)) throw new Error("Setup cancelled");
       customTemplate = template;
@@ -40,8 +49,16 @@ const executeSetupFlow = (deps: Dependencies): Future<Error, void> => {
     const authMethod = await p.select({
       message: "Select authentication method:",
       options: [
-        { value: "oauth", label: "Google OAuth (recommended)", hint: "Opens browser for Google sign-in" },
-        { value: "api_key", label: "API Key", hint: "Paste a Google AI Studio API key" },
+        {
+          value: "oauth",
+          label: "Google OAuth (recommended)",
+          hint: "Opens browser for Google sign-in",
+        },
+        {
+          value: "api_key",
+          label: "API Key",
+          hint: "Paste a Google AI Studio API key",
+        },
       ],
       initialValue: "oauth",
     });
@@ -71,7 +88,7 @@ const setupOAuth = (
   p.log.info("Opening browser for Google sign-in...");
 
   return performOAuthFlow(deps)
-    .chain(tokens => {
+    .chain((tokens) => {
       const s = p.spinner();
       s.start("Validating OAuth tokens...");
 
@@ -88,14 +105,16 @@ const setupOAuth = (
           return saveConfig(config);
         })
         .map(() => {
-          p.outro(color.green("Setup complete! Authenticated via Google OAuth."));
+          p.outro(
+            color.green("Setup complete! Authenticated via Google OAuth."),
+          );
         })
-        .mapRej(e => {
+        .mapRej((e) => {
           s.stop(color.red("OAuth validation failed."));
           return e;
         });
     })
-    .mapRej(e => {
+    .mapRej((e) => {
       p.log.error(color.red(e.message));
       return e;
     });
@@ -108,12 +127,13 @@ const setupApiKey = (
   Future.attemptP(async () => {
     const apiKey = await p.password({
       message: "Enter your GOOGLE_API_KEY:",
-      validate: value => (!value || value.length < 10 ? "API Key is too short" : undefined),
+      validate: (value) =>
+        !value || value.length < 10 ? "API Key is too short" : undefined,
     });
 
     if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
     return apiKey;
-  }).chain(apiKey => {
+  }).chain((apiKey) => {
     const s = p.spinner();
     s.start("Validating API key...");
 
@@ -132,7 +152,7 @@ const setupApiKey = (
       .map(() => {
         p.outro(color.green("Setup complete!"));
       })
-      .mapRej(e => {
+      .mapRej((e) => {
         s.stop(color.red("Validation failed."));
         return e;
       });

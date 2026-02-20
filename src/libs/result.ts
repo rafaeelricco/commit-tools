@@ -6,10 +6,10 @@ export {
   traverse_,
 };
 
-import { Trampoline, end, tailRecursive } from '@/libs/trampoline';
-import { List } from '@/libs/list';
+import { Trampoline, end, tailRecursive } from "@/libs/trampoline";
+import { List } from "@/libs/list";
 
-import Callable from '@/libs/callable';
+import Callable from "@/libs/callable";
 
 type Result<E, T> = Success<E, T> | Failure<E, T>;
 
@@ -98,12 +98,12 @@ class Failure<E, T> implements IResult<E, T> {
 
 function traverse<T, A, E>(
   xs: List<A>,
-  f: (v: A) => Result<E, T>
+  f: (v: A) => Result<E, T>,
 ): Result<E, List<T>> {
   const go: (done: List<T>, todo: List<A>) => Trampoline<Result<E, List<T>>> =
     tailRecursive((done, todo) => {
       switch (true) {
-        case 'head' in todo.value: {
+        case "head" in todo.value: {
           const { head, tail } = todo.value;
           const r = f(head);
           switch (true) {
@@ -117,7 +117,7 @@ function traverse<T, A, E>(
               return r satisfies never;
           }
         }
-        case 'empty' in todo.value:
+        case "empty" in todo.value:
           return end(new Success(done.reverse()));
         default:
           return todo.value satisfies never;
@@ -129,7 +129,7 @@ function traverse<T, A, E>(
 
 function traverse_<T, A, E>(
   xs: Array<A>,
-  f: (v: A) => Result<E, T>
+  f: (v: A) => Result<E, T>,
 ): Result<E, Array<T>> {
   return traverse(List.from(xs), f).map((r) => r.toArray());
 }

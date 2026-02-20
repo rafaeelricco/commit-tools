@@ -26,7 +26,7 @@ export {
   mapMaybe,
 };
 
-import Callable from '@/libs/callable';
+import Callable from "@/libs/callable";
 
 type Maybe<T> = Just<T> | Nothing<T>;
 type Nullable<T> = T | null;
@@ -93,7 +93,7 @@ class Nothing<T> implements IMaybe<T> {
 }
 
 function fromOptional<T>(v: undefined | T): Maybe<T> {
-  if (typeof v === 'undefined') {
+  if (typeof v === "undefined") {
     return new Nothing();
   } else {
     return new Just(v);

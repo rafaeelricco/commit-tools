@@ -1,9 +1,9 @@
 export { Future, type Cancel };
 
-import * as F from 'fluture';
+import * as F from "fluture";
 
-import { Result, Success, Failure } from '@/libs/result';
-import { FutureInstance } from 'fluture';
+import { Result, Success, Failure } from "@/libs/result";
+import { FutureInstance } from "fluture";
 
 type Cancel = () => void;
 
@@ -13,24 +13,24 @@ class Future<E, T> {
   readonly inner: FutureInstance<E, T>;
 
   static create<E, T>(
-    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => Cancel | void
+    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => Cancel | void,
   ): Future<E, T> {
     return new Future(
       F.Future((r, a) => {
         const cancel = f(r, a);
         return cancel === undefined ? () => {} : cancel;
-      })
+      }),
     );
   }
 
   static createUncancellable<E, T>(
-    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => void
+    f: (r: F.RejectFunction<E>, a: F.ResolveFunction<T>) => void,
   ): Future<E, T> {
     return new Future(
       F.Future((r, a) => {
         f(r, a);
         return () => {}; // No-op cancel function
-      })
+      }),
     );
   }
 
@@ -49,22 +49,22 @@ class Future<E, T> {
   static bracket<E, A, B, C>(
     acquire: Future<E, A>,
     release: (_: A) => Future<E, C>,
-    consume: (_: A) => Future<E, B>
+    consume: (_: A) => Future<E, B>,
   ) {
     return new Future(
-      F.hook(acquire.inner)((x) => release(x).inner)((x) => consume(x).inner)
+      F.hook(acquire.inner)((x) => release(x).inner)((x) => consume(x).inner),
     );
   }
 
   static parallel<E, T>(
     n: number,
-    xs: Array<Future<E, T>>
+    xs: Array<Future<E, T>>,
   ): Future<E, Array<T>> {
     return new Future(F.parallel(n)(xs.map((f) => f.inner)));
   }
 
   static concurrently<E, C extends { [k: string]: any }>(
-    obj: Fut<E, C>
+    obj: Fut<E, C>,
   ): Future<E, C> {
     const futures: Future<E, Record<string, unknown>>[] = [];
 
@@ -76,14 +76,14 @@ class Future<E, T> {
     return Future.parallel(Infinity, futures).map((results) =>
       results.reduce(
         (acc, x) => Object.assign(acc, x),
-        {} as Record<string, unknown>
-      )
+        {} as Record<string, unknown>,
+      ),
     ) as Future<E, C>;
   }
 
   static mapConcurrently<A, E, T>(
     f: (_: A) => Future<E, T>,
-    xs: Array<A>
+    xs: Array<A>,
   ): Future<E, Array<T>> {
     return Future.parallel(Infinity, xs.map(f));
   }
@@ -98,11 +98,11 @@ class Future<E, T> {
 
   static traverse<A, E, T>(
     f: (_: A) => Future<E, T>,
-    xs: Array<A>
+    xs: Array<A>,
   ): Future<E, Array<T>> {
     return xs.reduce(
       (acc, x) => acc.chain((ys) => f(x).map((y) => [...ys, y])),
-      Future.resolve([]) as Future<E, Array<T>>
+      Future.resolve([]) as Future<E, Array<T>>,
     );
   }
 
@@ -143,7 +143,7 @@ class Future<E, T> {
 
   bichain<F, W>(
     f: (_: E) => Future<F, W>,
-    g: (_: T) => Future<F, W>
+    g: (_: T) => Future<F, W>,
   ): Future<F, W> {
     const h = (x: E): FutureInstance<F, W> => f(x).inner;
     const i = (x: T): FutureInstance<F, W> => g(x).inner;
@@ -164,7 +164,7 @@ class Future<E, T> {
 
   promiseR(): Promise<Result<E, T>> {
     const f: Future<never, Result<E, T>> = this.map<Result<E, T>>(
-      Success
+      Success,
     ).chainRej((e) => Future.resolve(Failure(e)));
     return F.promise(f.inner);
   }

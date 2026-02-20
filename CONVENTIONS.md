@@ -34,6 +34,7 @@ class MyId {
 ```
 
 This class implementation has a few advantages over intersections:
+
 - No name collision.
 - No non-existent `__brand` property shown through intellisense.
 - It limits the operations you can perform on the type.
@@ -52,9 +53,9 @@ interface State {
 }
 
 // Good Pattern
-type State = 
-  | { status: "loading" } 
-  | { status: "error"; error: Error } 
+type State =
+  | { status: "loading" }
+  | { status: "error"; error: Error }
   | { status: "success"; data: { id: string } };
 ```
 
@@ -87,7 +88,7 @@ Avoid creating "valid" objects that represent an empty state (e.g., `Conversatio
 
 ```tsx
 // Bad Pattern
-const id = ConversationId.empty(); 
+const id = ConversationId.empty();
 if (id.value === "") { ... }
 
 // Good Pattern
@@ -138,54 +139,74 @@ Avoid `any`. Generic functions should preserve type information through the call
 
 ```tsx
 // Bad Pattern
-function parse(data: any): any { return data.result; }
+function parse(data: any): any {
+  return data.result;
+}
 
 // Good Pattern
-function parse<T>(data: { result: T }): T { return data.result; }
+function parse<T>(data: { result: T }): T {
+  return data.result;
+}
 ```
 
 Strict generics preserve information routing and generate compile-time errors instead of runtime failures.
 
 ---
 
-
-
 ### Domain-Driven Type Modeling
 
 By combining branded types, discriminated unions, and schemas, we can build a rock-solid domain model where impossible states are entirely unrepresentable.
 
 #### 1. Entity Identifiers
+
 These are the fundamental building blocks for identity. By co-locating the `schema` as a static property, we ensure they serialize and deserialize natively across the network/database boundary.
 
 ```tsx
-class MessageId { static schema = idSchema(this); readonly _tag: "MessageId"; }
-class ConversationId { static schema = idSchema(this); readonly _tag: "ConversationId"; }
-class AgencyId { static schema = idSchema(this); readonly _tag: "AgencyId"; }
+class MessageId {
+  static schema = idSchema(this);
+  readonly _tag: "MessageId";
+}
+class ConversationId {
+  static schema = idSchema(this);
+  readonly _tag: "ConversationId";
+}
+class AgencyId {
+  static schema = idSchema(this);
+  readonly _tag: "AgencyId";
+}
 
-class PropertyId { static schema = idSchema(this); readonly _tag: "PropertyId"; }
-class DraftId { static schema = idSchema(this); readonly _tag: "DraftId"; }
+class PropertyId {
+  static schema = idSchema(this);
+  readonly _tag: "PropertyId";
+}
+class DraftId {
+  static schema = idSchema(this);
+  readonly _tag: "DraftId";
+}
 ```
 
 #### 2. Explicit Message Structures
+
 When modeling complex, varied data structures like LLM outputs or conversational events, use explicit discriminated unions instead of giant bags of optional properties.
 
 For example, representing rich content streams inside an Assistant message:
+
 ```tsx
 const schema_AgentExecutionTrace = s.discriminatedUnion([
   s.variant({
     type: "text",
-    text: s.string
+    text: s.string,
   }),
   s.variant({
     type: "tool_call",
     name: s.string,
     input: s.json,
-    result: schema_Result(schema_Error, s.json)
+    result: schema_Result(schema_Error, s.json),
   }),
   s.variant({
     type: "error",
     message: s.string,
-    code: s.optional(s.string)
+    code: s.optional(s.string),
   }),
 ]);
 ```
@@ -219,10 +240,11 @@ const schema_ConversationEvents = s.discriminatedUnion([
   }),
 ]);
 
-export type Message = s.Infer<typeof schema_Message>
+export type Message = s.Infer<typeof schema_Message>;
 ```
 
 #### 3. Immutable State Transitions
+
 When deriving state from interactions, use distinct user actions rather than mutating generic data blobs. This serves as a deterministic source of truth.
 
 If an action relies on external data that can change (like a Property's price), embed an immutable snapshot inside the event:
@@ -237,16 +259,22 @@ const schema_PropertySnapshot = s.object({
 
 const schema_UserActions = s.discriminatedUnion([
   s.variant({ type: "view_property", property: schema_PropertySnapshot }),
-  s.variant({ type: "start_booking", property: schema_PropertySnapshot, draftId: DraftId.schema }),
+  s.variant({
+    type: "start_booking",
+    property: schema_PropertySnapshot,
+    draftId: DraftId.schema,
+  }),
   s.variant({ type: "confirm_booking", draftId: DraftId.schema }),
   s.variant({ type: "cancel_booking", draftId: DraftId.schema }),
 ]);
 ```
 
 #### 4. Co-locating State Machines
+
 Avoid disjointed standalone variables in global stores or top-level containers. If multiple properties only make sense together, group them into focused, union-driven state containers.
 
 **Avoid this:**
+
 ```tsx
 // Disparate state spread across the component or store
 currentConversationId: string;
@@ -260,34 +288,34 @@ activeVoiceConnection: boolean;
 Bundle the conversation scope so swapping IDs isn't decoupled from transcripts, and explicitly constrain the streaming status into its own state machine type (`Stream<E, R>`).
 
 ```tsx
-type Stream<E, R> = 
+type Stream<E, R> =
   | { type: "not_started" }
-  | { type: "streaming", results: R[] }
-  | { type: "done", results: R[] }
-  | { type: "error", error: E };
+  | { type: "streaming"; results: R[] }
+  | { type: "done"; results: R[] }
+  | { type: "error"; error: E };
 
 type VoiceConnection =
   | { type: "disconnected" }
   | { type: "connecting" }
-  | { type: "transcribing", transcription: string }
-  | { type: "error", error: FetchErrorResponse };
+  | { type: "transcribing"; transcription: string }
+  | { type: "error"; error: FetchErrorResponse };
 
-type UserInput = 
-  | { type: "text", content: string }
-  | { type: "voice", connection: VoiceConnection };
+type UserInput =
+  | { type: "text"; content: string }
+  | { type: "voice"; connection: VoiceConnection };
 
 // Unified conversation state
 interface ActiveConversation {
-    id: ConversationId,
-    messages: Array<Message>,
-    inputMode: UserInput,
-    streamingResponse: Stream<Error, string>
+  id: ConversationId;
+  messages: Array<Message>;
+  inputMode: UserInput;
+  streamingResponse: Stream<Error, string>;
 }
 ```
+
 This guarantees the UI receives deterministically valid combinations. If we are transcribing voice, we fundamentally cannot be editing text simultaneously, because `UserInput` restricts the shape at the compiler level.
 
 ---
-
 
 ## 2. Core Functional Primitives
 
@@ -296,6 +324,7 @@ Instead of ad-hoc checks or throwing exceptions, our architecture enforces data 
 ### 1. `Maybe` - Representing Absence
 
 Use `Maybe<T>` to represent values that might not exist.
+
 - Instead of returning `null` or `undefined`, return `Just(value)` or `Nothing()`.
 - Unrepresentable States: Never assume non-empty. Enforce exhaustiveness via pattern matching:
   ```typescript
@@ -304,14 +333,14 @@ Use `Maybe<T>` to represent values that might not exist.
       console.log(maybeUser.value);
       break;
     case maybeUser instanceof Nothing:
-      console.log('No user');
+      console.log("No user");
       break;
-    default: maybeUser satisfies never;
+    default:
+      maybeUser satisfies never;
   }
   ```
 - **Combinators**: Use `.map()`, `.chain()` (flatMap), `.withDefault(fallback)`, and `.unwrap(onNothing, onJust)`.
 - Use `fromNullable()` and `fromOptional()` at system boundaries.
-
 
 #### Usage Patterns
 
@@ -320,12 +349,12 @@ Use `Maybe<T>` to represent values that might not exist.
 ```typescript
 // Bad - using null directly
 const user: User | null = findUser(id);
-if (user !== null) { /* use user */ }
+if (user !== null) {
+  /* use user */
+}
 
 // Good - using Just/Nothing constructors (callable without new)
-const user: Maybe<User> = findUser(id)
-  ? Just(foundUser)
-  : Nothing();
+const user: Maybe<User> = findUser(id) ? Just(foundUser) : Nothing();
 ```
 
 **Rationale:** Maybe types are self-documenting. The type signature `Maybe<User>` communicates optionality, while `User | null` requires checking implementation.
@@ -344,7 +373,7 @@ switch (true) {
     console.log(maybeUser.value);
     break;
   case maybeUser instanceof Nothing:
-    console.log('No user found');
+    console.log("No user found");
     break;
   default:
     maybeUser satisfies never;
@@ -357,24 +386,23 @@ switch (true) {
 
 ```typescript
 // Bad - unwrap, transform, rewrap
-const name = maybeUser instanceof Just
-  ? Just(maybeUser.value.name) : Nothing();
+const name = maybeUser instanceof Just ? Just(maybeUser.value.name) : Nothing();
 
 // Good - use map
-const name = maybeUser.map(user => user.name);
+const name = maybeUser.map((user) => user.name);
 ```
 
 #### Chaining operations (flatMap)
 
 ```typescript
 // Bad - nested map creating Maybe<Maybe<T>>
-const dept: Maybe<Maybe<Department>> = maybeUser.map(user =>
-  findDepartment(user.departmentId)
+const dept: Maybe<Maybe<Department>> = maybeUser.map((user) =>
+  findDepartment(user.departmentId),
 );
 
 // Good - chain flattens the nested Maybe
-const dept: Maybe<Department> = maybeUser.chain(user =>
-  findDepartment(user.departmentId)
+const dept: Maybe<Department> = maybeUser.chain((user) =>
+  findDepartment(user.departmentId),
 );
 ```
 
@@ -382,10 +410,13 @@ const dept: Maybe<Department> = maybeUser.chain(user =>
 
 ```typescript
 // Good - withDefault for simple defaults
-const name = maybeUser.map(u => u.name).withDefault('Anonymous');
+const name = maybeUser.map((u) => u.name).withDefault("Anonymous");
 
 // Good - maybe for default with transformation in one step
-const greeting = maybeUser.maybe('Hello, stranger', user => `Hello, ${user.name}`);
+const greeting = maybeUser.maybe(
+  "Hello, stranger",
+  (user) => `Hello, ${user.name}`,
+);
 ```
 
 #### Alternative values with alt
@@ -398,8 +429,8 @@ const user = primaryUser.alt(secondaryUser).alt(defaultUser);
 #### Converting from nullable/optional at boundaries
 
 ```typescript
-const maybe = fromNullable(nullableValue);   // for null
-const maybe = fromOptional(undefinedValue);   // for undefined
+const maybe = fromNullable(nullableValue); // for null
+const maybe = fromOptional(undefinedValue); // for undefined
 ```
 
 #### Filtering arrays with catMaybes and mapMaybe
@@ -409,8 +440,8 @@ const maybe = fromOptional(undefinedValue);   // for undefined
 const users = catMaybes(results);
 
 // mapMaybe combines map and filter
-const adults = mapMaybe(users, user =>
-  user.age >= 18 ? Just(user) : Nothing()
+const adults = mapMaybe(users, (user) =>
+  user.age >= 18 ? Just(user) : Nothing(),
 );
 ```
 
@@ -426,10 +457,10 @@ const adults = mapMaybe(users, user =>
 ### 2. `Result` - Typed Error Handling
 
 Use `Result<E, T>` for fallible operations.
+
 - Avoid Exceptions: Never `throw` an error unless it is a catastrophic programmer bug. Return `Failure(error)` instead of throwing.
 - Exhaustive Checking: Handle both paths with `.either(onError, onSuccess)`.
 - **Combinators**: Short-circuit execution natively with `.chain()` passing only `Success` down the chain. Transform success values with `.map()` and errors with `.mapFailure()`.
-
 
 #### Usage Patterns
 
@@ -438,7 +469,7 @@ Use `Result<E, T>` for fallible operations.
 ```typescript
 // Good - callable constructors (no new needed)
 const success = Success<string, number>(42);
-const failure = Failure<string, number>('validation failed');
+const failure = Failure<string, number>("validation failed");
 ```
 
 #### Pattern Matching with either()
@@ -447,8 +478,8 @@ const failure = Failure<string, number>('validation failed');
 // Good - exhaustive fold
 const handle = (result: Result<Error, User>): string =>
   result.either(
-    e => e.message,      // failure case
-    user => user.name    // success case
+    (e) => e.message, // failure case
+    (user) => user.name, // success case
   );
 ```
 
@@ -456,16 +487,14 @@ const handle = (result: Result<Error, User>): string =>
 
 ```typescript
 // Good - monadic chain short-circuits on first Failure
-parseJson(input)
-  .chain(validate)
-  .chain(transform);
+parseJson(input).chain(validate).chain(transform);
 ```
 
 #### Transforming with map vs chain
 
 ```typescript
 // map for pure transformations (T) => W
-const doubled = Success<string, number>(21).map(n => n * 2);
+const doubled = Success<string, number>(21).map((n) => n * 2);
 
 // chain for fallible transformations (T) => Result<E, W>
 const result = getUser(id).chain(validateUser);
@@ -474,12 +503,13 @@ const result = getUser(id).chain(validateUser);
 #### Error transformation with mapFailure
 
 ```typescript
-const domainResult: Result<DomainError, User> = httpResult
-  .mapFailure(httpErr => ({
+const domainResult: Result<DomainError, User> = httpResult.mapFailure(
+  (httpErr) => ({
     code: httpErr.status,
     message: httpErr.body,
     original: httpErr,
-  }));
+  }),
+);
 ```
 
 #### Common Mistakes
@@ -494,10 +524,10 @@ const domainResult: Result<DomainError, User> = httpResult
 ### 3. `RemoteData` - UI State Machine
 
 Use `RemoteData<E, T>` to model the exact status of asynchronous UI actions or network requests.
+
 - Prevent Impossible Combinations: Replacing three unstructured booleans (`loading`, `error`, `success`) avoids bugs like `loading=true` AND `error!=null`.
 - **States**: `NotAsked()`, `Loading({ ...progress })`, `Failed(error)`, and `Ready(value)`.
 - Map over `Ready` values using `.map()` while preserving `Loading`/`Failed` states.
-
 
 #### Usage Patterns
 
@@ -505,15 +535,15 @@ Use `RemoteData<E, T>` to model the exact status of asynchronous UI actions or n
 
 ```typescript
 // Bad - boolean flags allowing impossible states
-type UserState = { user: User | null; loading: boolean; error: Error | null; };
+type UserState = { user: User | null; loading: boolean; error: Error | null };
 
 // Good - explicit state representation
 type UserState = RemoteData<ApiError, User>;
 
 const initial = NotAsked<ApiError, User>();
 const loading = Loading<ApiError, User>();
-const failed  = Failed<ApiError, User>(new ApiError('Not found'));
-const ready   = Ready<ApiError, User>(user);
+const failed = Failed<ApiError, User>(new ApiError("Not found"));
+const ready = Ready<ApiError, User>(user);
 ```
 
 #### Pattern matching with instanceof
@@ -541,12 +571,12 @@ switch (true) {
 ```typescript
 // map transforms only Ready state
 const displayName: RemoteData<E, string> = state.map(
-  user => `${user.firstName} ${user.lastName}`
+  (user) => `${user.firstName} ${user.lastName}`,
 );
 
 // chain sequences RemoteData operations
-const posts: RemoteData<ApiError, Post[]> = userState.chain(user =>
-  fetchPosts(user.id)
+const posts: RemoteData<ApiError, Post[]> = userState.chain((user) =>
+  fetchPosts(user.id),
 );
 ```
 
@@ -561,13 +591,13 @@ const posts: RemoteData<ApiError, Post[]> = userState.chain(user =>
 ### 4. `Future` - Lazy Async Computation
 
 Use `Future<E, T>` instead of `Promise` for predictable, cancelable, and lazily evaluated async flows.
+
 - **Lazy**: Unlike Promises, `Future` does not execute until `.fork(onError, onSuccess)` is called.
 - **Initialization**: Create instances via `Future.create` (supplying cancel mechanics) or `Future.attemptP(promiseFn)` (though this loses explicit cancellation).
 - **Control flow**: Flatten nested asynchronous chains with `.chain()` instead of callback hell. Use `Future.bracket()` for guaranteed resource cleanup (locks, file descriptors, DB connections) mimicking `try/finally`.
 - **Concurrency**: Use `Future.parallel(limit, futures)` to regulate concurrency without flooding APIs. `both()` paired with `.fork` cancels early on sequential rejections.
 
 ---
-
 
 #### Usage Patterns
 
@@ -576,7 +606,7 @@ Use `Future<E, T>` instead of `Promise` for predictable, cancelable, and lazily 
 ```typescript
 // Bad - attemptP for non-Promise async (loses cancellation)
 const future = Future.attemptP(async () => {
-  return new Promise(resolve => setTimeout(() => resolve(42), 1000));
+  return new Promise((resolve) => setTimeout(() => resolve(42), 1000));
 });
 
 // Good - create with cancellation support
@@ -599,7 +629,10 @@ const future = Future.createUncancellable<never, Data>((reject, resolve) => {
 
 ```typescript
 // Bad
-Future.attemptP(async () => { const r = await someAsyncFunction(); return r; });
+Future.attemptP(async () => {
+  const r = await someAsyncFunction();
+  return r;
+});
 
 // Good - wrap Promise directly
 Future.attemptP(() => someAsyncFunction());
@@ -609,7 +642,7 @@ Future.attemptP(() => someAsyncFunction());
 
 ```typescript
 fetchUser(id)
-  .chain(user => fetchPosts(user.id).map(posts => ({ user, posts })))
+  .chain((user) => fetchPosts(user.id).map((posts) => ({ user, posts })))
   .fork(handleError, ({ user, posts }) => render(user, posts));
 ```
 
@@ -630,10 +663,8 @@ const result = Future.concurrently({
 #### Recovery with chainRej
 
 ```typescript
-future.chainRej(error =>
-  error.code === 404
-    ? Future.resolve(defaultValue)
-    : Future.reject(error)
+future.chainRej((error) =>
+  error.code === 404 ? Future.resolve(defaultValue) : Future.reject(error),
 );
 ```
 
@@ -641,9 +672,9 @@ future.chainRej(error =>
 
 ```typescript
 Future.bracket(
-  acquireConnection(),              // acquire
-  conn => releaseConnection(conn),  // release (always runs)
-  conn => useConnection(conn)       // consume
+  acquireConnection(), // acquire
+  (conn) => releaseConnection(conn), // release (always runs)
+  (conn) => useConnection(conn), // consume
 );
 ```
 
@@ -652,15 +683,16 @@ Future.bracket(
 ```typescript
 const result = Future.race(
   longOperation(),
-  Future.resolveAfter<OperationError, never>(5000, null)
-    .chain(() => Future.reject(new TimeoutError()))
+  Future.resolveAfter<OperationError, never>(5000, null).chain(() =>
+    Future.reject(new TimeoutError()),
+  ),
 );
 ```
 
 #### Converting to Promise
 
 ```typescript
-const result = await future.promise(e => new Error(String(e.message)));
+const result = await future.promise((e) => new Error(String(e.message)));
 ```
 
 #### Common Mistakes
@@ -673,28 +705,30 @@ const result = await future.promise(e => new Error(String(e.message)));
 
 ---
 
-
 ## 3. Persistent Collections & Concurrency
 
 Avoid native `Map`, `Set`, and mutable recursive Arrays when functional semantics are strictly needed or iterations run excessively deep.
 
 ### `List` - The Singly Linked List
+
 Use `List<T>` for O(1) prepends and immutable functional sequences.
+
 - Avoid appending onto linked lists because it operates in O(n^2). Build lists functionally using O(1) prepend `List.cons(item, list)` applying `.reverse()` at the end, or generate from native arrays utilizing `List.from(arr)`.
 - Safe Retrieval: Always access lists via `.head()` knowing it enforces a `Maybe<T>` return to avoid crash exceptions.
 
 ### Ordered Collections (`TreeMap` / `TreeSet`)
+
 Utilize BTree-wrapped persistent representations replacing un-ordered JS Maps to maintain structured iteration priorities and typed interactions.
+
 - Utilize constructors with deterministic string comparators efficiently: `TreeSet.new<number>((a, b) => a - b)`. Domain instances can implement `Comparable` and spawn structured wrappers internally.
 - Use boolean properties effectively mapping logic internally without creating deep loops `.intersectionWith()`, `union()`, `difference()`.
-
 
 #### Usage Patterns
 
 #### Creating Maps with explicit comparators
 
 ```typescript
-const map = TreeMap.new<string, number>((x, y) => x > y ? 1 : x < y ? -1 : 0);
+const map = TreeMap.new<string, number>((x, y) => (x > y ? 1 : x < y ? -1 : 0));
 
 // Or use stringMap factory
 const map = stringMap<User>();
@@ -716,7 +750,7 @@ if (result instanceof Just) {
 
 ```typescript
 const merged = map1.unionWith(map2, (old, new_) => old + new_);
-map.setWith('count', 1, (old, _new) => old + _new);
+map.setWith("count", 1, (old, _new) => old + _new);
 ```
 
 #### Set operations
@@ -733,7 +767,6 @@ const common = mapA.intersectionWith(mapB, (a, b) => ({ left: a, right: b }));
 - **Assuming insertion order**: TreeMap is always sorted by comparator.
 
 ---
-
 
 #### Usage Patterns
 
@@ -770,10 +803,10 @@ const set = TreeSet.new<number>((a, b) => a - b)
 
 Use these structures for explicit, state-based coordination of asynchronous operations, rather than relying on raw Promises, flags, or unconstrained arrays.
 
-- **`MVar<T>`**: Inspired by Haskell, a mutable variable that is either full or empty. Ideal for synchronization. 
+- **`MVar<T>`**: Inspired by Haskell, a mutable variable that is either full or empty. Ideal for synchronization.
   - `put(v)` blocks if the MVar is already full.
   - `take()` blocks if the MVar is currently empty.
-- **`BoundedBuffer<T>`**: An async queue with a maximum capacity (backpressure). 
+- **`BoundedBuffer<T>`**: An async queue with a maximum capacity (backpressure).
   - `enqueue(v)` blocks if the buffer is full (preventing memory blow-ups).
   - `dequeue()` blocks if the buffer is empty.
 
@@ -794,16 +827,16 @@ const iterable: AsyncIterable<string> = {
     return {
       async next() {
         return Promise.race([
-          textBuffer.dequeue().then(value => ({ done: false, value })),
-          endSignal.take().then(() => ({ done: true, value: undefined }))
+          textBuffer.dequeue().then((value) => ({ done: false, value })),
+          endSignal.take().then(() => ({ done: true, value: undefined })),
         ]);
-      }
+      },
     };
-  }
+  },
 };
 
 // 2. Producer: asynchronously push items
-model.onToken(token => {
+model.onToken((token) => {
   textBuffer.enqueue(token); // blocks if buffer reaches 100
 });
 model.onDone(() => {
@@ -823,17 +856,19 @@ for await (const text of iterable) {
 - **Forgetting `MVar` fairness**: `MVar` resolves pending operations in FIFO order. If multiple consumers call `take()`, the first one to call it gets the first `put()`.
 
 ---
+
 ## 4. Safe Boundaries: Parsing & Validation
 
 Our standard avoids magic serialization libraries (`superjson`) and blind `any` casting, preferring granular structural control over external inputs. This section outlines how to use decoders, encoders, and schemas to generate perfectly type-safe code that enforces our domain constraints.
 
 ### Decoders: Validating Incoming Data
+
 Type-safe monadic combinators for parsing unknown JSON.
+
 - Never write `const user = JSON.parse(input) as User;`. Validate shape using a decoder returning a `Result<string, T>`.
 - Use `Decoder.optional()` for `V | undefined` and `Decoder.nullable()` for `V | null`. Distinguish from `Decoder.optionalNullable()` if a field can be missing OR null.
 - Handle discriminated JSON unions powerfully with `Decoder.oneOf()` and `Decoder.stringLiteral()`.
 - Always derive Types from Decoder shapes via `type User = Decoder.Infer<typeof userDecoder>`.
-
 
 #### Usage Patterns
 
@@ -863,16 +898,16 @@ const userDecoder: Decoder<User> = Decoder.object({
 
 ```typescript
 // optional: field may not exist → V | undefined
-Decoder.optional(Decoder.string)
+Decoder.optional(Decoder.string);
 
 // nullable: field exists but value may be null → V | null
-Decoder.nullable(Decoder.string)
+Decoder.nullable(Decoder.string);
 
 // optionalNullable: field may be absent OR null
-Decoder.optionalNullable(Decoder.string)
+Decoder.optionalNullable(Decoder.string);
 
 // optionalMaybe: field may not exist → Maybe<V>
-Decoder.optionalMaybe(Decoder.string)
+Decoder.optionalMaybe(Decoder.string);
 ```
 
 #### Discriminated unions with oneOf and stringLiteral
@@ -880,11 +915,11 @@ Decoder.optionalMaybe(Decoder.string)
 ```typescript
 const shapeDecoder: Decoder<Shape> = Decoder.oneOf([
   Decoder.object({
-    type: Decoder.stringLiteral('circle'),
+    type: Decoder.stringLiteral("circle"),
     radius: Decoder.number,
   }),
   Decoder.object({
-    type: Decoder.stringLiteral('rect'),
+    type: Decoder.stringLiteral("rect"),
     width: Decoder.number,
     height: Decoder.number,
   }),
@@ -907,11 +942,14 @@ type User = Decoder.Infer<typeof userDecoder>;
 const versionedDecoder = Decoder.object({ version: Decoder.number }).chain(
   ({ version }) => {
     switch (version) {
-      case 1: return v1Decoder;
-      case 2: return v2Decoder;
-      default: return Decoder.fail(`Unknown version: ${version}`);
+      case 1:
+        return v1Decoder;
+      case 2:
+        return v2Decoder;
+      default:
+        return Decoder.fail(`Unknown version: ${version}`);
     }
-  }
+  },
 );
 ```
 
@@ -925,10 +963,11 @@ const versionedDecoder = Decoder.object({ version: Decoder.number }).chain(
 ---
 
 ### Encoders: Formatting Output Data
-A contravariant functor enabling reliable serialization of explicit structures back mapping to primitive outputs.
-- Transform inputs *before* encoding with `{Encoder}.rmap(transformFn)`. Example: `E.string.rmap((date: Date) => date.toISOString())`.
-- Merge payloads cleanly utilizing `E.both(encoder1, encoder2)`.
 
+A contravariant functor enabling reliable serialization of explicit structures back mapping to primitive outputs.
+
+- Transform inputs _before_ encoding with `{Encoder}.rmap(transformFn)`. Example: `E.string.rmap((date: Date) => date.toISOString())`.
+- Merge payloads cleanly utilizing `E.both(encoder1, encoder2)`.
 
 #### Usage Patterns
 
@@ -963,7 +1002,7 @@ const userIdEncoder = E.string.rmap((id: UserId) => id.value);
 
 ```typescript
 const shapeEncoder = E.oneOf<Shape>((shape) =>
-  shape.type === "circle" ? circleEncoder : rectEncoder
+  shape.type === "circle" ? circleEncoder : rectEncoder,
 );
 ```
 
@@ -985,8 +1024,11 @@ combinedEncoder.run([{ id: "1" }, { timestamp: 123 }]);
 ---
 
 ### Schemas: Bidirectional Mapping
+
 A combined bidirectional boundary encapsulating both `Decoder` and `Encoder` in a single construct, ensuring no serialization drift occurs.
+
 - Provide schemas as static members within classes:
+
   ```typescript
   class MessageId {
     // @ts-expect-error
@@ -994,14 +1036,14 @@ A combined bidirectional boundary encapsulating both `Decoder` and `Encoder` in 
     constructor(public value: string) {}
 
     static schema = s.string.dimap(
-      v => new MessageId(v),
-      id => id.value
+      (v) => new MessageId(v),
+      (id) => id.value,
     );
   }
   ```
+
 - Make custom types serialize easily bidirectionally natively relying deeply on `Schema.dimap()`.
 - Exploit `s.discriminatedUnion` combined with `s.variant` to build fully type-inferred sum-type parsers natively mapped without repeating checks.
-
 
 #### Usage Patterns
 
@@ -1020,8 +1062,8 @@ const encoded = s.encode(User, user);
 
 ```typescript
 const Timestamp = s.number.dimap(
-  (n) => new Date(n),    // decode: number → Date
-  (d) => d.valueOf()     // encode: Date → number
+  (n) => new Date(n), // decode: number → Date
+  (d) => d.valueOf(), // encode: Date → number
 );
 ```
 
@@ -1044,12 +1086,12 @@ static schema: s.Schema<DateOnly> = s.string.chain(
 ```typescript
 const Message = s.discriminatedUnion([
   s.variant({
-    type: 'error' as const,
+    type: "error" as const,
     code: s.number,
     message: s.string,
   }),
   s.variant({
-    type: 'success' as const,
+    type: "success" as const,
     value: s.string,
   }),
 ]);
@@ -1065,7 +1107,7 @@ class POSIX {
 
   static schema: s.Schema<POSIX> = s.number.dimap(
     (n) => new POSIX(n),
-    (p) => p.value
+    (p) => p.value,
   );
 }
 ```

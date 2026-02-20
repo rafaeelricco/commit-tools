@@ -45,8 +45,8 @@ const main = () => {
   }
 
   action.fork(
-    _ => process.exit(1),
-    () => process.exit(0)
+    (_) => process.exit(1),
+    () => process.exit(0),
   );
 };
 

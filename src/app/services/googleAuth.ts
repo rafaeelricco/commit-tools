@@ -18,7 +18,7 @@ import { type Dependencies } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
 
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"];
-type CommitConvention = typeof COMMIT_CONVENTIONS[number];
+type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
 
 const schema_OAuthTokens = s.object({
   access_token: s.string,
@@ -49,7 +49,6 @@ const Config = s.object({
   custom_template: s.optionalMaybe(s.string),
 });
 type Config = s.Infer<typeof Config>;
-
 
 const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
@@ -101,7 +100,11 @@ const findAvailablePort = (): Future<Error, number> =>
   Future.create<Error, number>((reject, resolve) => {
     const tryPort = (port: number): void => {
       if (port > PORT_RANGE_END) {
-        reject(new Error(`No available port found in range ${PORT_RANGE_START}-${PORT_RANGE_END}. Close other applications and try again.`));
+        reject(
+          new Error(
+            `No available port found in range ${PORT_RANGE_START}-${PORT_RANGE_END}. Close other applications and try again.`,
+          ),
+        );
         return;
       }
 
@@ -122,7 +125,10 @@ const findAvailablePort = (): Future<Error, number> =>
     tryPort(PORT_RANGE_START);
   });
 
-const startCallbackServer = (port: number, state: string): Future<Error, CallbackServer> =>
+const startCallbackServer = (
+  port: number,
+  state: string,
+): Future<Error, CallbackServer> =>
   Future.create<Error, CallbackServer>((reject, resolve) => {
     let resolveCode: (code: string) => void;
     let rejectCode: (err: Error) => void;
@@ -144,7 +150,8 @@ const startCallbackServer = (port: number, state: string): Future<Error, Callbac
 
           const error = url.searchParams.get("error");
           if (error) {
-            const description = url.searchParams.get("error_description") ?? error;
+            const description =
+              url.searchParams.get("error_description") ?? error;
             rejectCode(new Error(`OAuth error: ${description}`));
             return new Response(ERROR_HTML(description), {
               headers: { "Content-Type": "text/html" },
@@ -177,7 +184,9 @@ const startCallbackServer = (port: number, state: string): Future<Error, Callbac
 
       resolve({ server, port, codePromise });
     } catch (err) {
-      reject(new Error(`Failed to start callback server on port ${port}: ${err}`));
+      reject(
+        new Error(`Failed to start callback server on port ${port}: ${err}`),
+      );
     }
   });
 
@@ -211,7 +220,9 @@ const exchangeCodeForTokens = (
     });
 
     if (!tokens.access_token || !tokens.refresh_token) {
-      throw new Error("Incomplete token response from Google. Missing access_token or refresh_token.");
+      throw new Error(
+        "Incomplete token response from Google. Missing access_token or refresh_token.",
+      );
     }
 
     return {
@@ -221,11 +232,11 @@ const exchangeCodeForTokens = (
       token_type: tokens.token_type ?? "Bearer",
       scope: tokens.scope ?? SCOPES.join(" "),
     };
-  }).mapRej(e => new Error(`Token exchange failed: ${e}`));
+  }).mapRej((e) => new Error(`Token exchange failed: ${e}`));
 
 const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
-  deps.resolveOAuth().chain(oauth =>
-    findAvailablePort().chain(port => {
+  deps.resolveOAuth().chain((oauth) =>
+    findAvailablePort().chain((port) => {
       const redirectUri = `http://127.0.0.1:${port}/callback`;
       const codeVerifier = generateCodeVerifier();
       const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -246,31 +257,47 @@ const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
         state,
       });
 
-    return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
-      startCallbackServer(port, state),
-      stopCallbackServer,
-      (cs) => {
-        const waitForCode: Future<Error, string> = Future.attemptP(async () => {
-          await openBrowser(authUrl);
-          return cs.codePromise;
-        });
+      return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
+        startCallbackServer(port, state),
+        stopCallbackServer,
+        (cs) => {
+          const waitForCode: Future<Error, string> = Future.attemptP(
+            async () => {
+              await openBrowser(authUrl);
+              return cs.codePromise;
+            },
+          );
 
-        const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-          return () => clearTimeout(setTimeout(
-            () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
-            OAUTH_TIMEOUT_MS,
-          ));
-        });
+          const timeout: Future<Error, string> = Future.create<Error, string>(
+            (reject) => {
+              return () =>
+                clearTimeout(
+                  setTimeout(
+                    () =>
+                      reject(
+                        new Error(
+                          "OAuth flow timed out after 5 minutes. Please try again.",
+                        ),
+                      ),
+                    OAUTH_TIMEOUT_MS,
+                  ),
+                );
+            },
+          );
 
-        return Future.race(waitForCode, timeout)
-          .chain(code => exchangeCodeForTokens(client, code, codeVerifier, redirectUri));
-      },
-    );
-  })
-);
+          return Future.race(waitForCode, timeout).chain((code) =>
+            exchangeCodeForTokens(client, code, codeVerifier, redirectUri),
+          );
+        },
+      );
+    }),
+  );
 
-const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuth2Client> =>
-  deps.resolveOAuth().map(oauth => {
+const createAuthenticatedClient = (
+  deps: Dependencies,
+  tokens: OAuthTokens,
+): Future<Error, OAuth2Client> =>
+  deps.resolveOAuth().map((oauth) => {
     const client = new OAuth2Client({
       clientId: oauth.clientId,
       clientSecret: oauth.clientSecret,
@@ -287,39 +314,48 @@ const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): Fut
     return client;
   });
 
-const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
+const ensureFreshTokens = (
+  deps: Dependencies,
+  tokens: OAuthTokens,
+): Future<Error, OAuthTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
 
   if (!isExpired) {
     return Future.resolve(tokens);
   }
 
-  return createAuthenticatedClient(deps, tokens).chain(client =>
-    Future.attemptP(async () => {
-      const { credentials } = await client.refreshAccessToken();
+  return createAuthenticatedClient(deps, tokens)
+    .chain((client) =>
+      Future.attemptP(async () => {
+        const { credentials } = await client.refreshAccessToken();
 
-      if (!credentials.access_token) {
-        throw new Error("Token refresh returned no access_token");
+        if (!credentials.access_token) {
+          throw new Error("Token refresh returned no access_token");
+        }
+
+        return {
+          access_token: credentials.access_token,
+          refresh_token: credentials.refresh_token ?? tokens.refresh_token,
+          expiry_date: credentials.expiry_date ?? Date.now() + 3600 * 1000,
+          token_type: credentials.token_type ?? tokens.token_type,
+          scope: credentials.scope ?? tokens.scope,
+        };
+      }),
+    )
+    .mapRej((err) => {
+      const message = String(err);
+      if (message.includes("invalid_grant")) {
+        return new Error(
+          "OAuth tokens have been revoked. Please run 'commit-tools setup' or 'commit-tools login' to re-authenticate.",
+        );
       }
-
-      return {
-        access_token: credentials.access_token,
-        refresh_token: credentials.refresh_token ?? tokens.refresh_token,
-        expiry_date: credentials.expiry_date ?? Date.now() + 3600 * 1000,
-        token_type: credentials.token_type ?? tokens.token_type,
-        scope: credentials.scope ?? tokens.scope,
-      };
-    })
-  ).mapRej(err => {
-    const message = String(err);
-    if (message.includes("invalid_grant")) {
-      return new Error("OAuth tokens have been revoked. Please run 'commit-tools setup' or 'commit-tools login' to re-authenticate.");
-    }
-    if (message.includes("invalid_client")) {
-      return new Error("OAuth client credentials are invalid. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file.");
-    }
-    return new Error(`Token refresh failed: ${message}`);
-  });
+      if (message.includes("invalid_client")) {
+        return new Error(
+          "OAuth client credentials are invalid. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file.",
+        );
+      }
+      return new Error(`Token refresh failed: ${message}`);
+    });
 };
 
 const validateOAuthTokens = (tokens: OAuthTokens): Future<Error, void> =>

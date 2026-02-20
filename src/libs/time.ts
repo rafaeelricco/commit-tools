@@ -1,10 +1,10 @@
 export { type Timezone, DateOnly, TimeOfDay, POSIX, Duration };
 
-import * as s from '@/libs/json/schema';
-import { fail, always } from '@/libs/json/decoder';
-import { type Maybe, Just, Nothing } from '@/libs/maybe';
+import * as s from "@/libs/json/schema";
+import { fail, always } from "@/libs/json/decoder";
+import { type Maybe, Just, Nothing } from "@/libs/maybe";
 
-import { DateTime } from 'luxon';
+import { DateTime } from "luxon";
 
 type Timezone = string;
 
@@ -62,7 +62,7 @@ class POSIX {
   static fromLocalDateAndTime(
     date: DateOnly,
     time: TimeOfDay,
-    timezone: Timezone
+    timezone: Timezone,
   ): POSIX {
     const s = `${date.pretty()}T${time.pretty()}`;
     const luxonDate = DateTime.fromISO(s, { zone: timezone });
@@ -70,7 +70,7 @@ class POSIX {
   }
 
   toUTCDateAndTime(): { date: DateOnly; time: TimeOfDay } {
-    const dt = DateTime.fromMillis(this.value, { zone: 'UTC' });
+    const dt = DateTime.fromMillis(this.value, { zone: "UTC" });
     const date = new DateOnly(dt.year, dt.month, dt.day);
     const time = TimeOfDay.fromParts({
       hours: dt.hour,
@@ -81,8 +81,8 @@ class POSIX {
   }
 
   toLocalDateAndTime(timezone: Timezone): { date: DateOnly; time: TimeOfDay } {
-    const dt = DateTime.fromMillis(this.value, { zone: 'UTC' }).setZone(
-      timezone
+    const dt = DateTime.fromMillis(this.value, { zone: "UTC" }).setZone(
+      timezone,
     );
     const date = new DateOnly(dt.year, dt.month, dt.day);
     const time = TimeOfDay.fromParts({
@@ -95,11 +95,11 @@ class POSIX {
 
   static schema: s.Schema<POSIX> = s.number.dimap(
     (n) => new POSIX(n),
-    (p) => p.value
+    (p) => p.value,
   );
 }
 
-const padded = (v: number) => v.toString().padStart(2, '0');
+const padded = (v: number) => v.toString().padStart(2, "0");
 
 class DateOnly {
   readonly year: number;
@@ -126,7 +126,7 @@ class DateOnly {
     return new DateOnly(
       date.getFullYear(),
       date.getMonth() + 1,
-      date.getDate()
+      date.getDate(),
     );
   }
 
@@ -136,21 +136,21 @@ class DateOnly {
 
   static schema: s.Schema<DateOnly> = s.string.chain(
     (str) => {
-      const parts = str.split('-');
+      const parts = str.split("-");
       if (parts.length !== 3) {
-        return fail('Invalid Date');
+        return fail("Invalid Date");
       }
       const year = parseInt(parts[0] as string, 10);
       const month = parseInt(parts[1] as string, 10);
       const day = parseInt(parts[2] as string, 10);
 
       if (isNaN(year) || isNaN(month) || isNaN(day)) {
-        return fail('Invalid Date');
+        return fail("Invalid Date");
       }
 
       return always(new DateOnly(year, month, day));
     },
-    (date) => date.pretty()
+    (date) => date.pretty(),
   );
 
   greaterThan(other: DateOnly) {
@@ -184,7 +184,7 @@ class DateOnly {
     return new DateOnly(
       newLuxonDate.year,
       newLuxonDate.month,
-      newLuxonDate.day
+      newLuxonDate.day,
     );
   }
 }
@@ -297,7 +297,7 @@ class Duration {
     const count = Math.floor(abs.millis / length.millis);
     const remainderStart = length.multiplyBy(count).multiplyBy(sign);
     const remainder = Duration.milliseconds(
-      abs.millis % length.millis
+      abs.millis % length.millis,
     ).multiplyBy(sign);
     return {
       count: count * sign,
@@ -336,20 +336,20 @@ class Duration {
     const seconds = Math.abs(this.asSeconds()) % 60;
 
     const formatSeconds = (s: number): string =>
-      s % 1 === 0 ? s.toString() : s.toFixed(3).replace(/\.?0+$/, '');
+      s % 1 === 0 ? s.toString() : s.toFixed(3).replace(/\.?0+$/, "");
 
-    const prefix = this.millis < 0 ? '-P' : 'P';
-    const dayPart = days > 0 ? `${days}D` : '';
+    const prefix = this.millis < 0 ? "-P" : "P";
+    const dayPart = days > 0 ? `${days}D` : "";
     const hasTimePart = hours > 0 || minutes > 0 || seconds > 0 || days === 0;
     const timeParts = [
-      hours > 0 ? `${hours}H` : '',
-      minutes > 0 ? `${minutes}M` : '',
+      hours > 0 ? `${hours}H` : "",
+      minutes > 0 ? `${minutes}M` : "",
       seconds > 0 || (days === 0 && hours === 0 && minutes === 0)
         ? `${formatSeconds(seconds)}S`
-        : '',
-    ].join('');
+        : "",
+    ].join("");
 
-    return prefix + dayPart + (hasTimePart ? 'T' + timeParts : '');
+    return prefix + dayPart + (hasTimePart ? "T" + timeParts : "");
   }
 
   // Parses ISO-8601 duration string (e.g., "P1DT2H30M45.123S")
@@ -380,7 +380,7 @@ class Duration {
       return Nothing();
     }
 
-    const negative = match[1] === '-';
+    const negative = match[1] === "-";
     const days = match[2] ? parseFloat(match[2]) : 0;
     const hours = match[4] ? parseFloat(match[4]) : 0;
     const minutes = match[5] ? parseFloat(match[5]) : 0;
@@ -402,9 +402,9 @@ class Duration {
   static schema: s.Schema<Duration> = s.string.chain(
     (str) =>
       Duration.fromISO8601(str).unwrap(
-        () => fail('Invalid ISO-8601 duration format'),
-        (d) => always(d)
+        () => fail("Invalid ISO-8601 duration format"),
+        (d) => always(d),
       ),
-    (d) => d.toISO8601()
+    (d) => d.toISO8601(),
   );
 }

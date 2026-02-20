@@ -5,7 +5,11 @@ import * as p from "@clack/prompts";
 import { Future } from "@/libs/future";
 import { loadConfig, updateTokens } from "@/app/storage";
 import { executeSetupFlow } from "@/app/setup";
-import { CommitConvention, type Config, ensureFreshTokens } from "@/app/services/googleAuth";
+import {
+  CommitConvention,
+  type Config,
+  ensureFreshTokens,
+} from "@/app/services/googleAuth";
 import type { Dependencies } from "@/app/integrations";
 import {
   checkIsGitRepo,
@@ -24,15 +28,22 @@ import {
 
 import color from "picocolors";
 
-const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCredentials> => {
+const resolveAuth = (
+  deps: Dependencies,
+  config: Config,
+): Future<Error, AuthCredentials> => {
   const creds = getAuthCredentials(config);
 
   if (creds === null) {
-    return Future.reject(new Error("No authentication configured. Run 'commit-tools setup' to configure."));
+    return Future.reject(
+      new Error(
+        "No authentication configured. Run 'commit-tools setup' to configure.",
+      ),
+    );
   }
 
   if (creds.method === "oauth") {
-    return ensureFreshTokens(deps, creds.tokens).chain(freshTokens => {
+    return ensureFreshTokens(deps, creds.tokens).chain((freshTokens) => {
       const tokensChanged =
         freshTokens.access_token !== creds.tokens.access_token ||
         freshTokens.expiry_date !== creds.tokens.expiry_date;
@@ -54,20 +65,26 @@ const resolveAuth = (deps: Dependencies, config: Config): Future<Error, AuthCred
 const executeCommitFlow = (deps: Dependencies): Future<Error, void> =>
   loadConfig()
     .chainRej(() => {
-      p.log.warn(color.yellow("No configuration found. Let's set you up first."));
+      p.log.warn(
+        color.yellow("No configuration found. Let's set you up first."),
+      );
       return executeSetupFlow(deps).chain(() => loadConfig());
     })
-    .chain(config =>
-      resolveAuth(deps, config).chain(auth =>
+    .chain((config) =>
+      resolveAuth(deps, config).chain((auth) =>
         checkIsGitRepo().chain(() =>
-          getStagedDiff().chain(diff =>
-            generateWithSpinner(auth, diff, config.commit_convention, config.custom_template.maybe(undefined, t => t))
-              .chain(message => interactionLoop(auth, diff, message))
-          )
-        )
-      )
+          getStagedDiff().chain((diff) =>
+            generateWithSpinner(
+              auth,
+              diff,
+              config.commit_convention,
+              config.custom_template.maybe(undefined, (t) => t),
+            ).chain((message) => interactionLoop(auth, diff, message)),
+          ),
+        ),
+      ),
     )
-    .mapRej(e => {
+    .mapRej((e) => {
       if (e instanceof Error) {
         p.log.error(color.red(e.message));
       }
@@ -83,11 +100,11 @@ const generateWithSpinner = (
   const s = p.spinner();
   s.start("Generating commit message...");
   return generateCommitMessage(auth, diff, convention, customTemplate)
-    .map(msg => {
+    .map((msg) => {
       s.stop("Message generated!");
       return msg;
     })
-    .mapRej(e => {
+    .mapRej((e) => {
       s.stop("Generation failed.");
       return e;
     });
@@ -118,36 +135,39 @@ const interactionLoop = (
     }
 
     return action as string;
-  }).chain(action => {
+  }).chain((action) => {
     switch (action) {
       case "commit":
-        return performCommit(message).map(stats => {
+        return performCommit(message).map((stats) => {
           process.stdout.write(stats);
           p.outro(color.green("Committed successfully!"));
         });
       case "commit_push":
         return performCommit(message)
-          .chain(stats => {
+          .chain((stats) => {
             process.stdout.write(stats);
-            return hasUpstream().chain(exists => {
+            return hasUpstream().chain((exists) => {
               if (exists) {
                 const s = p.spinner();
                 s.start("Pushing...");
                 return performPush().map(() => s.stop("Pushed successfully!"));
               } else {
-                return getCurrentBranch().chain(branch =>
+                return getCurrentBranch().chain((branch) =>
                   Future.attemptP(async () => {
                     const publish = await p.confirm({
                       message: `Branch '${branch}' has no upstream. Publish to origin?`,
                     });
                     if (p.isCancel(publish) || !publish) return "skip_push";
                     return "publish";
-                  }).chain(pubAction => {
-                    if (pubAction === "skip_push") return Future.resolve(undefined);
+                  }).chain((pubAction) => {
+                    if (pubAction === "skip_push")
+                      return Future.resolve(undefined);
                     const s = p.spinner();
                     s.start(`Publishing '${branch}'...`);
-                    return performPush(branch, true).map(() => s.stop("Published successfully!"));
-                  })
+                    return performPush(branch, true).map(() =>
+                      s.stop("Published successfully!"),
+                    );
+                  }),
                 );
               }
             });
@@ -156,8 +176,9 @@ const interactionLoop = (
             p.outro(color.green("Done!"));
           });
       case "regenerate":
-        return generateWithSpinner(auth, diff, "imperative")
-          .chain(newMsg => interactionLoop(auth, diff, newMsg));
+        return generateWithSpinner(auth, diff, "imperative").chain((newMsg) =>
+          interactionLoop(auth, diff, newMsg),
+        );
       case "adjust":
         return Future.attemptP(async () => {
           const adj = await p.text({
@@ -166,16 +187,16 @@ const interactionLoop = (
           });
           if (p.isCancel(adj)) return null;
           return adj;
-        }).chain(adj => {
+        }).chain((adj) => {
           if (!adj) return interactionLoop(auth, diff, message);
           const s = p.spinner();
           s.start("Refining...");
           return refineCommitMessage(auth, message, adj, diff)
-            .map(newMsg => {
+            .map((newMsg) => {
               s.stop("Refined!");
               return newMsg;
             })
-            .chain(newMsg => interactionLoop(auth, diff, newMsg));
+            .chain((newMsg) => interactionLoop(auth, diff, newMsg));
         });
       default:
         return Future.resolve(undefined);

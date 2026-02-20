@@ -1,5 +1,5 @@
 export default function Callable<T extends new (...args: any[]) => any>(
-  classname: T
+  classname: T,
 ) {
   function apply(target: T, _: any, argumentsList: any[]): InstanceType<T> {
     return new target(...argumentsList);

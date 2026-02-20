@@ -1,6 +1,6 @@
 export { List };
 
-import { Maybe, Just, Nothing } from '@/libs/maybe';
+import { Maybe, Just, Nothing } from "@/libs/maybe";
 
 type Content<T> = { head: T; tail: List<T> } | { empty: null };
 
@@ -40,9 +40,9 @@ class List<T> {
 
   isEmpty(): boolean {
     switch (true) {
-      case 'empty' in this.value:
+      case "empty" in this.value:
         return true;
-      case 'head' in this.value:
+      case "head" in this.value:
         return false;
       default:
         return this.value satisfies never;
@@ -51,9 +51,9 @@ class List<T> {
 
   head(): Maybe<T> {
     switch (true) {
-      case 'empty' in this.value:
+      case "empty" in this.value:
         return Nothing();
-      case 'head' in this.value:
+      case "head" in this.value:
         return Just(this.value.head);
       default:
         return this.value satisfies never;
@@ -62,9 +62,9 @@ class List<T> {
 
   tail(): List<T> {
     switch (true) {
-      case 'empty' in this.value:
+      case "empty" in this.value:
         return List.empty();
-      case 'head' in this.value:
+      case "head" in this.value:
         return this.value.tail;
       default:
         return this.value satisfies never;
@@ -138,7 +138,7 @@ class List<T> {
 
   *[Symbol.iterator](): IterableIterator<T> {
     let list: List<T> = this;
-    while ('head' in list.value) {
+    while ("head" in list.value) {
       yield list.value.head;
       list = list.value.tail;
     }

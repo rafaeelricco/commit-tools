@@ -27,8 +27,8 @@ export {
   recursive,
 };
 
-import { Maybe, Nothing, Just, Nullable } from '@/libs/maybe';
-import { Json, JsonObject } from '@/libs/json/types';
+import { Maybe, Nothing, Just, Nullable } from "@/libs/maybe";
+import { Json, JsonObject } from "@/libs/json/types";
 
 // Infer the type from a encoder definition
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,15 +81,15 @@ const object = <A>(encoders: EncoderDef<A>): Encoder<A> =>
         case encoder instanceof EncoderOptional: {
           const encoded = encoder.encoder.run(input[field]);
           if (
-            typeof encoded != 'object' ||
+            typeof encoded != "object" ||
             encoded === null ||
-            !('nothing' in encoded || 'just' in encoded)
+            !("nothing" in encoded || "just" in encoded)
           ) {
             throw new Error(`Invalid output of EncoderOptional: ${encoded}`);
           }
 
-          if ('just' in encoded) {
-            result[field] = encoded['just'];
+          if ("just" in encoded) {
+            result[field] = encoded["just"];
           }
           break;
         }
@@ -114,7 +114,7 @@ const pair = <L, R>(sleft: Encoder<L>, sright: Encoder<R>): Encoder<[L, R]> =>
 const triple = <A, B, C>(
   sA: Encoder<A>,
   sB: Encoder<B>,
-  sC: Encoder<C>
+  sC: Encoder<C>,
 ): Encoder<[A, B, C]> =>
   new Encoder((input) => {
     const [a, b, c] = input;
@@ -126,7 +126,7 @@ const maybe = <V>(encoder: Encoder<V>): Encoder<Maybe<V>> =>
     (input) =>
       (input instanceof Nothing
         ? { nothing: {} }
-        : { just: encoder.run(input.value) }) as Json
+        : { just: encoder.run(input.value) }) as Json,
   );
 
 const nullable = <V>(encoder: Encoder<V>): Encoder<Nullable<V>> =>
@@ -149,19 +149,19 @@ const optionalMaybe = <V>(encoder: Encoder<V>): EncoderOptional<Maybe<V>> =>
   EncoderOptional.from(maybe(encoder));
 
 const optionalNullable = <V>(
-  encoder: Encoder<NonNullable<V>>
+  encoder: Encoder<NonNullable<V>>,
 ): EncoderOptional<Nullable<V>> =>
   optionalMaybe(encoder).rmap((v) =>
     v === null
       ? Nothing()
       : v === undefined
         ? Nothing()
-        : Just<NonNullable<V>>(v)
+        : Just<NonNullable<V>>(v),
   );
 
 const optional = <V>(encoder: Encoder<V>): EncoderOptional<V | undefined> =>
   optionalMaybe(encoder).rmap<V | undefined>((input): Maybe<V> => {
-    if (typeof input === 'undefined') {
+    if (typeof input === "undefined") {
       return Nothing() as Maybe<V>;
     }
     return Just(input) as Maybe<V>;
@@ -177,7 +177,7 @@ const stringEnum = <const T extends string[]>(strs: T): Encoder<T[number]> =>
   string.rmap((input) => {
     if (!strs.includes(input)) {
       throw new Error(
-        `Cannot encode '${input}'. Expected one of '${strs.join(', ')}'"`
+        `Cannot encode '${input}'. Expected one of '${strs.join(", ")}'"`,
       );
     }
     return input;
@@ -190,7 +190,7 @@ const stringified = <T>(inner: Encoder<T>): Encoder<T> =>
 // Define a recursive encoder
 function recursive<A>(f: (p: Encoder<A>) => Encoder<A>): Encoder<A> {
   const base: Encoder<A> = new Encoder((_) => {
-    throw new Error('A recursive encoder cannot immediately call itself.');
+    throw new Error("A recursive encoder cannot immediately call itself.");
   });
   const top = f(base);
   // @ts-expect-error assigning to read-only prop

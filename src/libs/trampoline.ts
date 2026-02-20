@@ -48,10 +48,10 @@ function fix<A extends unknown[], R>(
   f: Fun<
     [Fun<A, Trampoline<R>>, (r: R) => Trampoline<R>],
     Fun<A, Trampoline<R>>
-  >
+  >,
 ): Fun<A, R> {
   let lazy_f: Fun<A, Trampoline<R>> = (..._: A) => {
-    throw new Error('recursion error');
+    throw new Error("recursion error");
   };
   const recurse: Fun<A, Trampoline<R>> = (...args: A) =>
     rec(() => lazy_f(...args));
@@ -60,7 +60,7 @@ function fix<A extends unknown[], R>(
 }
 
 function tailRecursive<A extends unknown[], R>(
-  f: Fun<A, Trampoline<R>>
+  f: Fun<A, Trampoline<R>>,
 ): Fun<A, Trampoline<R>> {
   return (...args: A) => rec(() => f(...args));
 }

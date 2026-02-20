@@ -1,8 +1,21 @@
-export { type AuthCredentials, generateCommitMessage, refineCommitMessage, getAuthCredentials };
+export {
+  type AuthCredentials,
+  generateCommitMessage,
+  refineCommitMessage,
+  getAuthCredentials,
+};
 
-import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  type GenerateContentResponse,
+} from "@google/generative-ai";
 import { Future } from "@/libs/future";
-import { CommitConvention, type Config, type OAuthTokens, getAccessToken } from "@/app/services/googleAuth";
+import {
+  CommitConvention,
+  type Config,
+  type OAuthTokens,
+  getAccessToken,
+} from "@/app/services/googleAuth";
 import { getPrompt } from "@/app/services/prompts";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
@@ -12,7 +25,7 @@ type AuthCredentials =
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): AuthCredentials | null => {
-  switch(config.auth_method.type){
+  switch (config.auth_method.type) {
     case "oauth":
       return { method: "oauth", tokens: config.auth_method.content };
     case "api_key":
@@ -34,7 +47,9 @@ const generateContentWithApiKey = (
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    ...(params.systemInstruction !== undefined ? { systemInstruction: params.systemInstruction } : {}),
+    ...(params.systemInstruction !== undefined
+      ? { systemInstruction: params.systemInstruction }
+      : {}),
   });
 
   return Future.attemptP(async () => {
@@ -42,16 +57,14 @@ const generateContentWithApiKey = (
     const text = result.response.text();
     if (!text || !text.trim()) throw new Error("Empty AI response");
     return text.trim();
-  }).mapRej(e => new Error(String(e)));
+  }).mapRej((e) => new Error(String(e)));
 };
-
-
 
 const generateContentWithOAuth = (
   tokens: OAuthTokens,
   params: GenerateContentParams,
 ): Future<Error, string> =>
-  getAccessToken(tokens).chain(accessToken =>
+  getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -67,7 +80,7 @@ const generateContentWithOAuth = (
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -78,7 +91,7 @@ const generateContentWithOAuth = (
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
-      const json = await response.json() as GenerateContentResponse;
+      const json = (await response.json()) as GenerateContentResponse;
 
       const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text || !text.trim()) {
@@ -86,7 +99,7 @@ const generateContentWithOAuth = (
       }
 
       return text.trim();
-    }).mapRej(e => new Error(String(e)))
+    }).mapRej((e) => new Error(String(e))),
   );
 
 const generateContent = (
@@ -107,7 +120,9 @@ const generateCommitMessage = (
   convention: CommitConvention,
   customTemplate?: string,
 ): Future<Error, string> =>
-  generateContent(auth, { prompt: getPrompt(diff, convention, customTemplate) });
+  generateContent(auth, {
+    prompt: getPrompt(diff, convention, customTemplate),
+  });
 
 const refineCommitMessage = (
   auth: AuthCredentials,

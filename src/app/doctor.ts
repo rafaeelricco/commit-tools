@@ -21,8 +21,14 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
 
     const oauthResult = await deps.resolveOAuth().promiseR();
     const [oauthStatus, oauthInfo] = oauthResult.either(
-      () => [color.yellow("Missing"), "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set"],
-      ok => [color.green("Configured"), `Client ID: ${ok.clientId.slice(0, 12)}...`]
+      () => [
+        color.yellow("Missing"),
+        "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set",
+      ],
+      (ok) => [
+        color.green("Configured"),
+        `Client ID: ${ok.clientId.slice(0, 12)}...`,
+      ],
     );
 
     table.push(["OAuth Credentials", oauthStatus, oauthInfo]);
@@ -39,7 +45,7 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
 
       configResult.either(
         () => {},
-        config => {
+        (config) => {
           const authMethod = config.auth_method.type;
 
           table.push([
@@ -71,8 +77,14 @@ const executeDoctorFlow = (deps: Dependencies): Future<Error, void> =>
     process.stdout.write("\n" + table.toString() + "\n\n");
 
     if (!configExists) {
-      process.stdout.write(color.yellow("! Please run 'commit-tools setup' to configure your API key.\n\n"));
+      process.stdout.write(
+        color.yellow(
+          "! Please run 'commit-tools setup' to configure your API key.\n\n",
+        ),
+      );
     } else {
-      process.stdout.write(color.green("System is ready to generate commits!\n\n"));
+      process.stdout.write(
+        color.green("System is ready to generate commits!\n\n"),
+      );
     }
   });

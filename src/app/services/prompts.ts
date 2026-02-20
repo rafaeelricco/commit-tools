@@ -2,7 +2,11 @@ export { getPrompt };
 
 import { CommitConvention } from "@/app/services/googleAuth";
 
-function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
+function getPrompt(
+  diff: string,
+  convention: CommitConvention,
+  customTemplate?: string,
+): string {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);

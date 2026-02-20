@@ -39,8 +39,8 @@ export {
   type OnError,
 };
 
-import * as express from 'express';
-import { Cancel, Future } from '@/libs/future';
+import * as express from "express";
+import { Cancel, Future } from "@/libs/future";
 
 type Json = null | string | number | boolean | JsonArray | JsonObject;
 type JsonObject = { [x: string]: Json };
@@ -65,7 +65,7 @@ class JSON {
       status: number;
       headers: Headers;
       content: Json;
-    }
+    },
   ) {}
 }
 
@@ -73,7 +73,7 @@ class Redirect {
   constructor(
     public values: {
       path: string;
-    }
+    },
   ) {}
 }
 
@@ -83,7 +83,7 @@ class Render {
       status: number;
       headers: Headers;
       content: string | Json;
-    }
+    },
   ) {}
 }
 
@@ -94,7 +94,7 @@ class SSE {
     public values: {
       headers: Headers;
       stream: (emit: SendMessage, onError: OnError) => Future<Error, null>;
-    }
+    },
   ) {}
 }
 type SendMessage = (json: Json) => boolean;
@@ -159,9 +159,9 @@ function send(response: Response, res: express.Response): void {
     case response instanceof SSE: {
       res.set({
         ...response.values.headers,
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       });
       res.flushHeaders();
       streamSSEResponse(res, response.values.stream);
@@ -172,7 +172,7 @@ function send(response: Response, res: express.Response): void {
 
 function streamSSEResponse(
   res: express.Response,
-  stream: (emit: SendMessage, onError: OnError) => Future<Error, null>
+  stream: (emit: SendMessage, onError: OnError) => Future<Error, null>,
 ): void {
   let connectionClosed = false;
   let endStream: Cancel = () => {};
@@ -190,8 +190,8 @@ function streamSSEResponse(
     closeConnection();
   };
 
-  res.on('close', closeConnection);
-  res.on('error', handleError);
+  res.on("close", closeConnection);
+  res.on("error", handleError);
 
   // start streaming
   endStream = stream(
@@ -202,18 +202,18 @@ function streamSSEResponse(
     },
     function onError(handler) {
       errorHandlers.push(handler);
-    }
+    },
   ).fork(handleError, closeConnection);
 }
 
 function sendResponse(
   routeHandler: Route<{}>,
   req: express.Request,
-  res: express.Response
+  res: express.Response,
 ): void {
   routeHandler(req, {}).fork(
     (r) => send(r, res),
-    (r) => send(r, res)
+    (r) => send(r, res),
   );
 }
 

@@ -62,10 +62,10 @@ export {
   recursive,
 };
 
-import { Result, Success, Failure, traverse } from '@/libs/result';
-import { Maybe, Just, Nothing, Nullable } from '@/libs/maybe';
-import { List } from '@/libs/list';
-import { Json } from '@/libs/json/types';
+import { Result, Success, Failure, traverse } from "@/libs/result";
+import { Maybe, Just, Nothing, Nullable } from "@/libs/maybe";
+import { List } from "@/libs/list";
+import { Json } from "@/libs/json/types";
 
 // Infer the type from a decoder definition
 type Infer<A extends Decoder<unknown>> = A extends Decoder<infer B> ? B : never;
@@ -95,7 +95,7 @@ function decode<T>(input: unknown, decoder: Decoder<T>): Result<string, T> {
 }
 
 function showPath([path, error]: [Path, string]): string {
-  return error + '. When parsing: ' + Array.from(path).join('.');
+  return error + ". When parsing: " + Array.from(path).join(".");
 }
 
 type DecodeResult<T> = Result<[Path, string], T>;
@@ -130,36 +130,36 @@ const both = <T, U>(left: Decoder<T>, right: Decoder<U>): Decoder<[T, U]> =>
   });
 
 const string: Decoder<string> = new Decoder((v) =>
-  typeof v === 'string'
+  typeof v === "string"
     ? Success(v)
-    : failure('expected string but found ' + typeof v)
+    : failure("expected string but found " + typeof v),
 );
 
 const number: Decoder<number> = new Decoder((v) =>
-  typeof v === 'number'
+  typeof v === "number"
     ? Success(v)
-    : failure('expected number but found ' + typeof v)
+    : failure("expected number but found " + typeof v),
 );
 
 const stringNumber: Decoder<number> = string.chain((s) => {
   const v = parseInt(s, 10);
-  return isNaN(v) ? fail('not a valid number: ' + s) : succeed(v);
+  return isNaN(v) ? fail("not a valid number: " + s) : succeed(v);
 });
 
 const boolean: Decoder<boolean> = new Decoder((v) =>
-  typeof v === 'boolean'
+  typeof v === "boolean"
     ? Success(v)
-    : failure('expected boolean but found ' + typeof v)
+    : failure("expected boolean but found " + typeof v),
 );
 
 const array = <V>(decodeValue: Decoder<V>): Decoder<Array<V>> =>
   new Decoder((input) => {
     if (!Array.isArray(input)) {
-      return failure('expected array but found ' + typeof input);
+      return failure("expected array but found " + typeof input);
     }
 
     return traverse(List.from(input), decodeValue.run).map((list) =>
-      Array.from(list)
+      Array.from(list),
     );
   });
 
@@ -170,8 +170,8 @@ type DecoderDef<A> = {
 // Ignores extra properties.
 const object = <A>(decoders: DecoderDef<A>): Decoder<A> =>
   new Decoder((input) => {
-    if (typeof input !== 'object' || input === null) {
-      return failure('expected object but found ' + typeof input);
+    if (typeof input !== "object" || input === null) {
+      return failure("expected object but found " + typeof input);
     }
     const obj = input as { [P in keyof A]: unknown };
 
@@ -206,8 +206,8 @@ type ObjectMap<A> = { [x: string]: A };
 
 const objectMap = <A>(decoder: Decoder<A>): Decoder<ObjectMap<A>> =>
   new Decoder((input) => {
-    if (typeof input !== 'object' || input === null) {
-      return failure('expected object but found ' + typeof input);
+    if (typeof input !== "object" || input === null) {
+      return failure("expected object but found " + typeof input);
     }
 
     // object without a prototype or built-in functions.
@@ -233,15 +233,15 @@ const objectMap = <A>(decoder: Decoder<A>): Decoder<ObjectMap<A>> =>
 
 const pair = <L, R>(
   ldecode: Decoder<L>,
-  rdecode: Decoder<R>
+  rdecode: Decoder<R>,
 ): Decoder<[L, R]> =>
   new Decoder((input) => {
     if (!Array.isArray(input)) {
-      return failure('expected array but found ' + typeof input);
+      return failure("expected array but found " + typeof input);
     }
     if (input.length !== 2) {
       return failure(
-        'expected array with 2 elements but it found ' + input.length
+        "expected array with 2 elements but it found " + input.length,
       );
     }
     const [l, r] = input;
@@ -254,15 +254,15 @@ const pair = <L, R>(
 const triple = <A, B, C>(
   pA: Decoder<A>,
   pB: Decoder<B>,
-  pC: Decoder<C>
+  pC: Decoder<C>,
 ): Decoder<[A, B, C]> =>
   new Decoder((input) => {
     if (!Array.isArray(input)) {
-      return failure('expected array but found ' + typeof input);
+      return failure("expected array but found " + typeof input);
     }
     if (input.length !== 3) {
       return failure(
-        'expected array with 3 elements but it found ' + input.length
+        "expected array with 3 elements but it found " + input.length,
       );
     }
     const [ia, ib, ic] = input;
@@ -270,14 +270,14 @@ const triple = <A, B, C>(
     return pA
       .run(ia)
       .chain((a) =>
-        pB.run(ib).chain((b) => pC.run(ic).chain((c) => Success([a, b, c])))
+        pB.run(ib).chain((b) => pC.run(ic).chain((c) => Success([a, b, c]))),
       );
   });
 
 const oneOf = <T extends Decoder<any>[]>(decoders: T): T[number] =>
   new Decoder((input) => {
     type V = Infer<T[number]>;
-    let decoded: DecodeResult<V> = failure('no decoders');
+    let decoded: DecodeResult<V> = failure("no decoders");
 
     const errors: Array<[Path, string]> = [];
 
@@ -291,7 +291,7 @@ const oneOf = <T extends Decoder<any>[]>(decoders: T): T[number] =>
 
     return Failure<[Path, string], V>([
       List.empty(),
-      errors.map(showPath).join('\n'),
+      errors.map(showPath).join("\n"),
     ]);
   });
 
@@ -305,19 +305,19 @@ const nullable = <V>(decoder: Decoder<V>): Decoder<Nullable<V>> =>
   oneOf([nullP, decoder]);
 
 const nullP: Decoder<null> = new Decoder((v) =>
-  v === null ? Success(null) : failure('expected null but found ' + typeof v)
+  v === null ? Success(null) : failure("expected null but found " + typeof v),
 );
 
 const undefinedP: Decoder<undefined> = new Decoder((v) =>
   v === undefined
     ? Success(undefined)
-    : failure('expected `undefined` ' + typeof v)
+    : failure("expected `undefined` " + typeof v),
 );
 
 // Useful for parsing tag names in discriminated unions.
 const stringLiteral = <T extends string>(str: T): Decoder<T> =>
   new Decoder((v) =>
-    v === str ? Success(v as T) : failure(`expected '${str}' but found '${v}'`)
+    v === str ? Success(v as T) : failure(`expected '${str}' but found '${v}'`),
   );
 
 // Decoder for a field that may not be present.
@@ -337,20 +337,20 @@ const optionalMaybe = <V>(decoder: Decoder<V>): DecoderOptional<Maybe<V>> =>
   DecoderOptional.from(decoder);
 
 const optionalNullable = <V>(
-  decoder: Decoder<NonNullable<V>>
+  decoder: Decoder<NonNullable<V>>,
 ): DecoderOptional<Nullable<V>> =>
   optionalMaybe(decoder).map((v) => v.asNullable());
 
 // An object field that may be absent.
 const optional = <V>(decoder: Decoder<V>): DecoderOptional<V | undefined> =>
   optionalMaybe(decoder).map((v) =>
-    v instanceof Nothing ? undefined : v.value
+    v instanceof Nothing ? undefined : v.value,
   );
 
 // If the field is absent, the default value will be used.
 const optionalDefault = <V>(
   def: V,
-  decoder: Decoder<V>
+  decoder: Decoder<V>,
 ): DecoderOptional<V> => {
   return optionalMaybe(decoder).map((v) => v.withDefault(def));
 };
@@ -358,7 +358,7 @@ const optionalDefault = <V>(
 // Define a recursive decoder
 function recursive<A>(f: (p: Decoder<A>) => Decoder<A>): Decoder<A> {
   const base: Decoder<A> = fail(
-    'A recursive decoder cannot immediately call itself.'
+    "A recursive decoder cannot immediately call itself.",
   );
   const top = f(base);
   // @ts-expect-error will complain that 'run' is readonly. But we are doing this on purpose here.
@@ -367,7 +367,7 @@ function recursive<A>(f: (p: Decoder<A>) => Decoder<A>): Decoder<A> {
 }
 
 const json: Decoder<Json> = recursive((json) =>
-  oneOf([nullP, string, number, boolean, array(json), objectMap(json)])
+  oneOf([nullP, string, number, boolean, array(json), objectMap(json)]),
 );
 
 const stringEnum = <const T extends string[]>(strs: T): Decoder<T[number]> =>
@@ -380,7 +380,7 @@ const stringified = <T>(inner: Decoder<T>): Decoder<T> =>
       try {
         return succeed(JSON.parse(str));
       } catch {
-        return fail('Invalid JSON string');
+        return fail("Invalid JSON string");
       }
     })
     .chain((json) => new Decoder((_) => inner.run(json)));

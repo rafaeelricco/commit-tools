@@ -87,8 +87,6 @@ class Setup {
     }
   }
 
-  // --- Private Methods ---
-
   private buildConfig(authMethod: Config["auth_method"]): Config {
     return {
       auth_method: authMethod,

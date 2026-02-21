@@ -109,8 +109,6 @@ class Commit {
     });
   }
 
-  // --- Private Methods ---
-
   private static resolveAuth(deps: Dependencies, config: Config): Future<Error, AuthCredentials> {
     const credentials = getAuthCredentials(config);
 

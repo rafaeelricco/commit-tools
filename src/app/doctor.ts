@@ -26,8 +26,6 @@ class Doctor {
     );
   }
 
-  // --- Private Methods ---
-
   private checkRuntime(): CheckRow {
     return ["Runtime", color.green("Bun"), Bun.version];
   }

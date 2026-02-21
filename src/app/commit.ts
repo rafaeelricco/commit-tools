@@ -105,10 +105,8 @@ class Commit {
   }
 
   private static resolveProvider(deps: Dependencies, config: Config): Future<Error, ProviderConfig> {
-    const ai = config.ai;
-
-    if (ai.provider === "gemini" && ai.auth_method.type === "oauth") {
-      const originalTokens = ai.auth_method.content;
+    if (config.ai.provider === "gemini" && config.ai.auth_method.type === "oauth") {
+      const originalTokens = config.ai.auth_method.content;
 
       return ensureFreshTokens(deps, originalTokens).chain((freshTokens) => {
         const tokensChanged =
@@ -120,14 +118,14 @@ class Commit {
         return persist.map(
           (): ProviderConfig => ({
             provider: "gemini",
-            model: ai.model,
+            model: config.ai.model,
             auth_method: { type: "oauth", content: freshTokens }
           })
         );
       });
     }
 
-    return Future.resolve(ai);
+    return Future.resolve(config.ai);
   }
 
   private promptAction(message: string): Future<Error, UserAction> {

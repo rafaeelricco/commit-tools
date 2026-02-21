@@ -3,6 +3,7 @@ import { Commit } from "@/app/commit";
 import { Setup } from "@/app/setup";
 import { Doctor } from "@/app/doctor";
 import { configureDependencies } from "@/app/integrations";
+import { showHelp, showVersion } from "@/app/ui";
 import { Future } from "@/libs/future";
 
 import color from "picocolors";
@@ -26,14 +27,9 @@ const main = () => {
       action = Doctor.create(deps).run();
       break;
     case "--version":
-    case "-v": {
-      const start = performance.now();
-      console.log("commit-tools 0.1.0 (bun)");
-      const end = performance.now();
-      const diff = end - start;
-      console.log(`Done in ${diff.toLocaleString()}ms`);
+    case "-v":
+      showVersion();
       return;
-    }
     case "--help":
     case "-h":
       showHelp();
@@ -48,20 +44,6 @@ const main = () => {
     (_) => process.exit(1),
     () => process.exit(0)
   );
-};
-
-const showHelp = () => {
-  console.log(`
-Usage: commit-tools [command]
-
-Commands:
-  generate (default)  Generate a commit message
-  setup               Configure authentication and conventions
-  login               Alias for setup (re-authenticate)
-  doctor              Check installation and environment
-  --version, -v       Show version
-  --help, -h          Show help
-  `);
 };
 
 main();

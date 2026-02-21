@@ -65,7 +65,11 @@ class Doctor {
       return loadConfig()
         .map((config) => {
           const rows: CheckRow[] = [row];
-          const authMethod = config.auth_method.type;
+          const ai = config.ai;
+
+          rows.push(["Provider", color.green(ai.provider), `Model: ${ai.model}`]);
+
+          const authMethod = ai.auth_method.type;
 
           rows.push([
             "Auth Method",
@@ -73,9 +77,9 @@ class Doctor {
             authMethod === "oauth" ? "Google OAuth 2.0" : "Google AI Studio API Key"
           ]);
 
-          if (config.auth_method.type === "oauth") {
+          if (ai.auth_method.type === "oauth") {
             const now = Date.now();
-            const expiryDate = config.auth_method.content.expiry_date;
+            const expiryDate = ai.auth_method.content.expiry_date;
             const isExpired = expiryDate <= now;
             const expiryStr = new Date(expiryDate).toLocaleString();
 

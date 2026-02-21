@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { Future } from "@/libs/future";
 import { loadConfig, updateTokens } from "@/app/storage";
 import { Setup } from "@/app/setup";
-import { CommitConvention, type Config } from "@/app/services/config";
+import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
 import { ensureFreshTokens } from "@/app/services/googleAuth";
 import { Dependencies } from "@/app/integrations";
 import {
@@ -16,12 +16,7 @@ import {
   getCurrentBranch,
   hasUpstream
 } from "@/app/services";
-import {
-  generateCommitMessage,
-  refineCommitMessage,
-  getAuthCredentials,
-  type AuthCredentials
-} from "@/app/services/gemini";
+import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/app/ui";
 
@@ -33,7 +28,7 @@ type UserAction = (typeof USER_ACTIONS)[number];
 class Commit {
   private constructor(
     private readonly config: Config,
-    private readonly auth: AuthCredentials
+    private readonly providerConfig: ProviderConfig
   ) {}
 
   static create(deps: Dependencies): Future<Error, Commit> {
@@ -44,7 +39,7 @@ class Commit {
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) => Commit.resolveAuth(deps, config).map((auth) => new Commit(config, auth)));
+      .chain((config) => Commit.resolveProvider(deps, config).map((ai) => new Commit(config, ai)));
   }
 
   run(): Future<Error, void> {
@@ -68,7 +63,7 @@ class Commit {
       "Generating commit message...",
       "Message generated!",
       generateCommitMessage(
-        this.auth,
+        this.providerConfig,
         diff,
         convention ?? this.config.commit_convention,
         template ?? this.config.custom_template.maybe(undefined, (t) => t)
@@ -77,7 +72,7 @@ class Commit {
   }
 
   refine(message: string, adjustment: string, diff: string): Future<Error, string> {
-    return loading("Refining...", "Refined!", refineCommitMessage(this.auth, message, adjustment, diff));
+    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
   }
 
   commit(message: string): Future<Error, string> {
@@ -109,31 +104,30 @@ class Commit {
     });
   }
 
-  private static resolveAuth(deps: Dependencies, config: Config): Future<Error, AuthCredentials> {
-    const credentials = getAuthCredentials(config);
+  private static resolveProvider(deps: Dependencies, config: Config): Future<Error, ProviderConfig> {
+    const ai = config.ai;
 
-    if (credentials instanceof Nothing) {
-      return Future.reject(new Error("No authentication configured. Run 'commit-tools setup' to configure."));
-    }
+    if (ai.provider === "gemini" && ai.auth_method.type === "oauth") {
+      const originalTokens = ai.auth_method.content;
 
-    const creds = credentials.value;
-
-    if (creds.method === "oauth") {
-      return ensureFreshTokens(deps, creds.tokens).chain((freshTokens) => {
+      return ensureFreshTokens(deps, originalTokens).chain((freshTokens) => {
         const tokensChanged =
-          freshTokens.access_token !== creds.tokens.access_token ||
-          freshTokens.expiry_date !== creds.tokens.expiry_date;
+          freshTokens.access_token !== originalTokens.access_token ||
+          freshTokens.expiry_date !== originalTokens.expiry_date;
 
         const persist = tokensChanged ? updateTokens(freshTokens) : Future.resolve<Error, void>(undefined);
 
-        return persist.map(() => ({
-          method: "oauth" as const,
-          tokens: freshTokens
-        }));
+        return persist.map(
+          (): ProviderConfig => ({
+            provider: "gemini",
+            model: ai.model,
+            auth_method: { type: "oauth", content: freshTokens }
+          })
+        );
       });
     }
 
-    return Future.resolve(creds);
+    return Future.resolve(ai);
   }
 
   private promptAction(message: string): Future<Error, UserAction> {

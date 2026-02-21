@@ -4,7 +4,7 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import { CommitConvention, type AuthMethod, type Config } from "@/app/services/config";
+import { CommitConvention, DEFAULT_MODELS, type Config, type ProviderConfig } from "@/app/services/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { Dependencies } from "@/app/integrations";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -16,7 +16,9 @@ import color from "picocolors";
 type SetupPreferences = {
   readonly convention: CommitConvention;
   readonly customTemplate: string | undefined;
-  readonly authMethod: AuthMethod;
+  readonly provider: ProviderConfig["provider"];
+  readonly model: string;
+  readonly authMethod: "oauth" | "api_key";
 };
 
 class Setup {
@@ -28,6 +30,24 @@ class Setup {
   static create(deps: Dependencies): Future<Error, Setup> {
     return Future.attemptP(async () => {
       p.intro(color.bgCyan(color.black(" Commit Gen Setup ")));
+
+      const provider = await p.select({
+        message: "Select AI provider:",
+        options: [{ value: "gemini", label: "Google Gemini" }],
+        initialValue: "gemini"
+      });
+
+      if (p.isCancel(provider)) throw new Error("Setup cancelled");
+
+      const defaultModel = DEFAULT_MODELS[provider as ProviderConfig["provider"]];
+
+      const model = await p.text({
+        message: "Enter model ID:",
+        initialValue: defaultModel,
+        placeholder: defaultModel
+      });
+
+      if (p.isCancel(model)) throw new Error("Setup cancelled");
 
       const convention = await p.select({
         message: "Select commit convention:",
@@ -73,7 +93,9 @@ class Setup {
       return new Setup(deps, {
         convention: convention as CommitConvention,
         customTemplate,
-        authMethod: authMethod as AuthMethod
+        provider: provider as ProviderConfig["provider"],
+        model: model as string,
+        authMethod: authMethod as "oauth" | "api_key"
       });
     });
   }
@@ -87,9 +109,13 @@ class Setup {
     }
   }
 
-  private buildConfig(authMethod: Config["auth_method"]): Config {
+  private buildConfig(authMethod: ProviderConfig["auth_method"]): Config {
     return {
-      auth_method: authMethod,
+      ai: {
+        provider: this.preferences.provider,
+        model: this.preferences.model,
+        auth_method: authMethod
+      },
       commit_convention: this.preferences.convention,
       custom_template: this.preferences.customTemplate ? Just(this.preferences.customTemplate) : Nothing()
     };
@@ -124,7 +150,7 @@ class Setup {
       if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
       return apiKey;
     }).chain((apiKey) =>
-      loading("Validating API key...", "API key validated!", Setup.validateApiKey(apiKey))
+      loading("Validating API key...", "API key validated!", Setup.validateApiKey(apiKey, this.preferences.model))
         .map(() => this.buildConfig({ type: "api_key", content: apiKey }))
         .chain((config) => saveConfig(config))
         .map(() => {
@@ -137,11 +163,11 @@ class Setup {
     );
   }
 
-  private static validateApiKey(apiKey: string): Future<Error, void> {
+  private static validateApiKey(apiKey: string, model: string): Future<Error, void> {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
+    const geminiModel = genAI.getGenerativeModel({ model });
     return Future.attemptP(async () => {
-      await model.generateContent("test");
+      await geminiModel.generateContent("test");
     });
   }
 }

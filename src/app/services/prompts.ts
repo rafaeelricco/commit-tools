@@ -1,6 +1,6 @@
-export { getPrompt };
+export { getPrompt, getRefinePrompt };
 
-import { CommitConvention } from "@/app/services/googleAuth";
+import { CommitConvention } from "@/app/services/config";
 
 function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
   switch (convention) {
@@ -235,4 +235,19 @@ function promptCustom(gitDiff: string, template?: string): string {
         4. Do NOT wrap the commit message in quotes or code fences.
       </output_instructions>
 `;
+}
+
+function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {
+  prompt: string;
+  systemInstruction: string;
+} {
+  return {
+    prompt:
+      `<diff>\n${params.diff}\n</diff>\n` +
+      `<current>\n${params.currentMessage}\n</current>\n` +
+      `<adjustment>\n${params.adjustment}\n</adjustment>`,
+    systemInstruction:
+      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. " +
+      "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
+  };
 }

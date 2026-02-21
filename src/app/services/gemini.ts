@@ -1,50 +1,56 @@
-export { type AuthCredentials, generateCommitMessage, refineCommitMessage, getAuthCredentials };
+export { type GeminiAuthCredentials, generateContentWithGemini, getAuthCredentials };
 
-import { GoogleGenerativeAI, type GenerateContentResponse } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Future } from "@/libs/future";
-import { CommitConvention, type Config, type OAuthTokens } from "@/app/services/config";
+import { type Config, type OAuthTokens } from "@/app/services/config";
 import { getAccessToken } from "@/app/services/googleAuth";
-import { Just, type Maybe } from "@/libs/maybe";
-import { getPrompt } from "@/app/services/prompts";
-import { GEMINI_MODEL } from "@/const/gemini-model";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { type GenerateContentParams } from "@/app/services/llm";
 
-type AuthCredentials =
+type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
+
+type GeminiAuthCredentials =
   | { readonly method: "byok"; readonly apiKey: string }
   | { readonly method: "oauth"; readonly tokens: OAuthTokens };
 
-const getAuthCredentials = (config: Config): Maybe<AuthCredentials> => {
-  switch (config.auth_method.type) {
+const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
+  if (config.ai.provider !== "gemini") return Nothing();
+
+  switch (config.ai.auth_method.type) {
     case "oauth":
-      return Just({ method: "oauth", tokens: config.auth_method.content });
+      return Just({ method: "oauth", tokens: config.ai.auth_method.content });
     case "api_key":
-      return Just({ method: "byok", apiKey: config.auth_method.content });
+      return Just({ method: "byok", apiKey: config.ai.auth_method.content });
   }
 };
 
-type GenerateContentParams = {
-  readonly prompt: string;
-  readonly systemInstruction?: string;
-};
-
-const generateContentWithApiKey = (apiKey: string, params: GenerateContentParams): Future<Error, string> => {
+const generateContentWithApiKey = (
+  apiKey: string,
+  model: string,
+  params: GenerateContentParams
+): Future<Error, string> => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
+  const geminiModel = genAI.getGenerativeModel({
+    model,
     ...(params.systemInstruction !== undefined ? { systemInstruction: params.systemInstruction } : {})
   });
 
   return Future.attemptP(async () => {
-    const result = await model.generateContent(params.prompt);
+    const result = await geminiModel.generateContent(params.prompt);
     const text = result.response.text();
     if (!text || !text.trim()) throw new Error("Empty AI response");
     return text.trim();
   }).mapRej((e) => new Error(String(e)));
 };
 
-const generateContentWithOAuth = (tokens: OAuthTokens, params: GenerateContentParams): Future<Error, string> =>
+const generateContentWithOAuth = (
+  tokens: OAuthTokens,
+  model: string,
+  params: GenerateContentParams
+): Future<Error, string> =>
   getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
       const contents = [{ parts: [{ text: params.prompt }] }];
       const body: Record<string, unknown> = { contents };
@@ -69,7 +75,9 @@ const generateContentWithOAuth = (tokens: OAuthTokens, params: GenerateContentPa
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
-      const json = (await response.json()) as GenerateContentResponse;
+      const json = (await response.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
 
       const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text || !text.trim()) {
@@ -80,33 +88,11 @@ const generateContentWithOAuth = (tokens: OAuthTokens, params: GenerateContentPa
     }).mapRej((e) => new Error(String(e)))
   );
 
-const generateContent = (auth: AuthCredentials, params: GenerateContentParams): Future<Error, string> => {
-  switch (auth.method) {
-    case "byok":
-      return generateContentWithApiKey(auth.apiKey, params);
+const generateContentWithGemini = (config: GeminiConfig, params: GenerateContentParams): Future<Error, string> => {
+  switch (config.auth_method.type) {
+    case "api_key":
+      return generateContentWithApiKey(config.auth_method.content, config.model, params);
     case "oauth":
-      return generateContentWithOAuth(auth.tokens, params);
+      return generateContentWithOAuth(config.auth_method.content, config.model, params);
   }
 };
-
-const generateCommitMessage = (
-  auth: AuthCredentials,
-  diff: string,
-  convention: CommitConvention,
-  customTemplate?: string
-): Future<Error, string> =>
-  generateContent(auth, {
-    prompt: getPrompt(diff, convention, customTemplate)
-  });
-
-const refineCommitMessage = (
-  auth: AuthCredentials,
-  currentMessage: string,
-  adjustment: string,
-  diff: string
-): Future<Error, string> =>
-  generateContent(auth, {
-    prompt: `<diff>\n${diff}\n</diff>\n<current>\n${currentMessage}\n</current>\n<adjustment>\n${adjustment}\n</adjustment>`,
-    systemInstruction:
-      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
-  });

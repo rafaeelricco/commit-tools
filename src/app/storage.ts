@@ -7,6 +7,7 @@ import { resolve } from "path";
 import { homedir } from "os";
 import { mkdir } from "fs/promises";
 import { Config, type OAuthTokens } from "@/app/services/config";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
@@ -29,12 +30,19 @@ const saveConfig = (config: Config): Future<Error, void> =>
     await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
   });
 
+const extractOAuthConfig = (config: Config): Maybe<{ model: string }> =>
+  config.ai.provider === "gemini" && config.ai.auth_method.type === "oauth" ?
+    Just({ model: config.ai.model })
+  : Nothing();
+
 const updateTokens = (tokens: OAuthTokens): Future<Error, void> =>
   loadConfig().chain((config) =>
-    config.auth_method.type === "oauth" ?
-      saveConfig({
-        ...config,
-        auth_method: { type: "oauth", content: tokens }
-      })
-    : Future.reject(new Error("Cannot update tokens: not using OAuth authentication"))
+    extractOAuthConfig(config).maybe(
+      Future.reject<Error, void>(new Error("Cannot update tokens: not using OAuth authentication")),
+      ({ model }) =>
+        saveConfig({
+          ...config,
+          ai: { provider: "gemini", model, auth_method: { type: "oauth", content: tokens } }
+        })
+    )
   );

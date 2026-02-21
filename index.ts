@@ -4,6 +4,7 @@ import { Setup } from "@/app/setup";
 import { Doctor } from "@/app/doctor";
 import { configureDependencies } from "@/app/integrations";
 import { showHelp, showVersion } from "@/app/ui";
+import { parseArgs } from "@/app/cli";
 import { Future } from "@/libs/future";
 
 import color from "picocolors";
@@ -11,36 +12,36 @@ import color from "picocolors";
 const main = () => {
   const deps = configureDependencies();
   const args = process.argv.slice(2);
-  const command = args[0] || "generate";
 
-  let action: Future<Error, void>;
-
-  switch (command) {
-    case "generate":
-      action = Commit.create(deps).chain((flow) => flow.run());
-      break;
-    case "setup":
-    case "login":
-      action = Setup.create(deps).chain((s) => s.run());
-      break;
-    case "doctor":
-      action = Doctor.create(deps).run();
-      break;
-    case "--version":
-    case "-v":
-      showVersion();
-      return;
-    case "--help":
-    case "-h":
+  const actionFuture = parseArgs(args).either(
+    (err): Future<Error, void> => {
+      console.error(color.red(err.message));
       showHelp();
-      return;
-    default:
-      console.error(color.red(`Unknown command: ${command}`));
-      showHelp();
-      process.exit(1);
-  }
+      return Future.reject(err);
+    },
+    (command): Future<Error, void> => {
+      switch (command.type) {
+        case "generate":
+          return Commit.create(deps).chain((flow) => flow.run());
+        case "setup":
+          return Setup.create(deps).chain((s) => s.run());
+        case "doctor":
+          return Doctor.create(deps).run();
+        case "version":
+          showVersion();
+          return Future.resolve(undefined);
+        case "help":
+          showHelp();
+          return Future.resolve(undefined);
+        default: {
+          const _exhaustiveCheck: never = command;
+          return Future.reject(new Error(`Unhandled command: ${JSON.stringify(_exhaustiveCheck)}`));
+        }
+      }
+    }
+  );
 
-  action.fork(
+  actionFuture.fork(
     (_) => process.exit(1),
     () => process.exit(0)
   );

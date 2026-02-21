@@ -4,11 +4,12 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import { CommitConvention, type Config, type ProviderConfig, type OAuthTokens } from "@/app/services/config";
+import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { Dependencies } from "@/app/integrations";
 import { Just, Nothing } from "@/libs/maybe";
-import { loading } from "@/app/ui";
+import { loading } from "@/app/spinner";
+import { fetchModels, selectModelInteractively } from "@/app/services/models";
 
 import color from "picocolors";
 
@@ -134,58 +135,9 @@ class Setup {
     );
   }
 
-  private fetchModels(authMethod: ProviderConfig["auth_method"]): Future<Error, { id: string; description: string }[]> {
-    return Future.attemptP(async () => {
-      let url = "https://generativelanguage.googleapis.com/v1beta/models";
-      let headers: Record<string, string> = {};
-
-      if (authMethod.type === "api_key") {
-        url += `?key=${authMethod.content}`;
-      } else {
-        const tokens = authMethod.content as OAuthTokens;
-        headers["Authorization"] = `Bearer ${tokens.access_token}`;
-      }
-
-      const response = await fetch(url, { headers });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as { models?: any[] };
-      return (data.models || []).map((m: any) => ({
-        id: m.name.replace("models/", ""),
-        description: m.description || ""
-      }));
-    });
-  }
-
-  private selectModelInteractively(models: { id: string; description: string }[]): Future<Error, string> {
-    return Future.attemptP(async () => {
-      const { render } = await import("ink");
-      const React = await import("react");
-      const { ModelSelector } = await import("@/app/components/model-selector");
-
-      return new Promise<string>((resolve, reject) => {
-        const { unmount } = render(
-          React.createElement(ModelSelector, {
-            models,
-            onSelect: (modelId: string) => {
-              unmount();
-              resolve(modelId);
-            },
-            onCancel: () => {
-              unmount();
-              reject(new Error("Setup cancelled"));
-            }
-          })
-        );
-      });
-    });
-  }
-
   private finalizeSetup(authMethod: ProviderConfig["auth_method"]): Future<Error, void> {
-    return loading("Fetching available models...", "Models fetched!", this.fetchModels(authMethod))
-      .chain((models) => this.selectModelInteractively(models))
+    return loading("Fetching available models...", "Models fetched!", fetchModels(authMethod))
+      .chain((models) => selectModelInteractively(models))
       .chain((modelId) => saveConfig(this.buildConfig(authMethod, modelId)))
       .map(() => {
         p.outro(color.green("Setup complete!"));

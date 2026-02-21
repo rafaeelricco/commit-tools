@@ -2,9 +2,9 @@
 import { Commit } from "@/app/commit";
 import { Setup } from "@/app/setup";
 import { Doctor } from "@/app/doctor";
+import { ModelCommand } from "@/app/model";
 import { configureDependencies } from "@/app/integrations";
-import { showHelp, showVersion } from "@/app/ui";
-import { parseArgs } from "@/app/cli";
+import { parseArgs, showHelp, showVersion } from "@/app/cli";
 import { Future } from "@/libs/future";
 
 import color from "picocolors";
@@ -27,6 +27,8 @@ const main = () => {
           return Setup.create(deps).chain((s) => s.run());
         case "doctor":
           return Doctor.create(deps).run();
+        case "model":
+          return ModelCommand.create(deps).chain((m) => m.run());
         case "version":
           showVersion();
           return Future.resolve(undefined);

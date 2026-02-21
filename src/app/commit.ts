@@ -18,7 +18,7 @@ import {
 } from "@/app/services";
 import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
-import { loading } from "@/app/ui";
+import { loading } from "@/app/spinner";
 
 import color from "picocolors";
 

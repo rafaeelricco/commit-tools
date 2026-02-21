@@ -4,10 +4,10 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { loadConfig, updateTokens } from "@/app/storage";
-import { executeSetupFlow } from "@/app/setup";
+import { Setup } from "@/app/setup";
 import { CommitConvention, type Config } from "@/app/services/config";
 import { ensureFreshTokens } from "@/app/services/googleAuth";
-import type { Dependencies } from "@/app/integrations";
+import { Dependencies } from "@/app/integrations";
 import {
   checkIsGitRepo,
   getStagedDiff,
@@ -23,25 +23,12 @@ import {
   type AuthCredentials
 } from "@/app/services/gemini";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
+import { loading } from "@/app/ui";
 
 import color from "picocolors";
 
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
-
-const loading = <T>(label: string, stopLabel: string, future: Future<Error, T>): Future<Error, T> => {
-  const s = p.spinner();
-  s.start(label);
-  return future
-    .map((v) => {
-      s.stop(stopLabel);
-      return v;
-    })
-    .mapRej((e) => {
-      s.stop("Failed.");
-      return e;
-    });
-};
 
 class Commit {
   private constructor(
@@ -51,9 +38,11 @@ class Commit {
 
   static create(deps: Dependencies): Future<Error, Commit> {
     return loadConfig()
-      .chainRej(() => {
+      .chainRej((): Future<Error, Config> => {
         p.log.warn(color.yellow("No configuration found. Let's set you up first."));
-        return executeSetupFlow(deps).chain(() => loadConfig());
+        return Setup.create(deps)
+          .chain((s) => s.run())
+          .chain(() => loadConfig());
       })
       .chain((config) => Commit.resolveAuth(deps, config).map((auth) => new Commit(config, auth)));
   }

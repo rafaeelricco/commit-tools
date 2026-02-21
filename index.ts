@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Commit } from "@/app/commit";
-import { executeSetupFlow } from "@/app/setup";
-import { executeDoctorFlow } from "@/app/doctor";
+import { Setup } from "@/app/setup";
+import { Doctor } from "@/app/doctor";
 import { configureDependencies } from "@/app/integrations";
 import { Future } from "@/libs/future";
 
@@ -20,10 +20,10 @@ const main = () => {
       break;
     case "setup":
     case "login":
-      action = executeSetupFlow(deps);
+      action = Setup.create(deps).chain((s) => s.run());
       break;
     case "doctor":
-      action = executeDoctorFlow(deps);
+      action = Doctor.create(deps).run();
       break;
     case "--version":
     case "-v": {

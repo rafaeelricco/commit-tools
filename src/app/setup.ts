@@ -4,10 +4,9 @@ import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
-import { CommitConvention, DEFAULT_MODELS, type Config, type ProviderConfig } from "@/app/services/config";
+import { CommitConvention, type Config, type ProviderConfig, type OAuthTokens } from "@/app/services/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
 import { Dependencies } from "@/app/integrations";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Just, Nothing } from "@/libs/maybe";
 import { loading } from "@/app/ui";
 
@@ -17,7 +16,6 @@ type SetupPreferences = {
   readonly convention: CommitConvention;
   readonly customTemplate: string | undefined;
   readonly provider: ProviderConfig["provider"];
-  readonly model: string;
   readonly authMethod: "oauth" | "api_key";
 };
 
@@ -38,16 +36,6 @@ class Setup {
       });
 
       if (p.isCancel(provider)) throw new Error("Setup cancelled");
-
-      const defaultModel = DEFAULT_MODELS[provider as ProviderConfig["provider"]];
-
-      const model = await p.text({
-        message: "Enter model ID:",
-        initialValue: defaultModel,
-        placeholder: defaultModel
-      });
-
-      if (p.isCancel(model)) throw new Error("Setup cancelled");
 
       const convention = await p.select({
         message: "Select commit convention:",
@@ -94,7 +82,6 @@ class Setup {
         convention: convention as CommitConvention,
         customTemplate,
         provider: provider as ProviderConfig["provider"],
-        model: model as string,
         authMethod: authMethod as "oauth" | "api_key"
       });
     });
@@ -109,11 +96,11 @@ class Setup {
     }
   }
 
-  private buildConfig(authMethod: ProviderConfig["auth_method"]): Config {
+  private buildConfig(authMethod: ProviderConfig["auth_method"], model: string): Config {
     return {
       ai: {
         provider: this.preferences.provider,
-        model: this.preferences.model,
+        model,
         auth_method: authMethod
       },
       commit_convention: this.preferences.convention,
@@ -126,18 +113,11 @@ class Setup {
 
     return performOAuthFlow(this.deps)
       .chain((tokens) =>
-        loading("Validating OAuth tokens...", "OAuth tokens validated!", validateOAuthTokens(tokens)).map(() =>
-          this.buildConfig({ type: "oauth", content: tokens })
+        loading("Validating OAuth tokens...", "OAuth tokens validated!", validateOAuthTokens(tokens)).map(
+          () => ({ type: "oauth", content: tokens }) as ProviderConfig["auth_method"]
         )
       )
-      .chain((config) => saveConfig(config))
-      .map(() => {
-        p.outro(color.green("Setup complete! Authenticated via Google OAuth."));
-      })
-      .mapRej((e) => {
-        p.log.error(color.red(e.message));
-        return e;
-      });
+      .chain((authMethod) => this.finalizeSetup(authMethod));
   }
 
   private setupApiKey(): Future<Error, void> {
@@ -150,24 +130,69 @@ class Setup {
       if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
       return apiKey;
     }).chain((apiKey) =>
-      loading("Validating API key...", "API key validated!", Setup.validateApiKey(apiKey, this.preferences.model))
-        .map(() => this.buildConfig({ type: "api_key", content: apiKey }))
-        .chain((config) => saveConfig(config))
-        .map(() => {
-          p.outro(color.green("Setup complete!"));
-        })
-        .mapRej((e) => {
-          p.log.error(color.red("Validation failed."));
-          return e;
-        })
+      this.finalizeSetup({ type: "api_key", content: apiKey as string } as ProviderConfig["auth_method"])
     );
   }
 
-  private static validateApiKey(apiKey: string, model: string): Future<Error, void> {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const geminiModel = genAI.getGenerativeModel({ model });
+  private fetchModels(authMethod: ProviderConfig["auth_method"]): Future<Error, { id: string; description: string }[]> {
     return Future.attemptP(async () => {
-      await geminiModel.generateContent("test");
+      let url = "https://generativelanguage.googleapis.com/v1beta/models";
+      let headers: Record<string, string> = {};
+
+      if (authMethod.type === "api_key") {
+        url += `?key=${authMethod.content}`;
+      } else {
+        const tokens = authMethod.content as OAuthTokens;
+        headers["Authorization"] = `Bearer ${tokens.access_token}`;
+      }
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as { models?: any[] };
+      return (data.models || []).map((m: any) => ({
+        id: m.name.replace("models/", ""),
+        description: m.description || ""
+      }));
     });
+  }
+
+  private selectModelInteractively(models: { id: string; description: string }[]): Future<Error, string> {
+    return Future.attemptP(async () => {
+      const { render } = await import("ink");
+      const React = await import("react");
+      const { ModelSelector } = await import("@/app/components/model-selector");
+
+      return new Promise<string>((resolve, reject) => {
+        const { unmount } = render(
+          React.createElement(ModelSelector, {
+            models,
+            onSelect: (modelId: string) => {
+              unmount();
+              resolve(modelId);
+            },
+            onCancel: () => {
+              unmount();
+              reject(new Error("Setup cancelled"));
+            }
+          })
+        );
+      });
+    });
+  }
+
+  private finalizeSetup(authMethod: ProviderConfig["auth_method"]): Future<Error, void> {
+    return loading("Fetching available models...", "Models fetched!", this.fetchModels(authMethod))
+      .chain((models) => this.selectModelInteractively(models))
+      .chain((modelId) => saveConfig(this.buildConfig(authMethod, modelId)))
+      .map(() => {
+        p.outro(color.green("Setup complete!"));
+      })
+      .mapRej((e) => {
+        p.log.error(color.red(e.message));
+        return e;
+      });
   }
 }

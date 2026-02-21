@@ -22,9 +22,12 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/express": "^5.0.6",
+    "@types/ink-text-input": "^2.0.5",
     "@types/luxon": "^3.7.1",
+    "@types/react": "^19.2.14",
     "prettier": "^3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2"
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "react-devtools-core": "^7.0.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -35,8 +38,11 @@
     "cli-table3": "^0.6.5",
     "fluture": "^14.0.0",
     "google-auth-library": "^10.5.0",
+    "ink": "^6.8.0",
+    "ink-text-input": "^6.0.0",
     "luxon": "^3.7.2",
     "open": "^11.0.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "react": "^19.2.4"
   }
 }

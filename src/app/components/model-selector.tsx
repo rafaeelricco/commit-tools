@@ -1,6 +1,7 @@
 export { ModelSelector, type Model, type ModelSelectorProps };
 
-import React, { useState, useEffect } from "react";
+import * as React from "react";
+
 import { Box, Text, useInput, useApp } from "ink";
 import TextInput from "ink-text-input";
 
@@ -17,12 +18,11 @@ type ModelSelectorProps = {
 
 const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
   const { exit } = useApp();
-  const [query, setQuery] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [query, setQuery] = React.useState("");
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
 
   const filteredModels = models.filter((m) => m.id.toLowerCase().includes(query.toLowerCase()));
 
-  // Handle keyboard navigation
   useInput((_, key) => {
     if (key.escape) {
       onCancel();
@@ -49,51 +49,62 @@ const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
     }
   });
 
-  // Reset selection index when query changes
-  useEffect(() => {
+  React.useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
-  // Display only a window of models (e.g., 5 at a time)
   const windowSize = 5;
   const startIndex = Math.max(0, Math.min(selectedIndex - 2, filteredModels.length - windowSize));
   const visibleModels = filteredModels.slice(startIndex, startIndex + windowSize);
 
   return (
-    <Box flexDirection="column" paddingBottom={1} paddingTop={1}>
-      {/* Search Box */}
-      <Box borderStyle="round" borderColor="gray" paddingX={1} marginBottom={1}>
-        <Text color="gray">⌕ </Text>
-        <TextInput value={query} onChange={setQuery} placeholder="Search models..." />
+    <Box flexDirection="column">
+      <Box>
+        <Text color="gray">│</Text>
+      </Box>
+      <Box>
+        <Text color="cyan">◇ </Text>
+        <Text>Search and select model</Text>
       </Box>
 
-      {/* Model List */}
-      {visibleModels.length === 0 ?
-        <Text color="red"> No models found.</Text>
-      : visibleModels.map((model, idx) => {
-          const globalIdx = startIndex + idx;
-          const isSelected = globalIdx === selectedIndex;
-          return (
-            <Box key={model.id} flexDirection="column" paddingLeft={1} marginBottom={1}>
-              <Text bold={isSelected}>
-                <Text color={isSelected ? "cyan" : "gray"}>{isSelected ? "> ◯ " : "  ◯ "}</Text>
-                {model.id}
-              </Text>
-              <Box paddingLeft={4}>
-                <Text color="gray" dimColor>
-                  {model.description}
-                </Text>
-              </Box>
-            </Box>
-          );
-        })
-      }
+      <Box>
+        <Text color="gray">│ </Text>
+        <Text color="cyan">{"> "}</Text>
+        <TextInput value={query} onChange={setQuery} placeholder="type to search" />
+      </Box>
 
-      {/* Footer Instructions */}
-      <Box marginTop={1} paddingLeft={1}>
-        <Text color="gray" dimColor>
-          type to search · ↑/↓ to navigate · Enter to select · Esc to cancel
-        </Text>
+      <Box flexDirection="row">
+        <Box flexDirection="column" marginRight={1}>
+          {Array.from({ length: Math.max(1, visibleModels.length) + 2 }).map((_, i) => (
+            <Text key={i} color="gray">
+              │
+            </Text>
+          ))}
+        </Box>
+        <Box borderStyle="round" borderColor="gray" paddingX={0} paddingY={0} flexDirection="column" width={64}>
+          {visibleModels.length === 0 ?
+            <Box>
+              <Text color="red"> No models found.</Text>
+            </Box>
+          : visibleModels.map((model) => {
+              const globalIdx = filteredModels.indexOf(model);
+              const isSelected = globalIdx === selectedIndex;
+
+              return (
+                <Box key={model.id}>
+                  <Text color={isSelected ? "cyan" : "gray"}>{isSelected ? " ● " : " ○ "}</Text>
+                  {isSelected ?
+                    <Text color="cyan">{model.id}</Text>
+                  : <Text>{model.id}</Text>}
+                </Box>
+              );
+            })
+          }
+        </Box>
+      </Box>
+
+      <Box>
+        <Text color="gray">│</Text>
       </Box>
     </Box>
   );

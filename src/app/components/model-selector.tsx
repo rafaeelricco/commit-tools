@@ -17,12 +17,30 @@ type ModelSelectorProps = {
   onCancel: () => void;
 };
 
+function fuzzyMatch(pattern: string, target: string): boolean {
+  const p = pattern.toLowerCase();
+  const t = target.toLowerCase();
+  let pi = 0;
+  let ti = 0;
+
+  while (pi < p.length && ti < t.length) {
+    if (p[pi] === t[ti]) pi++;
+    ti++;
+  }
+
+  return pi === p.length;
+}
+
 const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
   const { exit } = useApp();
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
 
-  const filteredModels = models.filter((m) => m.id.toLowerCase().includes(query.toLowerCase()));
+  const filteredModels = models.filter((m) => {
+    const q = query.trim();
+    if (!q) return true;
+    return fuzzyMatch(q, m.id) || (m.description && fuzzyMatch(q, m.description));
+  });
 
   useInput((_, key) => {
     if (key.escape) {

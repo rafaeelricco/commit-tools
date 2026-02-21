@@ -1,6 +1,7 @@
 export { loading, showHelp, showVersion };
 
 import * as p from "@clack/prompts";
+
 import { Future } from "@/libs/future";
 
 const loading = <T>(label: string, stopLabel: string, f: Future<Error, T>): Future<Error, T> => {

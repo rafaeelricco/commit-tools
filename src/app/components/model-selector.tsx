@@ -3,6 +3,7 @@ export { ModelSelector, type Model, type ModelSelectorProps };
 import * as React from "react";
 
 import { Box, Text, useInput, useApp } from "ink";
+
 import TextInput from "ink-text-input";
 
 type Model = {

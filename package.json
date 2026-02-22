@@ -1,10 +1,10 @@
 {
   "name": "@rafaeelricco/commit-tools",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "commit-tools": "./dist/index.js"
+    "commit": "./dist/index.js"
   },
   "scripts": {
     "start": "bun index.ts",

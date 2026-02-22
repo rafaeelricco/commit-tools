@@ -18,6 +18,10 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rafaeelricco/commit-tools"
+  },
   "publishConfig": {
     "access": "public"
   },

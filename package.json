@@ -1,5 +1,6 @@
 {
-  "name": "commit-tools",
+  "name": "@rafaeelricco/commit-tools",
+  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "bin": {
@@ -14,7 +15,11 @@
     "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
     "install:global": "bun link",
     "format": "npx prettier . --write",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist"

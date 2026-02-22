@@ -159,13 +159,3 @@ Contributions and feedback are welcome!
 ## Contributing
 
 We welcome contributions! Feel free to report bugs, suggest features, or submit pull requests.
-
-## Legal
-
-- **License**: Open Source.
-
----
-
-<p align="center">
-  Built by the open source community
-</p>

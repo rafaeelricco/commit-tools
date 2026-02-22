@@ -26,17 +26,29 @@ npm install -g @rafaeelricco/commit-tools
 **Conventional Commits**
 
 ```
-feat: add dark mode toggle to settings page
-fix: resolve race condition in token refresh
-refactor: extract validation logic into shared module
+feat: add model command for selecting AI model
+```
+
+```
+refactor(config): decouple storage and auth logic
+
+- Separate authentication credentials from configuration storage.
+- Introduce `AuthCredentials` type to replace raw API key passing.
+- Update `loadConfig` and setup flow to accept a `Dependencies` object.
 ```
 
 **Imperative Style**
 
 ```
-add dark mode toggle to settings page
-fix race condition in token refresh
-extract validation logic into shared module
+Add fuzzy search to model selector
+```
+
+```
+Refactor commit flow into a class structure
+
+- Extract `CommitFlow` class with dedicated methods for each step.
+- Move loading spinner logic to a separate module.
+- Update `interactionLoop` to use structured context.
 ```
 
 **Custom Template**

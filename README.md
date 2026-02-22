@@ -53,7 +53,28 @@ Refactor commit flow into a class structure
 
 **Custom Template**
 
-Define your own format during `commit setup` to match your team's guidelines.
+Define your own format during `commit setup` to match your team's guidelines:
+
+_Template:_
+
+```
+[JIRA-<ticket_number>] <gitmoji> <type>(<scope>): <subject>
+
+<optional body>
+
+Co-authored-by: <team_name>
+```
+
+_Output:_
+
+```
+[JIRA-402] ✨ feat(ui): add model selection command
+
+- Implemented fuzzy search for easier discovery.
+- Added a fallback when no models are available.
+
+Co-authored-by: frontend-team
+```
 
 ## Getting Started
 
@@ -89,7 +110,7 @@ commit model
 Stage your changes, then run:
 
 ```bash
-git add <files>
+git add <files> # soon: we will be able to add files using the tool
 commit
 ```
 

@@ -1,32 +1,27 @@
-export { type OAuthCredentials, type Dependencies, configureDependencies };
+// Environment variables
+// All environment variables used by the entire program are here.
+//
+// This module ensures all environment variables are:
+//
+// - Type-checked
+// - Decoded at the beginning of the program
+// - Handled consistently
+// - Visible in a single place
 
-import { Future } from "@/libs/future";
+export { type Environment, environment };
 
-type OAuthCredentials = {
-  readonly clientId: string;
-  readonly clientSecret: string;
-};
+import * as D from "@/libs/json/decoder";
 
-type Dependencies = {
-  readonly resolveOAuth: () => Future<Error, OAuthCredentials>;
-};
+type Environment = D.Infer<typeof envDecoder>;
 
-function configureDependencies(): Dependencies {
-  return {
-    resolveOAuth: () => {
-      const clientId = process.env["GOOGLE_CLIENT_ID"];
-      const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
+const envDecoder = D.object({
+  GOOGLE_CLIENT_ID: D.string,
+  GOOGLE_CLIENT_SECRET: D.string
+});
 
-      if (!clientId || !clientSecret) {
-        return Future.reject(
-          new Error(
-            "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for OAuth authentication.\n" +
-              "Set them in your environment or use 'commit-tools setup' with the API Key method instead."
-          )
-        );
-      }
-
-      return Future.resolve({ clientId, clientSecret });
-    }
-  };
-}
+const environment: Environment = D.decode(process.env, envDecoder).either(
+  (err) => {
+    throw new Error(`Unable to parse environment variables:\n${err}`);
+  },
+  (env) => env
+);

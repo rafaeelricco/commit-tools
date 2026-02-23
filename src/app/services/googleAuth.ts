@@ -15,7 +15,7 @@ import { COMMIT_CONVENTIONS, type CommitConvention, type OAuthTokens, Config, ty
 
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
-import { type Dependencies } from "@/app/integrations";
+import { environment } from "@/app/integrations";
 import { randomBytes, createHash } from "crypto";
 
 const SCOPES = [
@@ -272,81 +272,78 @@ const exchangeCodeForTokens = (
     };
   }).mapRej((e) => new Error(`Token exchange failed: ${e}`));
 
-const performOAuthFlow = (deps: Dependencies): Future<Error, OAuthTokens> =>
-  deps.resolveOAuth().chain((oauth) =>
-    findAvailablePort().chain((port) => {
-      const redirectUri = `http://127.0.0.1:${port}/callback`;
-      const codeVerifier = generateCodeVerifier();
-      const codeChallenge = generateCodeChallenge(codeVerifier);
-      const state = randomBytes(32).toString("hex");
+const performOAuthFlow = (): Future<Error, OAuthTokens> =>
+  findAvailablePort().chain((port) => {
+    const redirectUri = `http://127.0.0.1:${port}/callback`;
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+    const state = randomBytes(32).toString("hex");
 
-      const client = new OAuth2Client({
-        clientId: oauth.clientId,
-        clientSecret: oauth.clientSecret,
-        redirectUri
-      });
-
-      const authUrl = client.generateAuthUrl({
-        access_type: "offline",
-        prompt: "consent",
-        scope: SCOPES,
-        code_challenge: codeChallenge,
-        code_challenge_method: CodeChallengeMethod.S256,
-        state
-      });
-
-      return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
-        startCallbackServer(port, state),
-        stopCallbackServer,
-        (cs) => {
-          const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() =>
-            Future.attemptP(() => cs.codePromise)
-          );
-
-          const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-            return () =>
-              clearTimeout(
-                setTimeout(
-                  () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
-                  OAUTH_TIMEOUT_MS
-                )
-              );
-          });
-
-          return Future.race(waitForCode, timeout).chain((code) =>
-            exchangeCodeForTokens(client, code, codeVerifier, redirectUri)
-          );
-        }
-      );
-    })
-  );
-
-const createAuthenticatedClient = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuth2Client> =>
-  deps.resolveOAuth().map((oauth) => {
     const client = new OAuth2Client({
-      clientId: oauth.clientId,
-      clientSecret: oauth.clientSecret
+      clientId: environment.GOOGLE_CLIENT_ID,
+      clientSecret: environment.GOOGLE_CLIENT_SECRET,
+      redirectUri
     });
 
-    client.setCredentials({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expiry_date,
-      token_type: tokens.token_type,
-      scope: tokens.scope
+    const authUrl = client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: SCOPES,
+      code_challenge: codeChallenge,
+      code_challenge_method: CodeChallengeMethod.S256,
+      state
     });
 
-    return client;
+    return Future.bracket<Error, CallbackServer, OAuthTokens, void>(
+      startCallbackServer(port, state),
+      stopCallbackServer,
+      (cs) => {
+        const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() =>
+          Future.attemptP(() => cs.codePromise)
+        );
+
+        const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
+          return () =>
+            clearTimeout(
+              setTimeout(
+                () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
+                OAUTH_TIMEOUT_MS
+              )
+            );
+        });
+
+        return Future.race(waitForCode, timeout).chain((code) =>
+          exchangeCodeForTokens(client, code, codeVerifier, redirectUri)
+        );
+      }
+    );
   });
 
-const ensureFreshTokens = (deps: Dependencies, tokens: OAuthTokens): Future<Error, OAuthTokens> => {
+const createAuthenticatedClient = (tokens: OAuthTokens): Future<Error, OAuth2Client> => {
+  const client = new OAuth2Client({
+    clientId: environment.GOOGLE_CLIENT_ID,
+    clientSecret: environment.GOOGLE_CLIENT_SECRET
+  });
+
+  client.setCredentials({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expiry_date: tokens.expiry_date,
+    token_type: tokens.token_type,
+    scope: tokens.scope
+  });
+
+  return Future.resolve(client);
+};
+
+const ensureFreshTokens = (tokens: OAuthTokens): Future<Error, OAuthTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
 
   if (!isExpired) {
     return Future.resolve(tokens);
   }
 
-  return createAuthenticatedClient(deps, tokens)
+  return createAuthenticatedClient(tokens)
     .chain((client) =>
       Future.attemptP(async () => {
         const { credentials } = await client.refreshAccessToken();

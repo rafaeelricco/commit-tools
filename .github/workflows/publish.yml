@@ -61,6 +61,20 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Validate environment variables
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GOOGLE_CLIENT_ID" ]; then
+            echo "Error: GOOGLE_CLIENT_ID secret is not set."
+            exit 1
+          fi
+          if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+            echo "Error: GOOGLE_CLIENT_SECRET secret is not set."
+            exit 1
+          fi
+
       - name: Build project
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}

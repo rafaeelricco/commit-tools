@@ -3,14 +3,12 @@ import { Commit } from "@/app/commit";
 import { Setup } from "@/app/setup";
 import { Doctor } from "@/app/doctor";
 import { ModelCommand } from "@/app/model";
-import { configureDependencies } from "@/app/integrations";
 import { parseArgs, showHelp, showVersion } from "@/app/cli";
 import { Future } from "@/libs/future";
 
 import color from "picocolors";
 
 const main = () => {
-  const deps = configureDependencies();
   const args = process.argv.slice(2);
 
   const actionFuture = parseArgs(args).either(
@@ -22,13 +20,13 @@ const main = () => {
     (command): Future<Error, void> => {
       switch (command.type) {
         case "generate":
-          return Commit.create(deps).chain((flow) => flow.run());
+          return Commit.create().chain((flow) => flow.run());
         case "setup":
-          return Setup.create(deps).chain((s) => s.run());
+          return Setup.create().chain((s) => s.run());
         case "doctor":
-          return Doctor.create(deps).run();
+          return Doctor.create().run();
         case "model":
-          return ModelCommand.create(deps).chain((m) => m.run());
+          return ModelCommand.create().chain((m) => m.run());
         case "version":
           showVersion();
           return Future.resolve(undefined);

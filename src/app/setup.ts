@@ -6,7 +6,6 @@ import { Future } from "@/libs/future";
 import { saveConfig } from "@/app/storage";
 import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/app/services/googleAuth";
-import { Dependencies } from "@/app/integrations";
 import { Just, Nothing } from "@/libs/maybe";
 import { loading } from "@/app/spinner";
 import { fetchModels, selectModelInteractively } from "@/app/services/models";
@@ -21,12 +20,9 @@ type SetupPreferences = {
 };
 
 class Setup {
-  private constructor(
-    private readonly deps: Dependencies,
-    private readonly preferences: SetupPreferences
-  ) {}
+  private constructor(private readonly preferences: SetupPreferences) {}
 
-  static create(deps: Dependencies): Future<Error, Setup> {
+  static create(): Future<Error, Setup> {
     return Future.attemptP(async () => {
       p.intro(color.bgCyan(color.black(" Commit Gen Setup ")));
 
@@ -79,7 +75,7 @@ class Setup {
 
       if (p.isCancel(authMethod)) throw new Error("Setup cancelled");
 
-      return new Setup(deps, {
+      return new Setup({
         convention: convention as CommitConvention,
         customTemplate,
         provider: provider as ProviderConfig["provider"],
@@ -112,7 +108,7 @@ class Setup {
   private setupOAuth(): Future<Error, void> {
     p.log.info("Opening browser for Google sign-in...");
 
-    return performOAuthFlow(this.deps)
+    return performOAuthFlow()
       .chain((tokens) =>
         loading("Validating OAuth tokens...", "OAuth tokens validated!", validateOAuthTokens(tokens)).map(
           () => ({ type: "oauth", content: tokens }) as ProviderConfig["auth_method"]

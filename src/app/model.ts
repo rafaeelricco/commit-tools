@@ -7,7 +7,6 @@ import { type Config, type ProviderConfig } from "@/app/services/config";
 import { loadConfig, saveConfig, updateTokens } from "@/app/storage";
 import { ensureFreshTokens } from "@/app/services/googleAuth";
 import { fetchModels, selectModelInteractively } from "@/app/services/models";
-import { Dependencies } from "@/app/integrations";
 import { loading } from "@/app/spinner";
 
 import color from "picocolors";
@@ -18,12 +17,12 @@ class ModelCommand {
     private readonly providerConfig: ProviderConfig
   ) {}
 
-  static create(deps: Dependencies): Future<Error, ModelCommand> {
+  static create(): Future<Error, ModelCommand> {
     return loadConfig()
       .chainRej(() =>
         Future.reject<Error, Config>(new Error("No configuration found. Run 'commit-tools setup' first."))
       )
-      .chain((config) => ModelCommand.resolveProvider(deps, config).map((ai) => new ModelCommand(config, ai)));
+      .chain((config) => ModelCommand.resolveProvider(config).map((ai) => new ModelCommand(config, ai)));
   }
 
   run(): Future<Error, void> {
@@ -46,13 +45,13 @@ class ModelCommand {
       });
   }
 
-  private static resolveProvider(deps: Dependencies, config: Config): Future<Error, ProviderConfig> {
+  private static resolveProvider(config: Config): Future<Error, ProviderConfig> {
     const ai = config.ai;
 
     if (ai.provider === "gemini" && ai.auth_method.type === "oauth") {
       const originalTokens = ai.auth_method.content;
 
-      return ensureFreshTokens(deps, originalTokens).chain((freshTokens) => {
+      return ensureFreshTokens(originalTokens).chain((freshTokens) => {
         const tokensChanged =
           freshTokens.access_token !== originalTokens.access_token ||
           freshTokens.expiry_date !== originalTokens.expiry_date;

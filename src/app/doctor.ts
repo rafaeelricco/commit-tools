@@ -3,7 +3,7 @@ export { Doctor };
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/app/storage";
 import { exists } from "fs/promises";
-import { Dependencies } from "@/app/integrations";
+import { environment } from "@/app/integrations";
 
 import color from "picocolors";
 import Table from "cli-table3";
@@ -11,10 +11,10 @@ import Table from "cli-table3";
 type CheckRow = [string, string, string];
 
 class Doctor {
-  private constructor(private readonly deps: Dependencies) {}
+  private constructor() {}
 
-  static create(deps: Dependencies): Doctor {
-    return new Doctor(deps);
+  static create(): Doctor {
+    return new Doctor();
   }
 
   run(): Future<Error, void> {
@@ -35,19 +35,9 @@ class Doctor {
   }
 
   private checkOAuthCredentials(): Future<Error, CheckRow> {
-    return this.deps
-      .resolveOAuth()
-      .map(
-        (ok): CheckRow => ["OAuth Credentials", color.green("Configured"), `Client ID: ${ok.clientId.slice(0, 12)}...`]
-      )
-      .chainRej(
-        (): Future<Error, CheckRow> =>
-          Future.resolve([
-            "OAuth Credentials",
-            color.yellow("Missing"),
-            "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set"
-          ])
-      );
+    const clientId = environment.GOOGLE_CLIENT_ID;
+    const row: CheckRow = ["OAuth Credentials", color.green("Configured"), `Client ID: ${clientId.slice(0, 12)}...`];
+    return Future.resolve(row);
   }
 
   private checkConfig(): Future<Error, CheckRow[]> {

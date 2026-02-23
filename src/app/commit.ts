@@ -7,7 +7,6 @@ import { loadConfig, updateTokens } from "@/app/storage";
 import { Setup } from "@/app/setup";
 import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
 import { ensureFreshTokens } from "@/app/services/googleAuth";
-import { Dependencies } from "@/app/integrations";
 import {
   checkIsGitRepo,
   getStagedDiff,
@@ -31,15 +30,15 @@ class Commit {
     private readonly providerConfig: ProviderConfig
   ) {}
 
-  static create(deps: Dependencies): Future<Error, Commit> {
+  static create(): Future<Error, Commit> {
     return loadConfig()
       .chainRej((): Future<Error, Config> => {
         p.log.warn(color.yellow("No configuration found. Let's set you up first."));
-        return Setup.create(deps)
+        return Setup.create()
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) => Commit.resolveProvider(deps, config).map((ai) => new Commit(config, ai)));
+      .chain((config) => Commit.resolveProvider(config).map((ai) => new Commit(config, ai)));
   }
 
   run(): Future<Error, void> {
@@ -104,11 +103,11 @@ class Commit {
     });
   }
 
-  private static resolveProvider(deps: Dependencies, config: Config): Future<Error, ProviderConfig> {
+  private static resolveProvider(config: Config): Future<Error, ProviderConfig> {
     if (config.ai.provider === "gemini" && config.ai.auth_method.type === "oauth") {
       const originalTokens = config.ai.auth_method.content;
 
-      return ensureFreshTokens(deps, originalTokens).chain((freshTokens) => {
+      return ensureFreshTokens(originalTokens).chain((freshTokens) => {
         const tokensChanged =
           freshTokens.access_token !== originalTokens.access_token ||
           freshTokens.expiry_date !== originalTokens.expiry_date;

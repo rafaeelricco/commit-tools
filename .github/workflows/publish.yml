@@ -65,10 +65,10 @@ jobs:
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        run: >
+        run: |
           bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap \
-            --define process.env.GOOGLE_CLIENT_ID=\"\'$GOOGLE_CLIENT_ID\'\" \
-            --define process.env.GOOGLE_CLIENT_SECRET=\"\'$GOOGLE_CLIENT_SECRET\'\"
+            --define "process.env.GOOGLE_CLIENT_ID=\"$GOOGLE_CLIENT_ID\"" \
+            --define "process.env.GOOGLE_CLIENT_SECRET=\"$GOOGLE_CLIENT_SECRET\""
 
       - name: Publish to NPM
         run: |

@@ -15,8 +15,7 @@
     "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
     "install:global": "bun link",
     "format": "npx prettier . --write",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build"
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",

@@ -17,7 +17,15 @@ While built-in IDE tools (like Cursor, VSCode, or Windsurf) offer basic AI commi
 
 ## Quick Install
 
+**Prerequisites:** commit-tools requires the [Bun](https://bun.sh) runtime.
+
 ```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+```bash
+bun install -g @rafaeelricco/commit-tools
+# or
 npm install -g @rafaeelricco/commit-tools
 ```
 

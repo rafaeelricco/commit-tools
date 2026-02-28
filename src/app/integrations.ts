@@ -1,13 +1,3 @@
-// Environment variables
-// All environment variables used by the entire program are here.
-//
-// This module ensures all environment variables are:
-//
-// - Type-checked
-// - Decoded at the beginning of the program
-// - Handled consistently
-// - Visible in a single place
-
 export { type Environment, environment };
 
 import * as D from "@/libs/json/decoder";

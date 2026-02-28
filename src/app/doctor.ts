@@ -2,6 +2,7 @@ export { Doctor };
 
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/app/storage";
+import { type AuthMethod, type ProviderConfig } from "@/app/services/config";
 import { exists } from "fs/promises";
 import { environment } from "@/app/integrations";
 
@@ -61,15 +62,11 @@ class Doctor {
 
           const authMethod = ai.auth_method.type;
 
-          rows.push([
-            "Auth Method",
-            color.green(authMethod === "oauth" ? "OAuth" : "API Key"),
-            authMethod === "oauth" ? "Google OAuth 2.0" : "Google AI Studio API Key"
-          ]);
+          rows.push(["Auth Method", color.green(authMethodLabel(authMethod)), authMethodDescription(ai)]);
 
-          if (ai.auth_method.type === "oauth") {
+          if (ai.auth_method.type === "google_oauth" || ai.auth_method.type === "openai_oauth") {
             const now = Date.now();
-            const expiryDate = ai.auth_method.content.expiry_date;
+            const expiryDate = ai.auth_method.content.expiry_date; // For API Key we don't have this, that's why we have this `if (...) {}` block
             const isExpired = expiryDate <= now;
             const expiryStr = new Date(expiryDate).toLocaleString();
 
@@ -104,5 +101,30 @@ class Doctor {
     } else {
       process.stdout.write(color.green("System is ready to generate commits!\n\n"));
     }
+  }
+}
+
+function authMethodLabel(authMethod: AuthMethod): string {
+  switch (authMethod) {
+    case "google_oauth":
+    case "openai_oauth":
+      return "OAuth";
+    case "api_key":
+      return "API Key";
+    default:
+      return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
+  }
+}
+
+function authMethodDescription(ai: ProviderConfig): string {
+  switch (ai.auth_method.type) {
+    case "google_oauth":
+      return "Google OAuth 2.0";
+    case "openai_oauth":
+      return "OpenAI Codex OAuth";
+    case "api_key":
+      return ai.provider === "openai" ? "OpenAI API Key" : "Google AI Studio API Key";
+    default:
+      return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
   }
 }

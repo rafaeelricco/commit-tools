@@ -1,15 +1,18 @@
 export {
   type CommitConvention,
   type OAuthTokens,
+  type OpenAITokens,
+  type RefreshTokens,
   type AuthMethod,
   type ProviderConfig,
+  type Model,
   Config,
   schema_OAuthTokens,
+  schema_OpenAITokens,
   schema_AuthMethod,
   schema_ProviderConfig,
   COMMIT_CONVENTIONS,
-  AI_PROVIDERS,
-  DEFAULT_MODELS
+  AI_PROVIDERS
 };
 
 import * as s from "@/libs/json/schema";
@@ -17,12 +20,7 @@ import * as s from "@/libs/json/schema";
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
 
-const AI_PROVIDERS = ["gemini"] as const;
-type AIProvider = (typeof AI_PROVIDERS)[number];
-
-const DEFAULT_MODELS = {
-  gemini: "gemini-flash-lite-latest"
-} as const satisfies Record<AIProvider, string>;
+const AI_PROVIDERS = ["gemini", "openai"] as const;
 
 const schema_OAuthTokens = s.object({
   access_token: s.string,
@@ -33,14 +31,27 @@ const schema_OAuthTokens = s.object({
 });
 type OAuthTokens = s.Infer<typeof schema_OAuthTokens>;
 
+const schema_OpenAITokens = s.object({
+  access_token: s.string,
+  refresh_token: s.string,
+  expiry_date: s.number
+});
+type OpenAITokens = s.Infer<typeof schema_OpenAITokens>;
+
+type RefreshTokens = OAuthTokens | OpenAITokens;
+
 const schema_AuthMethod = s.discriminatedUnion([
   s.variant({
     type: "api_key",
     content: s.string
   }),
   s.variant({
-    type: "oauth",
+    type: "google_oauth",
     content: schema_OAuthTokens
+  }),
+  s.variant({
+    type: "openai_oauth",
+    content: schema_OpenAITokens
   })
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
@@ -48,6 +59,11 @@ type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 const schema_ProviderConfig = s.discriminatedUnion([
   s.variant({
     provider: "gemini",
+    model: s.string,
+    auth_method: schema_AuthMethod
+  }),
+  s.variant({
+    provider: "openai",
     model: s.string,
     auth_method: schema_AuthMethod
   })
@@ -60,3 +76,9 @@ const Config = s.object({
   custom_template: s.optionalMaybe(s.string)
 });
 type Config = s.Infer<typeof Config>;
+
+const Model = s.object({
+  id: s.string,
+  description: s.string
+});
+type Model = s.Infer<typeof Model>;

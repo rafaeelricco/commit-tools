@@ -5,6 +5,7 @@ export {
   type RefreshTokens,
   type AuthMethod,
   type ProviderConfig,
+  type Model,
   Config,
   schema_OAuthTokens,
   schema_OpenAITokens,
@@ -75,3 +76,9 @@ const Config = s.object({
   custom_template: s.optionalMaybe(s.string)
 });
 type Config = s.Infer<typeof Config>;
+
+const Model = s.object({
+  id: s.string,
+  description: s.string
+});
+type Model = s.Infer<typeof Model>;

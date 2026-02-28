@@ -3,10 +3,10 @@ export { Commit };
 import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
-import { loadConfig, updateTokens } from "@/app/storage";
+import { loadConfig } from "@/app/storage";
 import { Setup } from "@/app/setup";
 import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
-import { ensureFreshTokens } from "@/app/services/googleAuth";
+import { resolveProvider } from "@/app/services/resolveProvider";
 import {
   checkIsGitRepo,
   getStagedDiff,
@@ -38,7 +38,7 @@ class Commit {
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) => Commit.resolveProvider(config).map((ai) => new Commit(config, ai)));
+      .chain((config) => resolveProvider(config).map((ai) => new Commit(config, ai)));
   }
 
   run(): Future<Error, void> {
@@ -101,30 +101,6 @@ class Commit {
           return Future.resolve(undefined);
       }
     });
-  }
-
-  private static resolveProvider(config: Config): Future<Error, ProviderConfig> {
-    if (config.ai.provider === "gemini" && config.ai.auth_method.type === "oauth") {
-      const originalTokens = config.ai.auth_method.content;
-
-      return ensureFreshTokens(originalTokens).chain((freshTokens) => {
-        const tokensChanged =
-          freshTokens.access_token !== originalTokens.access_token ||
-          freshTokens.expiry_date !== originalTokens.expiry_date;
-
-        const persist = tokensChanged ? updateTokens(freshTokens) : Future.resolve<Error, void>(undefined);
-
-        return persist.map(
-          (): ProviderConfig => ({
-            provider: "gemini",
-            model: config.ai.model,
-            auth_method: { type: "oauth", content: freshTokens }
-          })
-        );
-      });
-    }
-
-    return Future.resolve(config.ai);
   }
 
   private promptAction(message: string): Future<Error, UserAction> {

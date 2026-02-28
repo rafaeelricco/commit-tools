@@ -182,13 +182,11 @@ const performOpenAIOAuthFlow = (): Future<Error, OpenAITokens> =>
         );
 
         const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-          return () =>
-            clearTimeout(
-              setTimeout(
-                () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
-                OAUTH_TIMEOUT_MS
-              )
-            );
+          const timer = setTimeout(
+            () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
+            OAUTH_TIMEOUT_MS
+          );
+          return () => clearTimeout(timer);
         });
 
         return Future.race(waitForCode, timeout).chain((code) =>

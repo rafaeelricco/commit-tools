@@ -11,16 +11,18 @@ type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 
 type GeminiAuthCredentials =
   | { readonly method: "byok"; readonly apiKey: string }
-  | { readonly method: "oauth"; readonly tokens: OAuthTokens };
+  | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
   if (config.ai.provider !== "gemini") return Nothing();
 
   switch (config.ai.auth_method.type) {
-    case "oauth":
-      return Just({ method: "oauth", tokens: config.ai.auth_method.content });
+    case "google_oauth":
+      return Just({ method: "google_oauth", tokens: config.ai.auth_method.content });
     case "api_key":
       return Just({ method: "byok", apiKey: config.ai.auth_method.content });
+    default:
+      return Nothing();
   }
 };
 
@@ -92,7 +94,9 @@ const generateContentWithGemini = (config: GeminiConfig, params: GenerateContent
   switch (config.auth_method.type) {
     case "api_key":
       return generateContentWithApiKey(config.auth_method.content, config.model, params);
-    case "oauth":
+    case "google_oauth":
       return generateContentWithOAuth(config.auth_method.content, config.model, params);
+    default:
+      return Future.reject(new Error(`Unsupported auth method for Gemini: ${config.auth_method.type}`));
   }
 };

@@ -3,19 +3,42 @@ export { fetchModels, selectModelInteractively, type Model };
 import { Future } from "@/libs/future";
 import { type ProviderConfig, type OAuthTokens } from "@/app/services/config";
 
+import OpenAI from "openai";
+
 type Model = {
   readonly id: string;
   readonly description: string;
 };
 
-const fetchModels = (authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> =>
+const fetchOpenAIModels = (): Future<Error, Model[]> =>
   Future.attemptP(async () => {
+    const client = new OpenAI();
+    const list = await client.models.list();
+    const models: Array<{ id: string }> = [];
+    for await (const model of list) {
+      models.push(model);
+    }
+    return models
+      .filter((m) => m.id.startsWith("gpt-") || m.id.startsWith("o"))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((m) => ({ id: m.id, description: "" }));
+  });
+
+const fetchModels = (
+  provider: ProviderConfig["provider"],
+  authMethod: ProviderConfig["auth_method"]
+): Future<Error, Model[]> => {
+  if (provider === "openai") {
+    return fetchOpenAIModels();
+  }
+
+  return Future.attemptP(async () => {
     let url = "https://generativelanguage.googleapis.com/v1beta/models";
     let headers: Record<string, string> = {};
 
     if (authMethod.type === "api_key") {
       url += `?key=${authMethod.content}`;
-    } else {
+    } else if (authMethod.type === "google_oauth") {
       const tokens = authMethod.content as OAuthTokens;
       headers["Authorization"] = `Bearer ${tokens.access_token}`;
     }
@@ -31,6 +54,7 @@ const fetchModels = (authMethod: ProviderConfig["auth_method"]): Future<Error, M
       description: m.description || ""
     }));
   });
+};
 
 const selectModelInteractively = (models: Model[]): Future<Error, string> =>
   Future.attemptP(async () => {

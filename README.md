@@ -1,6 +1,6 @@
 # commit-tools
 
-[![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.1.7-blue.svg)](#)
 
 Writing good commit messages _can_ have a high cognitive cost, especially when you make dozens of commits a day. That energy should be directed toward solving hard problems and shipping features, not summarizing them.
 

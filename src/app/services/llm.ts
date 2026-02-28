@@ -3,6 +3,7 @@ export { type GenerateContentParams, generateCommitMessage, refineCommitMessage 
 import { Future } from "@/libs/future";
 import { type ProviderConfig, type CommitConvention } from "@/app/services/config";
 import { generateContentWithGemini } from "@/app/services/gemini";
+import { generateContentWithOpenAI } from "@/app/services/openai";
 import { getPrompt, getRefinePrompt } from "@/app/services/prompts";
 
 type GenerateContentParams = {
@@ -14,6 +15,8 @@ const generateContent = (config: ProviderConfig, params: GenerateContentParams):
   switch (config.provider) {
     case "gemini":
       return generateContentWithGemini(config, params);
+    case "openai":
+      return generateContentWithOpenAI(config, params);
   }
 };
 

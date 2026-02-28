@@ -1,6 +1,6 @@
 # commit-tools
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.1.7-blue.svg)](#)
 
 Writing good commit messages _can_ have a high cognitive cost, especially when you make dozens of commits a day. That energy should be directed toward solving hard problems and shipping features, not summarizing them.
 
@@ -96,7 +96,7 @@ commit setup
 
 You will be prompted to choose:
 
-- **Auth method**: OAuth (sign in with your account) or BYOK (paste your own API key)
+- **Auth method**: OAuth (sign in with your Google or ChatGPT account) or API Key (paste your own key)
 - **Commit convention**: Conventional, Imperative, or Custom
 
 To re-authenticate at any time:
@@ -157,9 +157,11 @@ commit --help
 
 ## Providers
 
-Currently powered by **Google Gemini**. More providers are coming soon:
+- **Google Gemini** — API key or Google OAuth
+- **OpenAI** — API key or sign in with your ChatGPT Plus/Pro subscription
 
-- **OpenAI** (GPT-4o, o1, o3, etc.)
+More providers coming soon:
+
 - **Anthropic** (Claude)
 
 Contributions and feedback are welcome!

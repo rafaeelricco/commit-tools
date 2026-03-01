@@ -10,7 +10,7 @@ import { type GenerateContentParams } from "@/app/services/llm";
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 
 type GeminiAuthCredentials =
-  | { readonly method: "byok"; readonly apiKey: string }
+  | { readonly method: "api_key"; readonly apiKey: string }
   | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
 
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
@@ -20,7 +20,7 @@ const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
     case "google_oauth":
       return Just({ method: "google_oauth", tokens: config.ai.auth_method.content });
     case "api_key":
-      return Just({ method: "byok", apiKey: config.ai.auth_method.content });
+      return Just({ method: "api_key", apiKey: config.ai.auth_method.content });
     default:
       return Nothing();
   }

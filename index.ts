@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { Commit } from "@/app/commit";
-import { Setup } from "@/app/setup";
-import { Doctor } from "@/app/doctor";
-import { ModelCommand } from "@/app/model";
+import { Commit } from "@/app/commands/commit";
+import { Setup } from "@/app/commands/setup";
+import { Doctor } from "@/app/commands/doctor";
+import { ModelCommand } from "@/app/commands/model";
 import { parseArgs, showHelp, showVersion } from "@/app/cli";
 import { Future } from "@/libs/future";
 

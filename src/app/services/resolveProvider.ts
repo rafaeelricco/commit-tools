@@ -2,10 +2,10 @@ export { resolveProvider };
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type Config, type ProviderConfig, type RefreshTokens } from "@/app/services/config";
-import { ensureFreshTokens } from "@/app/services/googleAuth";
-import { ensureFreshOpenAITokens } from "@/app/services/openaiAuth";
-import { updateGoogleTokens, updateOpenAITokens } from "@/app/storage";
+import { type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
+import { ensureFreshTokens } from "@/lib/auth/google";
+import { ensureFreshOpenAITokens } from "@/lib/auth/openai";
+import { updateGoogleTokens, updateOpenAITokens } from "@/lib/storage/config";
 
 type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => Maybe<T>;
 type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;

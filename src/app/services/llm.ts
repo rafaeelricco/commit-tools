@@ -1,10 +1,10 @@
 export { type GenerateContentParams, generateCommitMessage, refineCommitMessage };
 
 import { Future } from "@/libs/future";
-import { type ProviderConfig, type CommitConvention } from "@/app/services/config";
+import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
 import { generateContentWithGemini } from "@/app/services/gemini";
 import { generateContentWithOpenAI } from "@/app/services/openai";
-import { getPrompt, getRefinePrompt } from "@/app/services/prompts";
+import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
 
 type GenerateContentParams = {
   readonly prompt: string;

@@ -3,9 +3,9 @@ export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, CONFIG_
 import * as s from "@/libs/json/schema";
 
 import { Future } from "@/libs/future";
-import { resolve } from "path";
-import { homedir } from "os";
-import { mkdir } from "fs/promises";
+import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Config, type OAuthTokens, type OpenAITokens } from "@/app/services/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
@@ -13,7 +13,7 @@ const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
 
 const loadConfig = (): Future<Error, Config> =>
-  Future.attemptP(() => Bun.file(CONFIG_FILE).text())
+  Future.attemptP(() => readFile(CONFIG_FILE, "utf-8"))
     .mapRej((err) => new Error(`Failed to read config file: ${err}`))
     .map((value) => JSON.parse(value))
     .chain((json) => {
@@ -27,7 +27,7 @@ const loadConfig = (): Future<Error, Config> =>
 const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
     await mkdir(CONFIG_DIR, { recursive: true });
-    await Bun.write(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2));
+    await writeFile(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
   });
 
 const extractGoogleOAuthConfig = (config: Config): Maybe<{ model: string }> =>

@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import { Commit } from "@/app/commit";
 import { Setup } from "@/app/setup";
 import { Doctor } from "@/app/doctor";

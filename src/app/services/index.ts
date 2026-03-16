@@ -1,27 +1,34 @@
 export { checkIsGitRepo, getStagedDiff, performCommit, performPush, getCurrentBranch, hasUpstream };
 
 import { Future } from "@/libs/future";
-import { unlink } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
+import { spawn } from "node:child_process";
+import { unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+/** Run a git command, collect stdout+stderr, resolve with exit code */
+const execGit = (args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
+  new Promise((resolve, reject) => {
+    const proc = spawn("git", args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
+    proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+    proc.on("error", reject);
+    proc.on("close", (exitCode) => resolve({ stdout, stderr, exitCode: exitCode ?? 1 }));
+  });
 
 const checkIsGitRepo = (): Future<Error, void> =>
   Future.attemptP(async () => {
-    const proc = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], {
-      stderr: "pipe"
-    });
-    const exitCode = await proc.exited;
+    const { exitCode } = await execGit(["rev-parse", "--is-inside-work-tree"]);
     if (exitCode !== 0) throw new Error("Not a git repository");
   });
 
 const getStagedDiff = (): Future<Error, string> =>
   Future.attemptP(async () => {
-    const proc = Bun.spawn(["git", "diff", "--staged"], { stderr: "pipe" });
-    const stdout = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const { stdout, stderr, exitCode } = await execGit(["diff", "--staged"]);
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
       throw new Error(stderr.trim() || "Failed to get staged changes");
     }
 
@@ -32,18 +39,13 @@ const getStagedDiff = (): Future<Error, string> =>
 const performCommit = (message: string): Future<Error, string> =>
   Future.attemptP(async () => {
     const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);
-    await Bun.write(tmpPath, message);
+    await writeFile(tmpPath, message, "utf-8");
 
-    const proc = Bun.spawn(["git", "commit", "-F", tmpPath], {
-      stderr: "pipe"
-    });
-    const stdout = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const { stdout, stderr, exitCode } = await execGit(["commit", "-F", tmpPath]);
 
     await unlink(tmpPath).catch(() => {});
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
       throw new Error(stderr.trim() || stdout.trim() || "Commit failed");
     }
 
@@ -59,10 +61,7 @@ const performPush = (branch?: string, publish = false): Future<Error, string> =>
   Future.attemptP(async () => {
     const args = publish && branch ? ["push", "--set-upstream", "origin", branch] : ["push"];
 
-    const proc = Bun.spawn(["git", ...args], { stderr: "pipe" });
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    const { stdout, stderr, exitCode } = await execGit(args);
 
     if (exitCode !== 0) {
       throw new Error(stderr.trim() || stdout.trim() || "Push failed");
@@ -73,20 +72,13 @@ const performPush = (branch?: string, publish = false): Future<Error, string> =>
 
 const getCurrentBranch = (): Future<Error, string> =>
   Future.attemptP(async () => {
-    const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
-      stderr: "pipe"
-    });
-    const stdout = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const { stdout, exitCode } = await execGit(["rev-parse", "--abbrev-ref", "HEAD"]);
     if (exitCode !== 0) throw new Error("Failed to get current branch");
     return stdout.trim();
   });
 
 const hasUpstream = (): Future<Error, boolean> =>
   Future.attemptP(async () => {
-    const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "@{u}"], {
-      stderr: "pipe"
-    });
-    const exitCode = await proc.exited;
+    const { exitCode } = await execGit(["rev-parse", "--abbrev-ref", "@{u}"]);
     return exitCode === 0;
   });

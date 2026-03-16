@@ -5,7 +5,8 @@ import { SUCCESS_HTML, ERROR_HTML } from "@/app/services/oauthTemplates";
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
 import { environment } from "@/app/integrations";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash } from "node:crypto";
+import { createServer, type Server } from "node:http";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
@@ -20,7 +21,7 @@ const PORT_RANGE_END = 8410;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 type CallbackServer = {
-  readonly server: ReturnType<typeof Bun.serve>;
+  readonly server: Server;
   readonly port: number;
   readonly codePromise: Promise<string>;
 };
@@ -41,18 +42,11 @@ const findAvailablePort = (): Future<Error, number> =>
         return;
       }
 
-      try {
-        const testServer = Bun.serve({
-          port,
-          fetch() {
-            return new Response("probe");
-          }
-        });
-        testServer.stop(true);
-        resolve(port);
-      } catch {
-        tryPort(port + 1);
-      }
+      const testServer = createServer();
+      testServer.once("error", () => tryPort(port + 1));
+      testServer.listen(port, () => {
+        testServer.close(() => resolve(port));
+      });
     };
 
     tryPort(PORT_RANGE_START);
@@ -68,59 +62,53 @@ const startCallbackServer = (port: number, state: string): Future<Error, Callbac
       rejectCode = rej;
     });
 
-    try {
-      const server = Bun.serve({
-        port,
-        fetch(req) {
-          const url = new URL(req.url);
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", `http://localhost:${port}`);
 
-          if (url.pathname !== "/callback") {
-            return new Response("Not found", { status: 404 });
-          }
+      if (url.pathname !== "/callback") {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
 
-          const error = url.searchParams.get("error");
-          if (error) {
-            const description = url.searchParams.get("error_description") ?? error;
-            rejectCode(new Error(`OAuth error: ${description}`));
-            return new Response(ERROR_HTML(description), {
-              headers: { "Content-Type": "text/html" }
-            });
-          }
+      const error = url.searchParams.get("error");
+      if (error) {
+        const description = url.searchParams.get("error_description") ?? error;
+        rejectCode(new Error(`OAuth error: ${description}`));
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(ERROR_HTML(description));
+        return;
+      }
 
-          const returnedState = url.searchParams.get("state");
-          if (returnedState !== state) {
-            const msg = "CSRF state mismatch — possible attack";
-            rejectCode(new Error(msg));
-            return new Response(ERROR_HTML(msg), {
-              headers: { "Content-Type": "text/html" }
-            });
-          }
+      const returnedState = url.searchParams.get("state");
+      if (returnedState !== state) {
+        const msg = "CSRF state mismatch — possible attack";
+        rejectCode(new Error(msg));
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(ERROR_HTML(msg));
+        return;
+      }
 
-          const code = url.searchParams.get("code");
-          if (!code) {
-            rejectCode(new Error("No authorization code received"));
-            return new Response(ERROR_HTML("No authorization code received"), {
-              headers: { "Content-Type": "text/html" }
-            });
-          }
+      const code = url.searchParams.get("code");
+      if (!code) {
+        rejectCode(new Error("No authorization code received"));
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(ERROR_HTML("No authorization code received"));
+        return;
+      }
 
-          resolveCode(code);
-          return new Response(SUCCESS_HTML, {
-            headers: { "Content-Type": "text/html" }
-          });
-        }
-      });
+      resolveCode(code);
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(SUCCESS_HTML);
+    });
 
-      resolve({ server, port, codePromise });
-    } catch (err) {
-      reject(new Error(`Failed to start callback server on port ${port}: ${err}`));
-    }
+    server.once("error", (err) => reject(new Error(`Failed to start callback server on port ${port}: ${err}`)));
+    server.listen(port, () => resolve({ server, port, codePromise }));
   });
 
 const stopCallbackServer = (cs: CallbackServer): Future<Error, void> =>
   Future.create<Error, void>((_, resolve) => {
-    cs.server.stop(true);
-    resolve(undefined);
+    cs.server.close(() => resolve(undefined));
   });
 
 const openBrowser = (url: string): Future<Error, void> =>

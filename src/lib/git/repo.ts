@@ -6,7 +6,6 @@ import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/** Run a git command, collect stdout+stderr, resolve with exit code */
 const execGit = (args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
   new Promise((resolve, reject) => {
     const proc = spawn("git", args, { stdio: ["pipe", "pipe", "pipe"] });

@@ -1,19 +1,16 @@
 {
   "name": "@rafaeelricco/commit-tools",
-  "version": "0.1.7",
-  "module": "index.ts",
+  "version": "0.2.0",
   "type": "module",
   "bin": {
     "commit": "./dist/index.js"
   },
   "scripts": {
-    "start": "bun index.ts",
-    "setup": "bun run start setup",
-    "doctor": "bun run start doctor",
-    "test": "bun test",
-    "compile": "bun run build",
-    "build": "bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap",
-    "install:global": "bun link",
+    "start": "tsx --env-file=.env index.ts",
+    "setup": "pnpm run start -- setup",
+    "doctor": "pnpm run start -- doctor",
+    "build": "tsup",
+    "install:global": "npm link",
     "format": "npx prettier . --write",
     "typecheck": "tsc --noEmit"
   },
@@ -28,14 +25,16 @@
     "dist"
   ],
   "devDependencies": {
-    "@types/bun": "latest",
     "@types/express": "^5.0.6",
     "@types/ink-text-input": "^2.0.5",
     "@types/luxon": "^3.7.1",
+    "@types/node": "^22",
     "@types/react": "^19.2.14",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "react-devtools-core": "^7.0.1"
+    "react-devtools-core": "^7.0.1",
+    "tsup": "^8",
+    "tsx": "^4"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -43,6 +42,7 @@
   "dependencies": {
     "@clack/prompts": "^1.0.1",
     "@google/generative-ai": "^0.24.1",
+    "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "fluture": "^14.0.0",
     "google-auth-library": "^10.5.0",
@@ -52,5 +52,6 @@
     "openai": "^6.25.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.4"
-  }
+  },
+  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
 }

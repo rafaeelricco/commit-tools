@@ -56,7 +56,7 @@ Commands:
 
 const showVersion = (): void => {
   const start = performance.now();
-  console.log("commit-tools 0.1.0 (bun)");
+  console.log("commit-tools 0.2.0 (node)");
   const elapsed = performance.now() - start;
   console.log(`Done in ${elapsed.toLocaleString()}ms`);
 };

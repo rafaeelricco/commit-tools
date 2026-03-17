@@ -3,7 +3,7 @@ export { Doctor };
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/lib/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
-import { exists } from "fs/promises";
+import { access } from "node:fs/promises";
 import { environment } from "@/app/integrations";
 
 import color from "picocolors";
@@ -28,11 +28,16 @@ class Doctor {
   }
 
   private checkRuntime(): CheckRow {
-    return ["Runtime", color.green("Bun"), Bun.version];
+    return ["Runtime", color.green("Node.js"), process.version];
   }
 
   private checkPlatform(): CheckRow {
-    return ["Platform", color.green("macOS"), process.platform];
+    const label =
+      process.platform === "darwin" ? "macOS"
+      : process.platform === "win32" ? "Windows"
+      : process.platform === "linux" ? "Linux"
+      : process.platform;
+    return ["Platform", color.green(label), process.platform];
   }
 
   private checkOAuthCredentials(): Future<Error, CheckRow> {
@@ -42,7 +47,11 @@ class Doctor {
   }
 
   private checkConfig(): Future<Error, CheckRow[]> {
-    return Future.attemptP(() => exists(CONFIG_FILE)).chain((configExists) => {
+    return Future.attemptP(() =>
+      access(CONFIG_FILE)
+        .then(() => true)
+        .catch(() => false)
+    ).chain((configExists) => {
       const row: CheckRow = [
         "Configuration",
         configExists ? color.green("Found") : color.yellow("Missing"),

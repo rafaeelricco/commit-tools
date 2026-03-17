@@ -1,6 +1,6 @@
 # commit-tools
 
-[![Version](https://img.shields.io/badge/version-0.1.7-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](#)
 
 Writing good commit messages _can_ have a high cognitive cost, especially when you make dozens of commits a day. That energy should be directed toward solving hard problems and shipping features, not summarizing them.
 
@@ -17,15 +17,9 @@ While built-in IDE tools (like Cursor, VSCode, or Windsurf) offer basic AI commi
 
 ## Quick Install
 
-**Prerequisites:** commit-tools requires the [Bun](https://bun.sh) runtime.
+**Prerequisites:** [Node.js](https://nodejs.org) ≥ 20
 
 ```bash
-curl -fsSL https://bun.sh/install | bash
-```
-
-```bash
-bun install -g @rafaeelricco/commit-tools
-# or
 npm install -g @rafaeelricco/commit-tools
 ```
 

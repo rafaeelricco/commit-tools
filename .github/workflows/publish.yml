@@ -53,13 +53,11 @@ jobs:
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+      - name: Install pnpm
+        run: npm install -g pnpm
 
       - name: Install dependencies
-        run: bun install
+        run: pnpm install
 
       - name: Validate environment variables
         env:
@@ -79,10 +77,7 @@ jobs:
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        run: |
-          bun build ./index.ts --outdir ./dist --target bun --minify --sourcemap \
-            --define "process.env.GOOGLE_CLIENT_ID=\"$GOOGLE_CLIENT_ID\"" \
-            --define "process.env.GOOGLE_CLIENT_SECRET=\"$GOOGLE_CLIENT_SECRET\""
+        run: pnpm run build
 
       - name: Publish to NPM
         run: |

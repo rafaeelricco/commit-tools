@@ -3,11 +3,11 @@ export { ModelCommand };
 import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
-import { type Config, type ProviderConfig } from "@/app/services/config";
-import { loadConfig, saveConfig } from "@/app/storage";
+import { type Config, type ProviderConfig } from "@/domain/config/config";
+import { loadConfig, saveConfig } from "@/lib/storage/config";
 import { resolveProvider } from "@/app/services/resolveProvider";
-import { fetchModels, selectModelInteractively } from "@/app/services/models";
-import { loading } from "@/app/spinner";
+import { fetchModels, selectModelInteractively } from "@/domain/commit/model";
+import { loading } from "@/lib/ui/spinner";
 
 import color from "picocolors";
 

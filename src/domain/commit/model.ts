@@ -1,8 +1,8 @@
 export { fetchModels, selectModelInteractively };
 
 import { Future } from "@/libs/future";
-import { Model, type ProviderConfig } from "@/app/services/config";
-import { getOpenAIAccessToken } from "@/app/services/openaiAuth";
+import { Model, type ProviderConfig } from "@/domain/config/config";
+import { getOpenAIAccessToken } from "@/lib/auth/openai";
 
 import OpenAI from "openai";
 
@@ -97,7 +97,7 @@ const selectModelInteractively = (models: Model[]): Future<Error, string> =>
   Future.attemptP(async () => {
     const { render } = await import("ink");
     const React = await import("react");
-    const { ModelSelector } = await import("@/app/components/model-selector");
+    const { ModelSelector } = await import("@/lib/ui/components/model-selector");
 
     return new Promise<string>((resolve, reject) => {
       const { unmount } = render(

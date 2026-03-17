@@ -1,6 +1,6 @@
 export { getPrompt, getRefinePrompt };
 
-import { CommitConvention } from "@/app/services/config";
+import { CommitConvention } from "@/domain/config/config";
 
 function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
   switch (convention) {

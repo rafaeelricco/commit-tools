@@ -1,8 +1,8 @@
 export { Doctor };
 
 import { Future } from "@/libs/future";
-import { CONFIG_FILE, loadConfig } from "@/app/storage";
-import { type AuthMethod, type ProviderConfig } from "@/app/services/config";
+import { CONFIG_FILE, loadConfig } from "@/lib/storage/config";
+import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
 import { access } from "node:fs/promises";
 import { environment } from "@/app/integrations";
 

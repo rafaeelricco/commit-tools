@@ -3,9 +3,9 @@ export { Commit };
 import * as p from "@clack/prompts";
 
 import { Future } from "@/libs/future";
-import { loadConfig } from "@/app/storage";
-import { Setup } from "@/app/setup";
-import { CommitConvention, type Config, type ProviderConfig } from "@/app/services/config";
+import { loadConfig } from "@/lib/storage/config";
+import { Setup } from "@/app/commands/setup";
+import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/app/services/resolveProvider";
 import {
   checkIsGitRepo,
@@ -14,10 +14,10 @@ import {
   performPush,
   getCurrentBranch,
   hasUpstream
-} from "@/app/services";
+} from "@/lib/git/repo";
 import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
-import { loading } from "@/app/spinner";
+import { loading } from "@/lib/ui/spinner";
 
 import color from "picocolors";
 

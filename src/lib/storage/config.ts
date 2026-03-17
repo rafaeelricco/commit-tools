@@ -6,7 +6,7 @@ import { Future } from "@/libs/future";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { Config, type OAuthTokens, type OpenAITokens } from "@/app/services/config";
+import { Config, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");

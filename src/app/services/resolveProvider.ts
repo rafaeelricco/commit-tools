@@ -6,6 +6,7 @@ import { type Config, type ProviderConfig, type RefreshTokens } from "@/domain/c
 import { ensureFreshTokens } from "@/lib/auth/google";
 import { ensureFreshOpenAITokens } from "@/lib/auth/openai";
 import { updateGoogleTokens, updateOpenAITokens } from "@/lib/storage/config";
+import { debugLog } from "@/libs/debug";
 
 type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => Maybe<T>;
 type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;
@@ -24,30 +25,56 @@ const tokensChanged: DetectTokenChange = (original, fresh) =>
 
 const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
   refresh(tokens).chain((fresh) =>
-    tokensChanged(tokens, fresh).maybe(Future.resolve(fresh), (changed) => persist(changed).map(() => fresh))
+    tokensChanged(tokens, fresh).maybe(
+      (() => {
+        debugLog("provider.resolve.tokens.unchanged");
+        return Future.resolve(fresh) as Future<Error, typeof fresh>;
+      })(),
+      (changed) =>
+        persist(changed).map(() => {
+          debugLog("provider.resolve.tokens.persisted");
+          return fresh;
+        })
+    )
   );
 
 const resolveProvider: ResolveProvider = (config) => {
   const { ai } = config;
   const { auth_method } = ai;
+  debugLog("provider.resolve.start", {
+    provider: ai.provider,
+    authMethod: auth_method.type,
+    model: ai.model
+  });
 
   switch (auth_method.type) {
     case "api_key":
+      debugLog("provider.resolve.api_key");
       return Future.resolve(ai);
 
     case "google_oauth":
-      return refreshAndPersist(auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "google_oauth", content: tokens }
-      }));
+      return refreshAndPersist(auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => {
+        debugLog("provider.resolve.google_oauth.ready", {
+          model: ai.model
+        });
+        return {
+          provider: ai.provider,
+          model: ai.model,
+          auth_method: { type: "google_oauth", content: tokens }
+        };
+      });
 
     case "openai_oauth":
-      return refreshAndPersist(auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "openai_oauth", content: tokens }
-      }));
+      return refreshAndPersist(auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => {
+        debugLog("provider.resolve.openai_oauth.ready", {
+          model: ai.model
+        });
+        return {
+          provider: ai.provider,
+          model: ai.model,
+          auth_method: { type: "openai_oauth", content: tokens }
+        };
+      });
 
     default: {
       const _exhaustiveCheck: never = auth_method;

@@ -6,12 +6,15 @@ import { type Config, type OAuthTokens } from "@/domain/config/config";
 import { getAccessToken } from "@/lib/auth/google";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type GenerateContentParams } from "@/app/services/llm";
+import { debugError, debugLog } from "@/libs/debug";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 
 type GeminiAuthCredentials =
   | { readonly method: "api_key"; readonly apiKey: string }
   | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
+
+const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
 
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
   if (config.ai.provider !== "gemini") return Nothing();
@@ -31,6 +34,14 @@ const generateContentWithApiKey = (
   model: string,
   params: GenerateContentParams
 ): Future<Error, string> => {
+  debugLog("gemini.api_key.request", {
+    provider: "gemini",
+    authMethod: "api_key",
+    model,
+    promptLength: params.prompt.length,
+    hasSystemInstruction: params.systemInstruction !== undefined
+  });
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const geminiModel = genAI.getGenerativeModel({
     model,
@@ -39,10 +50,22 @@ const generateContentWithApiKey = (
 
   return Future.attemptP(async () => {
     const result = await geminiModel.generateContent(params.prompt);
-    const text = result.response.text();
+    debugLog("gemini.api_key.response", result.response);
+
+    const text = result.response.text() ?? "";
+    debugLog("gemini.api_key.extraction", {
+      textLength: text.length,
+      candidates: result.response.candidates ?? [],
+      promptFeedback: result.response.promptFeedback ?? null,
+      usageMetadata: result.response.usageMetadata ?? null
+    });
+
     if (!text || !text.trim()) throw new Error("Empty AI response");
     return text.trim();
-  }).mapRej((e) => new Error(String(e)));
+  }).mapRej((e) => {
+    debugError("gemini.api_key.error", e);
+    return toError(e);
+  });
 };
 
 const generateContentWithOAuth = (
@@ -52,6 +75,14 @@ const generateContentWithOAuth = (
 ): Future<Error, string> =>
   getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
+      debugLog("gemini.oauth.request", {
+        provider: "gemini",
+        authMethod: "google_oauth",
+        model,
+        promptLength: params.prompt.length,
+        hasSystemInstruction: params.systemInstruction !== undefined
+      });
+
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
       const contents = [{ parts: [{ text: params.prompt }] }];
@@ -72,22 +103,42 @@ const generateContentWithOAuth = (
         body: JSON.stringify(body)
       });
 
+      debugLog("gemini.oauth.http", {
+        status: response.status,
+        ok: response.ok,
+        model
+      });
+
       if (!response.ok) {
         const errorBody = await response.text();
+        debugLog("gemini.oauth.error_body", errorBody);
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
       const json = (await response.json()) as {
+        promptFeedback?: unknown;
+        usageMetadata?: unknown;
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
       };
+      debugLog("gemini.oauth.response", json);
 
       const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      debugLog("gemini.oauth.extraction", {
+        textLength: text?.length ?? 0,
+        candidates: json.candidates ?? [],
+        promptFeedback: json.promptFeedback ?? null,
+        usageMetadata: json.usageMetadata ?? null
+      });
+
       if (!text || !text.trim()) {
         throw new Error("Empty AI response");
       }
 
       return text.trim();
-    }).mapRej((e) => new Error(String(e)))
+    }).mapRej((e) => {
+      debugError("gemini.oauth.error", e);
+      return toError(e);
+    })
   );
 
 const generateContentWithGemini = (config: GeminiConfig, params: GenerateContentParams): Future<Error, string> => {

@@ -130,6 +130,22 @@ Verify your installation, environment, and configuration:
 commit doctor
 ```
 
+### Debug Logging
+
+To enable provider and OAuth debug logs without prefixing each command, set this in your `.env`:
+
+```bash
+COMMIT_DEBUG_LLM=1
+```
+
+Use `0` to disable logs:
+
+```bash
+COMMIT_DEBUG_LLM=0
+```
+
+If `COMMIT_DEBUG_LLM` is also provided in the shell environment, that runtime value takes precedence over `.env`.
+
 ## Commands
 
 To see all available commands at any time, run:

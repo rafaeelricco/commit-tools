@@ -48,10 +48,38 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
+      # actions/setup-node resolves a semver-compatible Node 24 release, which may
+      # bundle an npm CLI older than the minimum required for OIDC trusted publishing.
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+
+          NPM_VERSION=$(npm --version)
+          echo "Using npm $NPM_VERSION for trusted publishing"
+
+          node -e '
+            const current = process.argv[1].split(".").map(Number);
+            const minimum = [11, 5, 1];
+
+            for (let i = 0; i < minimum.length; i += 1) {
+              const actual = current[i] ?? 0;
+              const required = minimum[i];
+
+              if (actual > required) {
+                process.exit(0);
+              }
+
+              if (actual < required) {
+                console.error(
+                  `npm ${process.argv[1]} does not meet the trusted publishing minimum of ${minimum.join(".")}.`,
+                );
+                process.exit(1);
+              }
+            }
+          ' "$NPM_VERSION"
 
       - name: Install pnpm
         run: npm install -g pnpm

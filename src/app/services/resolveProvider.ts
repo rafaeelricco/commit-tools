@@ -25,11 +25,11 @@ const tokensChanged: DetectTokenChange = (original, fresh) =>
 
 const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
   refresh(tokens).chain((fresh) =>
-    tokensChanged(tokens, fresh).maybe(
-      (() => {
+    tokensChanged(tokens, fresh).unwrap(
+      () => {
         debugLog("provider.resolve.tokens.unchanged");
-        return Future.resolve(fresh) as Future<Error, typeof fresh>;
-      })(),
+        return Future.resolve(fresh);
+      },
       (changed) =>
         persist(changed).map(() => {
           debugLog("provider.resolve.tokens.persisted");

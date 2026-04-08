@@ -24,6 +24,11 @@ import color from "picocolors";
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
 
+const isNonFastForwardError = (error: Error): boolean => {
+  const msg = error.message.toLowerCase();
+  return msg.includes("non-fast-forward") || msg.includes("updates were rejected");
+};
+
 class Commit {
   private constructor(
     private readonly config: Config,
@@ -78,12 +83,18 @@ class Commit {
     return performCommit(message);
   }
 
-  push(branch?: string, publish = false): Future<Error, void> {
-    return loading(
-      publish ? `Publishing '${branch}'...` : "Pushing...",
-      publish ? "Published successfully!" : "Pushed successfully!",
-      performPush(branch, publish)
-    ).map(() => {});
+  push(branch?: string, publish = false, forceWithLease = false): Future<Error, void> {
+    const startMsg =
+      forceWithLease ? "Force pushing with lease..."
+      : publish ? `Publishing '${branch}'...`
+      : "Pushing...";
+
+    const endMsg =
+      forceWithLease ? "Force pushed successfully!"
+      : publish ? "Published successfully!"
+      : "Pushed successfully!";
+
+    return loading(startMsg, endMsg, performPush(branch, publish, forceWithLease)).map(() => {});
   }
 
   interact(diff: string, message: string): Future<Error, void> {
@@ -146,7 +157,11 @@ class Commit {
   }
 
   private pushAfterCommit(): Future<Error, void> {
-    return hasUpstream().chain((exists) => (exists ? this.push() : this.promptPublishBranch()));
+    return hasUpstream().chain((exists) =>
+      exists ?
+        this.push().chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease() : Future.reject(err)))
+      : this.promptPublishBranch()
+    );
   }
 
   private promptPublishBranch(): Future<Error, void> {
@@ -158,6 +173,15 @@ class Commit {
         return !(p.isCancel(publish) || !publish);
       }).chain((shouldPublish) => (shouldPublish ? this.push(branch, true) : Future.resolve(undefined)))
     );
+  }
+
+  private promptForceWithLease(): Future<Error, void> {
+    return Future.attemptP(async () => {
+      const force = await p.confirm({
+        message: "Push was rejected (branch is behind remote). Force push with lease?"
+      });
+      return !(p.isCancel(force) || !force);
+    }).chain((shouldForce) => (shouldForce ? this.push(undefined, false, true) : Future.resolve(undefined)));
   }
 
   private handleAdjust(diff: string, message: string): Future<Error, void> {

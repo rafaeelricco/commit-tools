@@ -56,9 +56,11 @@ const performCommit = (message: string): Future<Error, string> =>
     return "\n" + stats.trim() + "\n";
   });
 
-const performPush = (branch?: string, publish = false): Future<Error, string> =>
+const performPush = (branch?: string, publish = false, forceWithLease = false): Future<Error, string> =>
   Future.attemptP(async () => {
     const args = publish && branch ? ["push", "--set-upstream", "origin", branch] : ["push"];
+
+    if (forceWithLease) args.push("--force-with-lease");
 
     const { stdout, stderr, exitCode } = await execGit(args);
 

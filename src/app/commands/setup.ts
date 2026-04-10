@@ -32,9 +32,9 @@ class Setup {
       const provider = await p.select({
         message: "Select AI provider:",
         options: [
-          { value: "gemini", label: "Google Gemini" },
+          { value: "gemini", label: "Google" },
           { value: "openai", label: "OpenAI" },
-          { value: "anthropic", label: "Anthropic Claude" }
+          { value: "anthropic", label: "Anthropic" }
         ],
         initialValue: "gemini" as const
       });

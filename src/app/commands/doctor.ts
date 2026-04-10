@@ -118,6 +118,8 @@ function authMethodLabel(authMethod: AuthMethod): string {
     case "google_oauth":
     case "openai_oauth":
       return "OAuth";
+    case "anthropic_setup_token":
+      return "Setup Token";
     case "api_key":
       return "API Key";
     default:
@@ -131,8 +133,17 @@ function authMethodDescription(ai: ProviderConfig): string {
       return "Google OAuth 2.0";
     case "openai_oauth":
       return "OpenAI Codex OAuth";
+    case "anthropic_setup_token":
+      return "Claude Setup-Token";
     case "api_key":
-      return ai.provider === "openai" ? "OpenAI API Key" : "Google AI Studio API Key";
+      switch (ai.provider) {
+        case "openai":
+          return "OpenAI API Key";
+        case "anthropic":
+          return "Anthropic API Key";
+        case "gemini":
+          return "Google AI Studio API Key";
+      }
     default:
       return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
   }

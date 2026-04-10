@@ -20,7 +20,7 @@ import * as s from "@/libs/json/schema";
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
 
-const AI_PROVIDERS = ["gemini", "openai"] as const;
+const AI_PROVIDERS = ["gemini", "openai", "anthropic"] as const;
 
 const schema_OAuthTokens = s.object({
   access_token: s.string,
@@ -52,6 +52,10 @@ const schema_AuthMethod = s.discriminatedUnion([
   s.variant({
     type: "openai_oauth",
     content: schema_OpenAITokens
+  }),
+  s.variant({
+    type: "anthropic_setup_token",
+    content: s.string
   })
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
@@ -64,6 +68,11 @@ const schema_ProviderConfig = s.discriminatedUnion([
   }),
   s.variant({
     provider: "openai",
+    model: s.string,
+    auth_method: schema_AuthMethod
+  }),
+  s.variant({
+    provider: "anthropic",
     model: s.string,
     auth_method: schema_AuthMethod
   })

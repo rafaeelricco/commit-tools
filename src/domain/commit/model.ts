@@ -3,6 +3,7 @@ export { fetchModels, selectModelInteractively };
 import { Future } from "@/libs/future";
 import { Model, type ProviderConfig } from "@/domain/config/config";
 import { getOpenAIAccessToken } from "@/lib/auth/openai";
+import { anthropicOAuthHeaders } from "@/lib/auth/anthropic";
 
 import OpenAI from "openai";
 
@@ -81,6 +82,41 @@ const fetchGeminiModels = (authMethod: ProviderConfig["auth_method"]): Future<Er
     }));
   });
 
+const fetchAnthropicModels = (authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> =>
+  Future.attemptP(async () => {
+    const url = "https://api.anthropic.com/v1/models?limit=1000";
+    const headers: Record<string, string> = {
+      "anthropic-version": "2023-06-01",
+      Accept: "application/json"
+    };
+
+    switch (authMethod.type) {
+      case "api_key":
+        headers["x-api-key"] = authMethod.content;
+        break;
+      case "anthropic_setup_token":
+        headers["Authorization"] = `Bearer ${authMethod.content}`;
+        Object.assign(headers, anthropicOAuthHeaders());
+        break;
+      default:
+        throw new Error(`Unsupported auth method for Anthropic: ${authMethod.type}`);
+    }
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Failed to fetch Anthropic models (${response.status}): ${body}`);
+    }
+
+    const data = (await response.json()) as {
+      data?: Array<{ id: string; display_name?: string }>;
+    };
+
+    return (data.data ?? [])
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((m) => ({ id: m.id, description: m.display_name ?? "" }));
+  });
+
 const fetchModels = (
   provider: ProviderConfig["provider"],
   authMethod: ProviderConfig["auth_method"]
@@ -90,6 +126,8 @@ const fetchModels = (
       return fetchOpenAIModels(authMethod);
     case "gemini":
       return fetchGeminiModels(authMethod);
+    case "anthropic":
+      return fetchAnthropicModels(authMethod);
   }
 };
 

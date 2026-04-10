@@ -36,6 +36,7 @@ const resolveProvider: ResolveProvider = (config) => {
 
   switch (auth_method.type) {
     case "api_key":
+    case "anthropic_setup_token":
       return Future.resolve(ai);
 
     case "google_oauth":

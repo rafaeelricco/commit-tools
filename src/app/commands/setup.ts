@@ -8,6 +8,7 @@ import { saveConfig } from "@/lib/storage/config";
 import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/lib/auth/google";
 import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/lib/auth/openai";
+import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/lib/auth/anthropic";
 import { Just, Nothing } from "@/libs/maybe";
 import { loading } from "@/lib/ui/spinner";
 import { fetchModels, selectModelInteractively } from "@/domain/commit/model";
@@ -18,7 +19,7 @@ type SetupPreferences = {
   readonly convention: CommitConvention;
   readonly customTemplate: string | undefined;
   readonly provider: ProviderConfig["provider"];
-  readonly authMethod: "google_oauth" | "openai_oauth" | "api_key";
+  readonly authMethod: "google_oauth" | "openai_oauth" | "api_key" | "anthropic_setup_token";
 };
 
 class Setup {
@@ -32,7 +33,8 @@ class Setup {
         message: "Select AI provider:",
         options: [
           { value: "gemini", label: "Google Gemini" },
-          { value: "openai", label: "OpenAI" }
+          { value: "openai", label: "OpenAI" },
+          { value: "anthropic", label: "Anthropic Claude" }
         ],
         initialValue: "gemini" as const
       });
@@ -84,6 +86,8 @@ class Setup {
         return this.setupOAuth();
       case "openai_oauth":
         return this.setupOpenAIOAuth();
+      case "anthropic_setup_token":
+        return this.setupAnthropicSetupToken();
       case "api_key":
         return this.setupApiKey();
     }
@@ -128,15 +132,25 @@ class Setup {
   }
 
   private setupApiKey(): Future<Error, void> {
+    const { message, validate } = apiKeyPromptFor(this.preferences.provider);
     return Future.attemptP(async () => {
-      const apiKey = await p.password({
-        message: "Enter your GOOGLE_API_KEY:",
-        validate: (value) => (!value || value.length < 10 ? "API Key is too short" : undefined)
+      const apiKey = await p.password({ message, validate });
+      if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
+      return apiKey.trim();
+    }).chain((apiKey) => this.finalizeSetup({ type: "api_key" as const, content: apiKey }));
+  }
+
+  private setupAnthropicSetupToken(): Future<Error, void> {
+    p.log.info("Run `claude setup-token` in another terminal to generate a token from your claude.ai subscription.");
+    return Future.attemptP(async () => {
+      const token = await p.password({
+        message: "Paste your Claude setup-token (sk-ant-oat01-...):",
+        validate: validateAnthropicSetupToken
       });
 
-      if (p.isCancel(apiKey)) throw new Error("Setup cancelled");
-      return apiKey;
-    }).chain((apiKey) => this.finalizeSetup({ type: "api_key" as const, content: apiKey }));
+      if (p.isCancel(token)) throw new Error("Setup cancelled");
+      return token.trim();
+    }).chain((token) => this.finalizeSetup({ type: "anthropic_setup_token" as const, content: token }));
   }
 
   private finalizeSetup(authMethod: ProviderConfig["auth_method"]): Future<Error, void> {
@@ -185,6 +199,19 @@ function getAuthMethodOptions(provider: ProviderConfig["provider"]): Option<Setu
           hint: "Paste a Google AI Studio API key"
         }
       ];
+    case "anthropic":
+      return [
+        {
+          value: "anthropic_setup_token",
+          label: "Claude Setup-Token (recommended)",
+          hint: "Uses your claude.ai subscription — run `claude setup-token`"
+        },
+        {
+          value: "api_key",
+          label: "API Key",
+          hint: "Paste an Anthropic API key (sk-ant-api...)"
+        }
+      ];
   }
 }
 
@@ -194,5 +221,26 @@ function getInitialValue(provider: ProviderConfig["provider"]): SetupPreferences
       return "openai_oauth";
     case "gemini":
       return "google_oauth";
+    case "anthropic":
+      return "anthropic_setup_token";
+  }
+}
+
+type ApiKeyPrompt = {
+  readonly message: string;
+  readonly validate: (value: string | undefined) => string | undefined;
+};
+
+const genericApiKeyValidator = (value: string | undefined): string | undefined =>
+  !value || value.length < 10 ? "API Key is too short" : undefined;
+
+function apiKeyPromptFor(provider: ProviderConfig["provider"]): ApiKeyPrompt {
+  switch (provider) {
+    case "openai":
+      return { message: "Enter your OPENAI_API_KEY:", validate: genericApiKeyValidator };
+    case "gemini":
+      return { message: "Enter your GOOGLE_API_KEY:", validate: genericApiKeyValidator };
+    case "anthropic":
+      return { message: "Enter your ANTHROPIC_API_KEY (sk-ant-api...):", validate: validateAnthropicApiKey };
   }
 }

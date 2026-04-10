@@ -4,6 +4,7 @@ import { Future } from "@/libs/future";
 import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
 import { generateContentWithGemini } from "@/app/services/gemini";
 import { generateContentWithOpenAI } from "@/app/services/openai";
+import { generateContentWithAnthropic } from "@/app/services/anthropic";
 import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
 
 type GenerateContentParams = {
@@ -17,6 +18,8 @@ const generateContent = (config: ProviderConfig, params: GenerateContentParams):
       return generateContentWithGemini(config, params);
     case "openai":
       return generateContentWithOpenAI(config, params);
+    case "anthropic":
+      return generateContentWithAnthropic(config, params);
   }
 };
 

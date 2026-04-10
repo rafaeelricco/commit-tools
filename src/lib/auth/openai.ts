@@ -247,4 +247,6 @@ const validateOpenAITokens = (tokens: OpenAITokens): Future<Error, void> =>
   : Future.reject(new Error("No valid OpenAI access token available"));
 
 const getOpenAIAccessToken = (tokens: OpenAITokens): Future<Error, string> =>
-  tokens.access_token ? Future.resolve(tokens.access_token) : Future.reject(new Error("No OpenAI access token provided"));
+  tokens.access_token ?
+    Future.resolve(tokens.access_token)
+  : Future.reject(new Error("No OpenAI access token provided"));

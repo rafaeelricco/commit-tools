@@ -18,7 +18,6 @@ import {
 import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/lib/ui/spinner";
-import { debugError, debugLog } from "@/libs/debug";
 
 import color from "picocolors";
 
@@ -37,34 +36,21 @@ class Commit {
   ) {}
 
   static create(): Future<Error, Commit> {
-    debugLog("commit.flow.create.start");
     return loadConfig()
       .chainRej((): Future<Error, Config> => {
         p.log.warn(color.yellow("No configuration found. Let's set you up first."));
-        debugLog("commit.flow.create.no_config");
         return Setup.create()
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) =>
-        resolveProvider(config).map((ai) => {
-          debugLog("commit.flow.create.provider_resolved", {
-            provider: ai.provider,
-            authMethod: ai.auth_method.type,
-            model: ai.model
-          });
-          return new Commit(config, ai);
-        })
-      );
+      .chain((config) => resolveProvider(config).map((ai) => new Commit(config, ai)));
   }
 
   run(): Future<Error, void> {
-    debugLog("commit.flow.run.start");
     return checkIsGitRepo()
       .chain(() => this.diff())
       .chain((diff) => this.generate(diff).chain((message) => this.interact(diff, message)))
       .mapRej((e) => {
-        debugError("commit.flow.run.error", e);
         if (e instanceof Error) {
           p.log.error(color.red(e.message));
         }
@@ -73,24 +59,10 @@ class Commit {
   }
 
   diff(): Future<Error, string> {
-    return getStagedDiff().map((diff) => {
-      debugLog("commit.flow.diff.ready", {
-        diffLength: diff.length
-      });
-      return diff;
-    });
+    return getStagedDiff();
   }
 
   generate(diff: string, convention?: CommitConvention, template?: string): Future<Error, string> {
-    debugLog("commit.flow.generate.start", {
-      provider: this.providerConfig.provider,
-      authMethod: this.providerConfig.auth_method.type,
-      model: this.providerConfig.model,
-      diffLength: diff.length,
-      convention: convention ?? this.config.commit_convention,
-      hasTemplate: (template ?? this.config.custom_template.maybe(undefined, (t) => t)) !== undefined
-    });
-
     return loading(
       "Generating commit message...",
       "Message generated!",
@@ -100,36 +72,11 @@ class Commit {
         convention ?? this.config.commit_convention,
         template ?? this.config.custom_template.maybe(undefined, (t) => t)
       )
-    )
-      .map((message) => {
-        debugLog("commit.flow.generate.success", {
-          messageLength: message.length
-        });
-        return message;
-      })
-      .mapRej((e) => {
-        debugError("commit.flow.generate.error", e);
-        return e;
-      });
+    );
   }
 
   refine(message: string, adjustment: string, diff: string): Future<Error, string> {
-    debugLog("commit.flow.refine.start", {
-      messageLength: message.length,
-      adjustmentLength: adjustment.length,
-      diffLength: diff.length
-    });
-    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff))
-      .map((refined) => {
-        debugLog("commit.flow.refine.success", {
-          refinedLength: refined.length
-        });
-        return refined;
-      })
-      .mapRej((e) => {
-        debugError("commit.flow.refine.error", e);
-        return e;
-      });
+    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
   }
 
   commit(message: string): Future<Error, string> {

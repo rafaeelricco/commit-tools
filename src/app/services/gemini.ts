@@ -6,6 +6,7 @@ import { type Config, type OAuthTokens } from "@/domain/config/config";
 import { getAccessToken } from "@/lib/auth/google";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type GenerateContentParams } from "@/app/services/llm";
+import { extractResponse } from "@/app/services/responseExtractor";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 
@@ -34,19 +35,17 @@ const generateContentWithApiKey = (
   params: GenerateContentParams
 ): Future<Error, string> => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const geminiModel = genAI.getGenerativeModel({
-    model,
-    ...(params.systemInstruction !== undefined ? { systemInstruction: params.systemInstruction } : {})
-  });
+  const modelParams: Parameters<typeof genAI.getGenerativeModel>[0] = { model };
 
-  return Future.attemptP(async () => {
-    const result = await geminiModel.generateContent(params.prompt);
+  if (params.systemInstruction !== undefined) {
+    modelParams.systemInstruction = params.systemInstruction;
+  }
 
-    const text = result.response.text() ?? "";
+  const geminiModel = genAI.getGenerativeModel(modelParams);
 
-    if (!text || !text.trim()) throw new Error("Empty AI response");
-    return text.trim();
-  }).mapRej(toError);
+  return Future.attemptP(async () => await geminiModel.generateContent(params.prompt))
+    .mapRej(toError)
+    .chain((result) => extractResponse({ provider: "gemini", source: "sdk", value: result }));
 };
 
 const generateContentWithOAuth = (
@@ -81,20 +80,14 @@ const generateContentWithOAuth = (
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
-      const json = (await response.json()) as {
+      return (await response.json()) as {
         promptFeedback?: unknown;
         usageMetadata?: unknown;
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
       };
-
-      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text || !text.trim()) {
-        throw new Error("Empty AI response");
-      }
-
-      return text.trim();
-    }).mapRej(toError)
+    })
+      .mapRej(toError)
+      .chain((json) => extractResponse({ provider: "gemini", source: "rest", value: json }))
   );
 
 const generateContentWithGemini = (config: GeminiConfig, params: GenerateContentParams): Future<Error, string> => {

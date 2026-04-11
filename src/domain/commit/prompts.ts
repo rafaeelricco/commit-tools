@@ -1,8 +1,8 @@
 export { getPrompt, getRefinePrompt };
 
 import { CommitConvention } from "@/domain/config/config";
-import { Just, Nothing, type Maybe } from "@/utils/maybe";
-import { absurd } from "@/utils/types";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { absurd } from "@/libs/types";
 
 function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
   switch (convention) {

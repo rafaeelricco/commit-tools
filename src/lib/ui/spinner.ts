@@ -2,7 +2,7 @@ export { loading };
 
 import * as p from "@clack/prompts";
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 
 const loading = <T>(label: string, stopLabel: string, f: Future<Error, T>): Future<Error, T> => {
   const s = p.spinner();

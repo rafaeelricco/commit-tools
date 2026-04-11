@@ -1,9 +1,9 @@
 export { type Result, CallableSuccess as Success, CallableFailure as Failure, traverse, traverse_ };
 
-import { Trampoline, end, tailRecursive } from "@/libs/trampoline";
-import { List } from "@/libs/list";
+import { Trampoline, end, tailRecursive } from "@/utils/trampoline";
+import { List } from "@/utils/list";
 
-import Callable from "@/libs/callable";
+import Callable from "@/utils/callable";
 
 type Result<E, T> = Success<E, T> | Failure<E, T>;
 

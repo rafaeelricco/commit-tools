@@ -3,13 +3,13 @@ export { Commit };
 import * as p from "@clack/prompts";
 import * as repo from "@/lib/git/repo";
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { loadConfig } from "@/lib/storage/config";
 import { Setup } from "@/app/commands/setup";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
-import { resolveProvider } from "@/domain/provider/authResolver";
-import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
-import { Nothing, type Maybe, Just } from "@/libs/maybe";
+import { resolveProvider } from "@/domain/llm/authResolver";
+import { generateCommitMessage, refineCommitMessage } from "@/app/llm/llm";
+import { Nothing, type Maybe, Just } from "@/utils/maybe";
 import { loading } from "@/lib/ui/spinner";
 
 import color from "picocolors";

@@ -1,8 +1,8 @@
 export { type CliCommand, parseArgs, showHelp, showVersion };
 
-import * as D from "@/libs/json/decoder";
+import * as D from "@/utils/json/decoder";
 
-import { Result } from "@/libs/result";
+import { Result } from "@/utils/result";
 
 type CliCommand =
   | { type: "generate" }

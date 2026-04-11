@@ -2,7 +2,7 @@ export { performOpenAIOAuthFlow, ensureFreshOpenAITokens, validateOpenAITokens, 
 
 import { type OpenAITokens } from "@/domain/config/config";
 import { SUCCESS_HTML, ERROR_HTML } from "@/lib/auth/templates";
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { randomBytes, createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 

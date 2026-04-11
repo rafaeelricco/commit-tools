@@ -1,8 +1,8 @@
 export { type Timezone, DateOnly, TimeOfDay, POSIX, Duration };
 
-import * as s from "@/libs/json/schema";
-import { fail, always } from "@/libs/json/decoder";
-import { type Maybe, Just, Nothing } from "@/libs/maybe";
+import * as s from "@/utils/json/schema";
+import { fail, always } from "@/utils/json/decoder";
+import { type Maybe, Just, Nothing } from "@/utils/maybe";
 
 import { DateTime } from "luxon";
 

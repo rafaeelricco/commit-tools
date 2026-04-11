@@ -3,13 +3,13 @@ export { Setup };
 import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { saveConfig } from "@/lib/storage/config";
 import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/lib/auth/google";
 import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/lib/auth/openai";
 import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/lib/auth/anthropic";
-import { Just, Nothing } from "@/libs/maybe";
+import { Just, Nothing } from "@/utils/maybe";
 import { loading } from "@/lib/ui/spinner";
 import { fetchModels, selectModelInteractively } from "@/domain/commit/model";
 

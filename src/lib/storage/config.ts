@@ -1,13 +1,13 @@
 export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, CONFIG_DIR, CONFIG_FILE };
 
-import * as s from "@/libs/json/schema";
+import * as s from "@/utils/json/schema";
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Config, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, type Maybe } from "@/utils/maybe";
 
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");

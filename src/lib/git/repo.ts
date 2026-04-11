@@ -1,6 +1,6 @@
 export { checkIsGitRepo, getStagedDiff, performCommit, performPush, getCurrentBranch, hasUpstream };
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { spawn } from "node:child_process";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

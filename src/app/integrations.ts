@@ -1,6 +1,6 @@
 export { type Environment, environment };
 
-import * as D from "@/libs/json/decoder";
+import * as D from "@/utils/json/decoder";
 
 type Environment = D.Infer<typeof envDecoder>;
 

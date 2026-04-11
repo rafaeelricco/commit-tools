@@ -3,7 +3,7 @@ import { Setup } from "@/app/commands/setup";
 import { Doctor } from "@/app/commands/doctor";
 import { ModelCommand } from "@/app/commands/model";
 import { parseArgs, showHelp, showVersion } from "@/app/cli";
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 
 import color from "picocolors";
 

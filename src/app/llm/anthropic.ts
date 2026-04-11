@@ -3,11 +3,11 @@ export { generateContentWithAnthropic };
 import Anthropic from "@anthropic-ai/sdk";
 
 import { type Config } from "@/domain/config/config";
-import { type GenerateContentParams } from "@/app/services/llm";
-import { Future } from "@/libs/future";
+import { type GenerateContentParams } from "@/app/llm/llm";
+import { Future } from "@/utils/future";
 import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/lib/auth/anthropic";
-import { absurd } from "@/libs/types";
-import { extractResponse } from "@/domain/provider/responseParser";
+import { absurd } from "@/utils/types";
+import { extractResponse } from "@/domain/llm/responseParser";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 

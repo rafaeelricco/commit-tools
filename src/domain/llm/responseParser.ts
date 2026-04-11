@@ -1,7 +1,7 @@
 export { type RawResponse, extractResponse, finalizeText };
 
-import { Future } from "@/libs/future";
-import { absurd } from "@/libs/types";
+import { Future } from "@/utils/future";
+import { absurd } from "@/utils/types";
 
 const EMPTY_RESPONSE_ERROR = "Empty AI response";
 

@@ -1,12 +1,12 @@
 export { type GenerateContentParams, generateCommitMessage, refineCommitMessage };
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
-import { generateContentWithGemini } from "@/app/services/gemini";
-import { generateContentWithOpenAI } from "@/app/services/openai";
-import { generateContentWithAnthropic } from "@/app/services/anthropic";
+import { generateContentWithGemini } from "@/app/llm/gemini";
+import { generateContentWithOpenAI } from "@/app/llm/openai";
+import { generateContentWithAnthropic } from "@/app/llm/anthropic";
 import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
-import { Maybe, Nothing } from "@/libs/maybe";
+import { Maybe, Nothing } from "@/utils/maybe";
 
 type GenerateContentParams = {
   readonly prompt: string;

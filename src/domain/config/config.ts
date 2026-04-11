@@ -15,7 +15,7 @@ export {
   AI_PROVIDERS
 };
 
-import * as s from "@/libs/json/schema";
+import * as s from "@/utils/json/schema";
 
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];

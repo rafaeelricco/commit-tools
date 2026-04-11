@@ -2,10 +2,10 @@ export { ModelCommand };
 
 import * as p from "@clack/prompts";
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { loadConfig, saveConfig } from "@/lib/storage/config";
-import { resolveProvider } from "@/domain/provider/authResolver";
+import { resolveProvider } from "@/domain/llm/authResolver";
 import { fetchModels, selectModelInteractively } from "@/domain/commit/model";
 import { loading } from "@/lib/ui/spinner";
 

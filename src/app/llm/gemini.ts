@@ -1,12 +1,12 @@
 export { type GeminiAuthCredentials, generateContentWithGemini, getAuthCredentials };
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { type Config, type OAuthTokens } from "@/domain/config/config";
 import { getAccessToken } from "@/lib/auth/google";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type GenerateContentParams } from "@/app/services/llm";
-import { extractResponse } from "@/domain/provider/responseParser";
+import { Just, Nothing, type Maybe } from "@/utils/maybe";
+import { type GenerateContentParams } from "@/app/llm/llm";
+import { extractResponse } from "@/domain/llm/responseParser";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 

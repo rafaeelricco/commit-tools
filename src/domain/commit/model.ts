@@ -1,6 +1,6 @@
 export { fetchModels, selectModelInteractively };
 
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { Model, type ProviderConfig } from "@/domain/config/config";
 import { getOpenAIAccessToken } from "@/lib/auth/openai";
 import { anthropicOAuthHeaders } from "@/lib/auth/anthropic";

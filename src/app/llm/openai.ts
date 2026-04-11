@@ -1,10 +1,10 @@
 export { generateContentWithOpenAI };
 
 import { type Config, type OpenAITokens } from "@/domain/config/config";
-import { type GenerateContentParams } from "@/app/services/llm";
-import { Future } from "@/libs/future";
+import { type GenerateContentParams } from "@/app/llm/llm";
+import { Future } from "@/utils/future";
 import { getOpenAIAccessToken } from "@/lib/auth/openai";
-import { extractResponse } from "@/domain/provider/responseParser";
+import { extractResponse } from "@/domain/llm/responseParser";
 
 import OpenAI from "openai";
 

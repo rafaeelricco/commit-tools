@@ -40,7 +40,7 @@ export {
 };
 
 import * as express from "express";
-import { Cancel, Future } from "@/libs/future";
+import { Cancel, Future } from "@/utils/future";
 
 type Json = null | string | number | boolean | JsonArray | JsonObject;
 type JsonObject = { [x: string]: Json };

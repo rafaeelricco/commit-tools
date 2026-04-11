@@ -26,7 +26,7 @@ export {
   mapMaybe
 };
 
-import Callable from "@/libs/callable";
+import Callable from "@/utils/callable";
 
 type Maybe<T> = Just<T> | Nothing<T>;
 type Nullable<T> = T | null;

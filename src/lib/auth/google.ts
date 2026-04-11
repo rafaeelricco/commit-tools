@@ -3,7 +3,7 @@ export { performOAuthFlow, createAuthenticatedClient, ensureFreshTokens, validat
 import { type OAuthTokens } from "@/domain/config/config";
 import { SUCCESS_HTML, ERROR_HTML } from "@/lib/auth/templates";
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
-import { Future } from "@/libs/future";
+import { Future } from "@/utils/future";
 import { environment } from "@/app/integrations";
 import { randomBytes, createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";

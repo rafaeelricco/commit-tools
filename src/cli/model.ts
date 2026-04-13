@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { Future } from "@/libs/future";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { loadConfig, saveConfig } from "@/infra/storage/config";
-import { resolveProvider } from "@/domain/llm/authResolver";
+import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { fetchModels } from "@/domain/commit/models";
 import { selectModelInteractively } from "@/infra/ui/model-picker";
 import { loading } from "@/infra/ui/spinner";

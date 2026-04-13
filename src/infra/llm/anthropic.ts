@@ -7,7 +7,7 @@ import { type GenerateContentParams } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
 import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/anthropic";
 import { absurd } from "@/libs/types";
-import { extractResponse } from "@/domain/llm/responseParser";
+import { extractResponse } from "@/domain/llm/response-parser";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 

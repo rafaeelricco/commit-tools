@@ -7,7 +7,7 @@ import { Future } from "@/libs/future";
 import { loadConfig } from "@/infra/storage/config";
 import { Setup } from "@/cli/setup";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
-import { resolveProvider } from "@/domain/llm/authResolver";
+import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";

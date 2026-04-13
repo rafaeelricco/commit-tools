@@ -6,7 +6,7 @@ import { type Config, type OAuthTokens } from "@/domain/config/config";
 import { getAccessToken } from "@/infra/auth/google";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type GenerateContentParams } from "@/domain/llm/router";
-import { extractResponse } from "@/domain/llm/responseParser";
+import { extractResponse } from "@/domain/llm/response-parser";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 

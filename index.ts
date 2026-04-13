@@ -1,8 +1,8 @@
-import { Commit } from "@/app/commands/commit";
-import { Setup } from "@/app/commands/setup";
-import { Doctor } from "@/app/commands/doctor";
-import { ModelCommand } from "@/app/commands/model";
-import { parseArgs, showHelp, showVersion } from "@/app/cli";
+import { Commit } from "@/cli/commit";
+import { Setup } from "@/cli/setup";
+import { Doctor } from "@/cli/doctor";
+import { ModelCommand } from "@/cli/model";
+import { parseArgs, showHelp, showVersion } from "@/cli/parser";
 import { Future } from "@/libs/future";
 
 import color from "picocolors";

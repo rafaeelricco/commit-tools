@@ -1,23 +1,16 @@
 export { Commit };
 
 import * as p from "@clack/prompts";
+import * as repo from "@/infra/git/repo";
 
 import { Future } from "@/libs/future";
-import { loadConfig } from "@/lib/storage/config";
-import { Setup } from "@/app/commands/setup";
-import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
-import { resolveProvider } from "@/app/services/resolveProvider";
-import {
-  checkIsGitRepo,
-  getStagedDiff,
-  performCommit,
-  performPush,
-  getCurrentBranch,
-  hasUpstream
-} from "@/lib/git/repo";
-import { generateCommitMessage, refineCommitMessage } from "@/app/services/llm";
+import { loadConfig } from "@/infra/storage/config";
+import { Setup } from "@/cli/setup";
+import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
+import { resolveProvider } from "@/domain/llm/auth-resolver";
+import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
-import { loading } from "@/lib/ui/spinner";
+import { loading } from "@/infra/ui/spinner";
 
 import color from "picocolors";
 
@@ -47,9 +40,14 @@ class Commit {
   }
 
   run(): Future<Error, void> {
-    return checkIsGitRepo()
+    return repo
+      .checkIsGitRepo()
       .chain(() => this.diff())
-      .chain((diff) => this.generate(diff).chain((message) => this.interact(diff, message)))
+      .chain((diff) =>
+        this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) =>
+          this.interact(diff, message)
+        )
+      )
       .mapRej((e) => {
         if (e instanceof Error) {
           p.log.error(color.red(e.message));
@@ -59,19 +57,14 @@ class Commit {
   }
 
   diff(): Future<Error, string> {
-    return getStagedDiff();
+    return repo.getStagedDiff();
   }
 
-  generate(diff: string, convention?: CommitConvention, template?: string): Future<Error, string> {
+  generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, string> {
     return loading(
       "Generating commit message...",
       "Message generated!",
-      generateCommitMessage(
-        this.providerConfig,
-        diff,
-        convention ?? this.config.commit_convention,
-        template ?? this.config.custom_template.maybe(undefined, (t) => t)
-      )
+      generateCommitMessage(this.providerConfig, diff, convention, template)
     );
   }
 
@@ -80,7 +73,7 @@ class Commit {
   }
 
   commit(message: string): Future<Error, string> {
-    return performCommit(message);
+    return repo.performCommit(message);
   }
 
   push(branch?: string, publish = false, forceWithLease = false): Future<Error, void> {
@@ -94,7 +87,7 @@ class Commit {
       : publish ? "Published successfully!"
       : "Pushed successfully!";
 
-    return loading(startMsg, endMsg, performPush(branch, publish, forceWithLease)).map(() => {});
+    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).map(() => {});
   }
 
   interact(diff: string, message: string): Future<Error, void> {
@@ -105,7 +98,9 @@ class Commit {
         case "commit_push":
           return this.handleCommitAndPush(message);
         case "regenerate":
-          return this.generate(diff, "imperative").chain((msg) => this.interact(diff, msg));
+          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) =>
+            this.interact(diff, msg)
+          );
         case "adjust":
           return this.handleAdjust(diff, message);
         case "cancel":
@@ -157,15 +152,17 @@ class Commit {
   }
 
   private pushAfterCommit(): Future<Error, void> {
-    return hasUpstream().chain((exists) =>
-      exists ?
-        this.push().chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease() : Future.reject(err)))
-      : this.promptPublishBranch()
-    );
+    return repo
+      .hasUpstream()
+      .chain((exists) =>
+        exists ?
+          this.push().chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease() : Future.reject(err)))
+        : this.promptPublishBranch()
+      );
   }
 
   private promptPublishBranch(): Future<Error, void> {
-    return getCurrentBranch().chain((branch) =>
+    return repo.getCurrentBranch().chain((branch) =>
       Future.attemptP(async () => {
         const publish = await p.confirm({
           message: `Branch '${branch}' has no upstream. Publish to origin?`

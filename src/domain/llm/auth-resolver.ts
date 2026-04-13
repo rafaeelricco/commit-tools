@@ -3,9 +3,10 @@ export { resolveProvider };
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
-import { ensureFreshTokens } from "@/lib/auth/google";
-import { ensureFreshOpenAITokens } from "@/lib/auth/openai";
-import { updateGoogleTokens, updateOpenAITokens } from "@/lib/storage/config";
+import { ensureFreshTokens } from "@/infra/auth/google";
+import { ensureFreshOpenAITokens } from "@/infra/auth/openai";
+import { updateGoogleTokens, updateOpenAITokens } from "@/infra/storage/config";
+import { absurd } from "@/libs/types";
 
 type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => Maybe<T>;
 type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;
@@ -32,30 +33,27 @@ const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
 
 const resolveProvider: ResolveProvider = (config) => {
   const { ai } = config;
-  const { auth_method } = ai;
 
-  switch (auth_method.type) {
+  switch (ai.auth_method.type) {
     case "api_key":
     case "anthropic_setup_token":
       return Future.resolve(ai);
 
     case "google_oauth":
-      return refreshAndPersist(auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => ({
+      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => ({
         provider: ai.provider,
         model: ai.model,
         auth_method: { type: "google_oauth", content: tokens }
       }));
 
     case "openai_oauth":
-      return refreshAndPersist(auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => ({
+      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => ({
         provider: ai.provider,
         model: ai.model,
         auth_method: { type: "openai_oauth", content: tokens }
       }));
 
-    default: {
-      const _exhaustiveCheck: never = auth_method;
-      return Future.reject(new Error(`Unknown auth method: ${JSON.stringify(_exhaustiveCheck)}`));
-    }
+    default:
+      return absurd(ai.auth_method, "AuthMethod");
   }
 };

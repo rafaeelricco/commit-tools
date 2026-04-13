@@ -1,8 +1,10 @@
 export { getPrompt, getRefinePrompt };
 
 import { CommitConvention } from "@/domain/config/config";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { absurd } from "@/libs/types";
 
-function getPrompt(diff: string, convention: CommitConvention, customTemplate?: string): string {
+function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);
@@ -11,7 +13,7 @@ function getPrompt(diff: string, convention: CommitConvention, customTemplate?: 
     case "custom":
       return promptCustom(diff, customTemplate);
     default:
-      return promptImperative(diff);
+      return absurd(convention, "CommitConvention");
   }
 }
 
@@ -90,14 +92,14 @@ function promptConventional(gitDiff: string): string {
             • Line 2: blank.
             • Remaining lines: each line is a bullet starting with "- ".
       </output_instructions>
-`;
+  `;
 }
 
 function promptImperative(gitDiff: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
-        Your job is to read git diffs and output high-quality comic messages
+        Your job is to read git diffs and output high-quality commit messages
         that follow these rules.
       </system>
 
@@ -210,14 +212,13 @@ function promptImperative(gitDiff: string): string {
 `;
 }
 
-function promptCustom(gitDiff: string, template?: string): string {
-  if (!template) {
-    return promptImperative(gitDiff);
-  }
-
-  const processedTemplate = template.replace("{diff}", gitDiff);
-
-  return `
+function promptCustom(gitDiff: string, template: Maybe<string>): string {
+  switch (true) {
+    case template instanceof Nothing:
+      return promptImperative(gitDiff);
+    case template instanceof Just: {
+      const processedTemplate = template.value.replace("{diff}", gitDiff);
+      return `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -235,6 +236,11 @@ function promptCustom(gitDiff: string, template?: string): string {
         4. Do NOT wrap the commit message in quotes or code fences.
       </output_instructions>
 `;
+    }
+    default:
+      template satisfies never;
+      return promptImperative(gitDiff);
+  }
 }
 
 function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {

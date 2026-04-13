@@ -3,39 +3,31 @@ export { generateContentWithAnthropic };
 import Anthropic from "@anthropic-ai/sdk";
 
 import { type Config } from "@/domain/config/config";
-import { type GenerateContentParams } from "@/app/services/llm";
+import { type GenerateContentParams } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
-import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/lib/auth/anthropic";
+import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/anthropic";
+import { absurd } from "@/libs/types";
+import { extractResponse } from "@/domain/llm/response-parser";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 
 type TextBlock = { type: "text"; text: string };
 
-const MAX_TOKENS = 4096;
-
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
-
-const extractText = (content: Array<{ type: string; text?: string }>): string =>
-  content
-    .filter((block): block is TextBlock => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text)
-    .join("");
 
 const callAnthropicWithApiKey = (apiKey: string, model: string, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
     const client = new Anthropic({ apiKey });
 
-    const response = await client.messages.create({
+    return await client.messages.create({
       model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: 4096,
       ...(params.systemInstruction !== undefined ? { system: params.systemInstruction } : {}),
       messages: [{ role: "user", content: params.prompt }]
     });
-
-    const text = extractText(response.content);
-    if (!text.trim()) throw new Error("Empty AI response");
-    return text.trim();
-  }).mapRej(toError);
+  })
+    .mapRej(toError)
+    .chain((response) => extractResponse({ provider: "anthropic", value: response }));
 
 const callAnthropicWithSetupToken = (
   authToken: string,
@@ -49,22 +41,21 @@ const callAnthropicWithSetupToken = (
       defaultHeaders: anthropicOAuthHeaders()
     });
 
-    const systemBlocks: TextBlock[] = [
-      { type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT },
-      ...(params.systemInstruction !== undefined ? [{ type: "text" as const, text: params.systemInstruction }] : [])
-    ];
+    const systemBlocks: TextBlock[] = [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }];
 
-    const response = await client.messages.create({
+    if (params.systemInstruction !== undefined) {
+      systemBlocks.push({ type: "text", text: params.systemInstruction });
+    }
+
+    return await client.messages.create({
       model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: 4096,
       system: systemBlocks,
       messages: [{ role: "user", content: params.prompt }]
     });
-
-    const text = extractText(response.content);
-    if (!text.trim()) throw new Error("Empty AI response");
-    return text.trim();
-  }).mapRej(toError);
+  })
+    .mapRej(toError)
+    .chain((response) => extractResponse({ provider: "anthropic", value: response }));
 
 const generateContentWithAnthropic = (
   config: AnthropicConfig,
@@ -78,9 +69,7 @@ const generateContentWithAnthropic = (
     case "google_oauth":
     case "openai_oauth":
       return Future.reject(new Error(`Unsupported auth method for Anthropic: ${config.auth_method.type}`));
-    default: {
-      const _exhaustiveCheck: never = config.auth_method;
-      return Future.reject(new Error(`Unknown auth method: ${JSON.stringify(_exhaustiveCheck)}`));
-    }
+    default:
+      return absurd(config.auth_method, "AuthMethod");
   }
 };

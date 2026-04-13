@@ -1,9 +1,9 @@
-export { fetchModels, selectModelInteractively };
+export { fetchModels };
 
 import { Future } from "@/libs/future";
 import { Model, type ProviderConfig } from "@/domain/config/config";
-import { getOpenAIAccessToken } from "@/lib/auth/openai";
-import { anthropicOAuthHeaders } from "@/lib/auth/anthropic";
+import { getOpenAIAccessToken } from "@/infra/auth/openai";
+import { anthropicOAuthHeaders } from "@/infra/auth/anthropic";
 
 import OpenAI from "openai";
 
@@ -130,26 +130,3 @@ const fetchModels = (
       return fetchAnthropicModels(authMethod);
   }
 };
-
-const selectModelInteractively = (models: Model[]): Future<Error, string> =>
-  Future.attemptP(async () => {
-    const { render } = await import("ink");
-    const React = await import("react");
-    const { ModelSelector } = await import("@/lib/ui/components/model-selector");
-
-    return new Promise<string>((resolve, reject) => {
-      const { unmount } = render(
-        React.createElement(ModelSelector, {
-          models,
-          onSelect: (modelId: string) => {
-            unmount();
-            resolve(modelId);
-          },
-          onCancel: () => {
-            unmount();
-            reject(new Error("Selection cancelled"));
-          }
-        })
-      );
-    });
-  });

@@ -36,3 +36,6 @@ dist
 
 # Temporary files
 /tmp
+
+# Claude folder
+.claude

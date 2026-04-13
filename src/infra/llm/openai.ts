@@ -1,9 +1,10 @@
 export { generateContentWithOpenAI };
 
 import { type Config, type OpenAITokens } from "@/domain/config/config";
-import { type GenerateContentParams } from "@/app/services/llm";
+import { type GenerateContentParams } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
-import { getOpenAIAccessToken } from "@/lib/auth/openai";
+import { getOpenAIAccessToken } from "@/infra/auth/openai";
+import { extractResponse } from "@/domain/llm/response-parser";
 
 import OpenAI from "openai";
 
@@ -14,17 +15,14 @@ const toError = (error: unknown): Error => (error instanceof Error ? error : new
 const callOpenAIWithApiKey = (authToken: string, model: string, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
     const client = new OpenAI({ apiKey: authToken });
-    const response = await client.responses.create({
+    return await client.responses.create({
       model,
       instructions: params.systemInstruction ?? null,
       input: params.prompt
     });
-
-    const text = response.output_text ?? "";
-
-    if (!text || !text.trim()) throw new Error("Empty AI response");
-    return text.trim();
-  }).mapRej(toError);
+  })
+    .mapRej(toError)
+    .chain((response) => extractResponse({ provider: "openai", source: "direct", value: response }));
 
 const callOpenAIWithOAuth = (authToken: string, model: string, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
@@ -52,26 +50,10 @@ const callOpenAIWithOAuth = (authToken: string, model: string, params: GenerateC
     });
 
     const response = await stream.finalResponse();
-
-    const extractedText = response.output
-      .flatMap((item) => (item.type === "message" ? item.content : []))
-      .map((c) => (c.type === "output_text" ? c.text : ""))
-      .join("");
-
-    const outputText = response.output_text ?? "";
-    const candidates = [
-      { source: "output", value: extractedText },
-      { source: "output_text", value: outputText },
-      { source: "done_event", value: doneEventText },
-      { source: "delta_snapshot", value: deltaSnapshotText }
-    ] as const;
-    const selected = candidates.find((candidate) => candidate.value.trim().length > 0);
-    const text = selected?.value.trim() ?? "";
-
-    if (!text.trim()) throw new Error("Empty AI response");
-
-    return text.trim();
-  }).mapRej(toError);
+    return { response, doneEventText, deltaSnapshotText };
+  })
+    .mapRej(toError)
+    .chain((bundle) => extractResponse({ provider: "openai", source: "stream", value: bundle }));
 
 const generateContentWithApiKey = (
   apiKey: string,

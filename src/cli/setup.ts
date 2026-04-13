@@ -4,14 +4,15 @@ import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
 
 import { Future } from "@/libs/future";
-import { saveConfig } from "@/lib/storage/config";
+import { saveConfig } from "@/infra/storage/config";
 import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
-import { performOAuthFlow, validateOAuthTokens } from "@/lib/auth/google";
-import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/lib/auth/openai";
-import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/lib/auth/anthropic";
+import { performOAuthFlow, validateOAuthTokens } from "@/infra/auth/google";
+import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/infra/auth/openai";
+import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/infra/auth/anthropic";
 import { Just, Nothing } from "@/libs/maybe";
-import { loading } from "@/lib/ui/spinner";
-import { fetchModels, selectModelInteractively } from "@/domain/commit/model";
+import { loading } from "@/infra/ui/spinner";
+import { fetchModels } from "@/domain/commit/models";
+import { selectModelInteractively } from "@/infra/ui/model-picker";
 
 import color from "picocolors";
 

@@ -1,10 +1,10 @@
 export { Doctor };
 
 import { Future } from "@/libs/future";
-import { CONFIG_FILE, loadConfig } from "@/lib/storage/config";
+import { CONFIG_FILE, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
 import { access } from "node:fs/promises";
-import { environment } from "@/app/integrations";
+import { environment } from "@/infra/env";
 
 import color from "picocolors";
 import Table from "cli-table3";

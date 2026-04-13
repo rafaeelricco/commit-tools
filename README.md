@@ -90,8 +90,14 @@ commit setup
 
 You will be prompted to choose:
 
-- **Auth method**: OAuth (sign in with your Google or ChatGPT account) or API Key (paste your own key)
+- **AI provider**: Google Gemini, OpenAI, or Anthropic
+- **Auth method**:
+  - Google Gemini: Google OAuth or API key
+  - OpenAI: Sign in with ChatGPT or API key
+  - Anthropic: Claude setup-token or API key
 - **Commit convention**: Conventional, Imperative, or Custom
+
+If you want to use your claude.ai subscription with Anthropic, run `claude setup-token` in another terminal first, then paste the generated setup-token during `commit setup`.
 
 To re-authenticate at any time:
 
@@ -151,12 +157,9 @@ commit --help
 
 ## Providers
 
-- **Google Gemini** — API key or Google OAuth
-- **OpenAI** — API key or sign in with your ChatGPT Plus/Pro subscription
-
-More providers coming soon:
-
-- **Anthropic** (Claude)
+- **Google Gemini** — Google OAuth or API key
+- **OpenAI** — Sign in with your ChatGPT Plus/Pro subscription or API key
+- **Anthropic** (Claude) — Claude setup-token (`claude setup-token`) or API key
 
 Contributions and feedback are welcome!
 

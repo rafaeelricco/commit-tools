@@ -70,16 +70,7 @@ jobs:
             exit 1
           fi
 
-          if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
-            {
-              echo "### No publish on merge"
-              echo ""
-              echo "Version pinned at \`$HEAD_VERSION\` — merging will not publish \`$PACKAGE_NAME\` to NPM."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if ! semver "$HEAD_VERSION" -r ">$BASE_VERSION" >/dev/null; then
+          if [ "$HEAD_VERSION" != "$BASE_VERSION" ] && ! semver "$HEAD_VERSION" -r ">$BASE_VERSION" >/dev/null; then
             echo "::error::Version change $BASE_VERSION -> $HEAD_VERSION is not a valid forward bump."
             {
               echo "### Invalid version bump"
@@ -89,7 +80,18 @@ jobs:
             exit 1
           fi
 
-          if npm view "${PACKAGE_NAME}@${HEAD_VERSION}" version 2>/dev/null; then
+          PUBLISHED=$(npm view "${PACKAGE_NAME}@${HEAD_VERSION}" version 2>/dev/null || true)
+
+          if [ -n "$PUBLISHED" ]; then
+            if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
+              {
+                echo "### No publish on merge"
+                echo ""
+                echo "Version pinned at \`$HEAD_VERSION\` and already published on NPM — merging will not publish \`$PACKAGE_NAME\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
             echo "::error::Version $HEAD_VERSION is already published on NPM."
             {
               echo "### Invalid version bump"
@@ -97,6 +99,15 @@ jobs:
               echo "Version \`$HEAD_VERSION\` is already published on NPM. Bump to a new unpublished version."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
+          fi
+
+          if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
+            {
+              echo "### Will publish on merge"
+              echo ""
+              echo "Version pinned at \`$HEAD_VERSION\` but not yet published on NPM — merging will publish \`${PACKAGE_NAME}@${HEAD_VERSION}\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
           {

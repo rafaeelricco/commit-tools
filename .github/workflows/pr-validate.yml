@@ -1,0 +1,119 @@
+name: PR Validate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  checks:
+    name: Typecheck, format, and build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Check formatting
+        run: pnpm exec prettier . --check
+
+      - name: Build project
+        env:
+          GOOGLE_CLIENT_ID: pr-validation-not-a-real-client-id
+          GOOGLE_CLIENT_SECRET: pr-validation-not-a-real-secret
+        run: pnpm run build
+
+  publish-preview:
+    name: Publish preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install semver CLI
+        run: npm install -g semver
+
+      - name: Detect publish on merge
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          HEAD_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          git show "${BASE_SHA}:package.json" > /tmp/base-package.json
+          BASE_VERSION=$(node -p "require('/tmp/base-package.json').version")
+
+          echo "Package: $PACKAGE_NAME"
+          echo "Base:    $BASE_VERSION"
+          echo "Head:    $HEAD_VERSION"
+
+          if ! semver "$HEAD_VERSION" >/dev/null; then
+            echo "::error::Head version '$HEAD_VERSION' is not valid semver."
+            {
+              echo "### Invalid version"
+              echo ""
+              echo "\`$HEAD_VERSION\` is not a valid semver string."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ "$HEAD_VERSION" != "$BASE_VERSION" ] && ! semver "$HEAD_VERSION" -r ">$BASE_VERSION" >/dev/null; then
+            echo "::error::Version change $BASE_VERSION -> $HEAD_VERSION is not a valid forward bump."
+            {
+              echo "### Invalid version bump"
+              echo ""
+              echo "\`$BASE_VERSION\` -> \`$HEAD_VERSION\` is not a valid forward semver bump."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          PUBLISHED=$(npm view "${PACKAGE_NAME}@${HEAD_VERSION}" version 2>/dev/null || true)
+
+          if [ -n "$PUBLISHED" ]; then
+            if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
+              {
+                echo "### No publish on merge"
+                echo ""
+                echo "Version pinned at \`$HEAD_VERSION\` and already published on NPM — merging will not publish \`$PACKAGE_NAME\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "::error::Version $HEAD_VERSION is already published on NPM."
+            {
+              echo "### Invalid version bump"
+              echo ""
+              echo "Version \`$HEAD_VERSION\` is already published on NPM. Bump to a new unpublished version."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
+            {
+              echo "### Will publish on merge"
+              echo ""
+              echo "Version pinned at \`$HEAD_VERSION\` but not yet published on NPM — merging will publish \`${PACKAGE_NAME}@${HEAD_VERSION}\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Will publish on merge"
+            echo ""
+            echo "Merging will publish \`${PACKAGE_NAME}@${HEAD_VERSION}\` (bumped from \`$BASE_VERSION\`)."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -34,13 +34,12 @@ const classifyFailure = (stderr: string): PrLookup =>
   GH_UNAUTH_RE.test(stderr) ? { type: "unauthenticated" } : { type: "unavailable" };
 
 const getOpenPullRequest = (): Future<Error, PrLookup> =>
-  repo
-    .getTrackingRemoteUrl()
-    .chain((remoteUrl) => {
+  Future.both(repo.getTrackingRemoteUrl(), repo.getCurrentBranch())
+    .chain(([remoteUrl, branch]) => {
       const slug = parseGithubRepo(remoteUrl);
       return slug instanceof Just ?
-          execBin("gh", ["pr", "view", "-R", slug.value, "--json", "url,number"]).map(({ stdout, stderr, exitCode }) =>
-            exitCode !== 0 ? classifyFailure(stderr) : parsePrJson(stdout)
+          execBin("gh", ["pr", "view", branch, "-R", slug.value, "--json", "url,number"]).map(
+            ({ stdout, stderr, exitCode }) => (exitCode !== 0 ? classifyFailure(stderr) : parsePrJson(stdout))
           )
         : Future.resolve<Error, PrLookup>({ type: "unavailable" });
     })

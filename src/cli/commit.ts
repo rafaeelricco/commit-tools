@@ -1,6 +1,7 @@
 export { Commit };
 
 import * as p from "@clack/prompts";
+import * as pr from "@/infra/github/pr";
 import * as repo from "@/infra/git/repo";
 
 import { Future } from "@/libs/future";
@@ -11,6 +12,7 @@ import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
+import { renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
 
@@ -87,7 +89,26 @@ class Commit {
       : publish ? "Published successfully!"
       : "Pushed successfully!";
 
-    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).map(() => {});
+    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).chain((result) =>
+      Future.concurrently<
+        Error,
+        {
+          commit: repo.CommitMetadata;
+          localBranch: string;
+          upstream: Maybe<string>;
+          remoteUrl: string;
+          pr: pr.PrLookup;
+        }
+      >({
+        commit: repo.getCommitMetadata(),
+        localBranch: repo.getCurrentBranch(),
+        upstream: repo.getUpstream(),
+        remoteUrl: repo.getTrackingRemoteUrl(),
+        pr: pr.getOpenPullRequest()
+      })
+        .map((parts) => renderPushNote({ ...parts, range: result.range }))
+        .chainRej<Error>(() => Future.resolve(undefined))
+    );
   }
 
   interact(diff: string, message: string): Future<Error, void> {

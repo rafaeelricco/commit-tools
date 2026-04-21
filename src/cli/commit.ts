@@ -11,6 +11,7 @@ import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
+import { renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
 
@@ -87,7 +88,19 @@ class Commit {
       : publish ? "Published successfully!"
       : "Pushed successfully!";
 
-    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).map(() => {});
+    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease))
+      .chain((result) =>
+        Future.concurrently<
+          Error,
+          { commit: repo.CommitMetadata; localBranch: string; upstream: Maybe<string>; remoteUrl: string }
+        >({
+          commit: repo.getCommitMetadata(),
+          localBranch: repo.getCurrentBranch(),
+          upstream: repo.getUpstream(),
+          remoteUrl: repo.getRemoteUrl()
+        }).map((parts) => ({ ...parts, range: result.range }))
+      )
+      .map((metadata) => renderPushNote(metadata));
   }
 
   interact(diff: string, message: string): Future<Error, void> {

@@ -103,7 +103,7 @@ class Commit {
         commit: repo.getCommitMetadata(),
         localBranch: repo.getCurrentBranch(),
         upstream: repo.getUpstream(),
-        remoteUrl: repo.getRemoteUrl(),
+        remoteUrl: repo.getTrackingRemoteUrl(),
         pr: pr.getOpenPullRequest()
       })
         .map((parts) => renderPushNote({ ...parts, range: result.range }))

@@ -8,6 +8,7 @@ export {
   getUpstream,
   getCommitMetadata,
   getRemoteUrl,
+  getTrackingRemoteUrl,
   type CommitMetadata,
   type PushResult,
   type PushRange
@@ -107,6 +108,17 @@ const getUpstream = (): Future<Error, Maybe<string>> =>
 
 const getRemoteUrl = (remote: string = "origin"): Future<Error, string> =>
   execGitChecked(["remote", "get-url", remote], `Failed to read remote '${remote}' url`).map((s) => s.trim());
+
+const parseRemoteFromUpstream = (upstream: string): Maybe<string> => {
+  const idx = upstream.indexOf("/");
+  return idx > 0 ? Just(upstream.slice(0, idx)) : Nothing();
+};
+
+const getTrackingRemoteUrl = (): Future<Error, string> =>
+  getUpstream().chain((maybeRef) => {
+    const remote = maybeRef instanceof Just ? parseRemoteFromUpstream(maybeRef.value) : Nothing<string>();
+    return getRemoteUrl(remote instanceof Just ? remote.value : "origin");
+  });
 
 const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> =>
   execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain(

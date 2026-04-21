@@ -8,7 +8,7 @@ export default tseslint.config(
     languageOptions: { parser: tseslint.parser },
     plugins: { sonarjs },
     rules: {
-      "sonarjs/cognitive-complexity": ["error", 15]
+      "sonarjs/cognitive-complexity": ["error", 10]
     }
   }
 );

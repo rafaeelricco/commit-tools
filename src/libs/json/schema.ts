@@ -49,7 +49,6 @@ import { Maybe, Nullable } from "@/libs/maybe";
 import { filterMap, mapValues } from "@/libs/helpers/object";
 
 // Infer the type from a schema definition
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Infer<A extends Schema<any>> = A extends Schema<infer B> ? B : never;
 
 class Schema<A> {

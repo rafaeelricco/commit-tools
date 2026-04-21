@@ -152,15 +152,7 @@ class DateOnly {
   }
 
   compare(other: DateOnly): number {
-    return (
-      this.year > other.year ? 1
-      : this.year < other.year ? -1
-      : this.month > other.month ? 1
-      : this.month < other.month ? -1
-      : this.day > other.day ? 1
-      : this.day < other.day ? -1
-      : 0
-    );
+    return Math.sign(this.year - other.year) || Math.sign(this.month - other.month) || Math.sign(this.day - other.day);
   }
 
   addMonths(months: number): DateOnly {

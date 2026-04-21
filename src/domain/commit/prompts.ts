@@ -51,6 +51,7 @@ function promptConventional(gitDiff: string): string {
           - You MAY use inline code formatting with single backticks, e.g. \`function_name\`, \`git diff\`.
           - Do NOT use multiline code fences (no \`\`\` blocks).
           - Keep language concise and concrete. Prefer what the change DOES over HOW it is implemented.
+          - End each bullet with a period for consistency with the project's existing history.
       </rules>
 
       <examples>
@@ -66,9 +67,37 @@ function promptConventional(gitDiff: string): string {
             +  console.log('[INFO]', new Date().toISOString(), message);
             }
           </git_diff>
-          <classification>SMALL</classification>
           <commit_message>
             feat(logger): add timestamp to info logs
+          </commit_message>
+        </example>
+
+        <example>
+          <git_diff>
+            // Multiple files, new function and wiring
+            diff --git a/tools/prompting.py b/tools/prompting.py
+            index 1111111..2222222 100644
+            --- a/tools/prompting.py
+            +++ b/tools/prompting.py
+            @@ -1,0 +1,40 @@
+            +def prompt_commit_message(git_diff: string) -> string:
+            +    \"\"\"Generate a commit message prompt from a git diff.\"\"\"
+            +    ...
+
+            diff --git a/tests/test_prompting.py b/tests/test_prompting.py
+            index 3333333..4444444 100644
+            --- a/tests/test_prompting.py
+            +++ b/tests/test_prompting.py
+            @@ -1,0 +1,25 @@
+            +def test_prompt_commit_message():
+            +    ...
+          </git_diff>
+          <commit_message>
+            feat(prompting): add prompt_commit_message for git diff analysis
+
+            - Add helper to generate commit messages from git diffs following the project guidelines.
+            - Include initial implementation of \`prompt_commit_message\` with unit tests covering basic usage.
+            - Wire the helper into the commit flow so diff inputs produce structured prompts.
           </commit_message>
         </example>
       </examples>
@@ -84,7 +113,7 @@ function promptConventional(gitDiff: string): string {
         2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
         3. Then output ONLY the final commit message text, with no explanation.
         4. Do NOT wrap the commit message in quotes or code fences.
-        5. Always start with a Conventional Commits type prefix and capitalize the first letter after the prefix.
+        5. Always start with a Conventional Commits type prefix. Use lowercase for the first word after the prefix (except for proper nouns and acronyms), matching the style of the examples.
         6. Respect the required format based on size:
           - SMALL: single line only.
           - MEDIUM/LARGE:
@@ -127,6 +156,7 @@ function promptImperative(gitDiff: string): string {
           - You MAY use inline code formatting with single backticks, e.g. \`function_name\`, \`git diff\`.
           - Do NOT use multiline code fences (no \`\`\` blocks).
           - Keep language concise and concrete. Prefer what the change DOES over HOW it is implemented.
+          - End each bullet with a period for consistency with the project's existing history.
       </rules>
 
       <examples>
@@ -144,7 +174,6 @@ function promptImperative(gitDiff: string): string {
             }
           </git_diff>
 
-          <classification>SMALL</classification>
           <commit_message>
             Update info logger to include timestamp
           </commit_message>
@@ -171,7 +200,6 @@ function promptImperative(gitDiff: string): string {
             +    ...
           </git_diff>
 
-          <classification>MEDIUM</classification>
           <commit_message>
             Add prompt_commit_message function for git diff analysis
 
@@ -229,6 +257,10 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
         ${processedTemplate}
       </user_template>
 
+      <git_diff>
+        ${gitDiff}
+      </git_diff>
+
       <output_instructions>
         1. Follow the user's template style and format.
         2. Analyze the content and create a commit message that matches the template pattern.
@@ -254,6 +286,8 @@ function getRefinePrompt(params: { diff: string; currentMessage: string; adjustm
       `<adjustment>\n${params.adjustment}\n</adjustment>`,
     systemInstruction:
       "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. " +
-      "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
+      "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '. " +
+      "Preserve the original convention: if the current message starts with a Conventional Commits prefix (feat, fix, refactor, chore, docs, style, test, perf, ci, build), keep it; otherwise keep the imperative style. " +
+      "Output ONLY the revised commit message. No preamble, no explanation, no code fences, no surrounding quotes."
   };
 }

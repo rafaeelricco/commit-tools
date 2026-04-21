@@ -15,7 +15,7 @@ export {
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { spawn } from "node:child_process";
+import { execBin } from "@/infra/shell";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,19 +36,8 @@ type PushResult = {
   range: Maybe<PushRange>;
 };
 
-const execGit = (args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
-  new Promise((resolve, reject) => {
-    const proc = spawn("git", args, { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
-    proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-    proc.on("error", reject);
-    proc.on("close", (exitCode) => resolve({ stdout, stderr, exitCode: exitCode ?? 1 }));
-  });
-
 const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, string> =>
-  Future.attemptP(() => execGit(args)).chain(({ stdout, stderr, exitCode }) =>
+  execBin("git", args).chain(({ stdout, stderr, exitCode }) =>
     exitCode !== 0 ?
       Future.reject<Error, string>(new Error(stderr.trim() || stdout.trim() || fallbackMsg))
     : Future.resolve<Error, string>(stdout)
@@ -71,14 +60,13 @@ const getStagedDiff = (): Future<Error, string> =>
     : Future.reject<Error, string>(new Error("No staged changes found"))
   );
 
-const performCommit = (message: string): Future<Error, string> =>
-  Future.attemptP(async () => {
-    const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);
-    await writeFile(tmpPath, message, "utf-8");
-    const res = await execGit(["commit", "-F", tmpPath]);
-    await unlink(tmpPath).catch(() => {});
-    return res;
-  }).chain(({ stdout, stderr, exitCode }) =>
+const performCommit = (message: string): Future<Error, string> => {
+  const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);
+  return Future.bracket(
+    Future.attemptP(() => writeFile(tmpPath, message, "utf-8")),
+    () => Future.attemptP(() => unlink(tmpPath).catch(() => {})),
+    () => execBin("git", ["commit", "-F", tmpPath])
+  ).chain(({ stdout, stderr, exitCode }) =>
     exitCode !== 0 ?
       Future.reject<Error, string>(new Error(stderr.trim() || stdout.trim() || "Commit failed"))
     : Future.resolve<Error, string>(
@@ -91,11 +79,12 @@ const performCommit = (message: string): Future<Error, string> =>
           "\n"
       )
   );
+};
 
 const performPush = (branch?: string, publish = false, forceWithLease = false): Future<Error, PushResult> => {
   const args = publish && branch ? ["push", "--set-upstream", "origin", branch] : ["push"];
   if (forceWithLease) args.push("--force-with-lease");
-  return Future.attemptP(() => execGit(args)).chain(({ stdout, stderr, exitCode }) =>
+  return execBin("git", args).chain(({ stdout, stderr, exitCode }) =>
     exitCode !== 0 ?
       Future.reject<Error, PushResult>(new Error(stderr.trim() || stdout.trim() || "Push failed"))
     : Future.resolve<Error, PushResult>({
@@ -109,10 +98,10 @@ const getCurrentBranch = (): Future<Error, string> =>
   execGitChecked(["rev-parse", "--abbrev-ref", "HEAD"], "Failed to get current branch").map((s) => s.trim());
 
 const hasUpstream = (): Future<Error, boolean> =>
-  Future.attemptP(() => execGit(["rev-parse", "--abbrev-ref", "@{u}"])).map(({ exitCode }) => exitCode === 0);
+  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map(({ exitCode }) => exitCode === 0);
 
 const getUpstream = (): Future<Error, Maybe<string>> =>
-  Future.attemptP(() => execGit(["rev-parse", "--abbrev-ref", "@{u}"])).map(({ stdout, exitCode }) =>
+  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map(({ stdout, exitCode }) =>
     exitCode !== 0 ? Nothing<string>() : Just(stdout.trim())
   );
 

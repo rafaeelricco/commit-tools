@@ -1,6 +1,7 @@
 export { Commit };
 
 import * as p from "@clack/prompts";
+import * as pr from "@/infra/github/pr";
 import * as repo from "@/infra/git/repo";
 
 import { Future } from "@/libs/future";
@@ -92,12 +93,19 @@ class Commit {
       .chain((result) =>
         Future.concurrently<
           Error,
-          { commit: repo.CommitMetadata; localBranch: string; upstream: Maybe<string>; remoteUrl: string }
+          {
+            commit: repo.CommitMetadata;
+            localBranch: string;
+            upstream: Maybe<string>;
+            remoteUrl: string;
+            pr: pr.PrLookup;
+          }
         >({
           commit: repo.getCommitMetadata(),
           localBranch: repo.getCurrentBranch(),
           upstream: repo.getUpstream(),
-          remoteUrl: repo.getRemoteUrl()
+          remoteUrl: repo.getRemoteUrl(),
+          pr: pr.getOpenPullRequest()
         }).map((parts) => ({ ...parts, range: result.range }))
       )
       .map((metadata) => renderPushNote(metadata));

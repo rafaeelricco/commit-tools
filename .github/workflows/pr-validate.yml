@@ -37,6 +37,29 @@ jobs:
           GOOGLE_CLIENT_SECRET: pr-validation-not-a-real-secret
         run: pnpm run build
 
+  lint:
+    name: Cognitive complexity
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint (cognitive complexity)
+        run: pnpm run lint:ci
+
   publish-preview:
     name: Publish preview
     runs-on: ubuntu-latest

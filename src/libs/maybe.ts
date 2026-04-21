@@ -126,6 +126,5 @@ function mapMaybe<T, W>(xs: Array<T>, f: (v: T) => Maybe<W>): Array<W> {
   return r;
 }
 
-/* eslint-disable no-var */
 var CallableJust = Callable(Just) as typeof Just & typeof Just.new;
 var CallableNothing = Callable(Nothing) as typeof Nothing & typeof Nothing.new;

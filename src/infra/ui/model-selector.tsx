@@ -2,7 +2,7 @@ export { ModelSelector, type Model, type ModelSelectorProps };
 
 import * as React from "react";
 
-import { Box, Text, useInput, useApp } from "ink";
+import { Box, Text, useInput, useApp, type Key } from "ink";
 
 import chalk from "chalk";
 
@@ -64,19 +64,11 @@ const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
     return fuzzyMatch(q, m.id) || (m.description && fuzzyMatch(q, m.description));
   });
 
-  useInput((input, key) => {
+  const handleLifecycle = (key: Key): boolean => {
     if (key.escape) {
       onCancel();
       exit();
-      return;
-    }
-    if (key.upArrow) {
-      setSelectedIndex((prev) => Math.max(0, prev - 1));
-      return;
-    }
-    if (key.downArrow) {
-      setSelectedIndex((prev) => Math.min(filteredModels.length - 1, prev + 1));
-      return;
+      return true;
     }
     if (key.return) {
       const selectedModel = filteredModels[selectedIndex];
@@ -86,53 +78,75 @@ const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
         onCancel();
       }
       exit();
-      return;
+      return true;
     }
+    return false;
+  };
 
+  const handleNavigation = (key: Key): boolean => {
+    if (key.upArrow) {
+      setSelectedIndex((prev) => Math.max(0, prev - 1));
+      return true;
+    }
+    if (key.downArrow) {
+      setSelectedIndex((prev) => Math.min(filteredModels.length - 1, prev + 1));
+      return true;
+    }
+    return false;
+  };
+
+  const handleEdit = (input: string, key: Key): boolean => {
     // Option+Delete or Ctrl+W — delete word left
     if ((key.meta && key.backspace) || (key.ctrl && input === "w")) {
       const [next, pos] = deleteWordLeft(query, cursorOffset);
       setQuery(next);
       setCursorOffset(Math.max(0, pos));
-      return;
+      return true;
     }
-
     // Ctrl+U — delete to start of line
     if (key.ctrl && input === "u") {
       setQuery(query.slice(cursorOffset));
       setCursorOffset(0);
-      return;
+      return true;
     }
-
-    // Option+Left/Right — move cursor by word
-    if (key.meta && key.leftArrow) {
-      setCursorOffset(Math.max(0, wordBoundaryLeft(query, cursorOffset)));
-      return;
-    }
-    if (key.meta && key.rightArrow) {
-      setCursorOffset(Math.min(query.length, wordBoundaryRight(query, cursorOffset)));
-      return;
-    }
-
-    // Left/Right arrow - move cursor 1 char
-    if (key.leftArrow) {
-      setCursorOffset((prev) => Math.max(0, prev - 1));
-      return;
-    }
-    if (key.rightArrow) {
-      setCursorOffset((prev) => Math.min(query.length, prev + 1));
-      return;
-    }
-
     // Regular backspace — delete one char
     if (key.backspace || key.delete) {
       if (cursorOffset > 0) {
         setQuery(query.slice(0, cursorOffset - 1) + query.slice(cursorOffset));
         setCursorOffset((prev) => Math.max(0, prev - 1));
       }
-      return;
+      return true;
     }
+    return false;
+  };
 
+  const handleCursor = (key: Key): boolean => {
+    // Option+Left/Right — move cursor by word
+    if (key.meta && key.leftArrow) {
+      setCursorOffset(Math.max(0, wordBoundaryLeft(query, cursorOffset)));
+      return true;
+    }
+    if (key.meta && key.rightArrow) {
+      setCursorOffset(Math.min(query.length, wordBoundaryRight(query, cursorOffset)));
+      return true;
+    }
+    // Left/Right arrow — move cursor 1 char
+    if (key.leftArrow) {
+      setCursorOffset((prev) => Math.max(0, prev - 1));
+      return true;
+    }
+    if (key.rightArrow) {
+      setCursorOffset((prev) => Math.min(query.length, prev + 1));
+      return true;
+    }
+    return false;
+  };
+
+  useInput((input, key) => {
+    if (handleLifecycle(key)) return;
+    if (handleNavigation(key)) return;
+    if (handleEdit(input, key)) return;
+    if (handleCursor(key)) return;
     // Regular character input
     if (input && !key.ctrl && !key.meta) {
       setQuery(query.slice(0, cursorOffset) + input + query.slice(cursorOffset));

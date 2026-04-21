@@ -31,7 +31,6 @@ import { Maybe, Nothing, Just, Nullable } from "@/libs/maybe";
 import { Json, JsonObject } from "@/libs/json/types";
 
 // Infer the type from a encoder definition
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Infer<A extends Encoder<any>> = A extends Encoder<infer B> ? B : never;
 
 class Encoder<A> {

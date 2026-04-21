@@ -12,7 +12,9 @@
     "build": "tsup",
     "install:global": "npm link",
     "format": "npx prettier . --write",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:ci": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -30,11 +32,14 @@
     "@types/luxon": "^3.7.1",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
+    "eslint": "^9.39.4",
+    "eslint-plugin-sonarjs": "^4.0.3",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "react-devtools-core": "^7.0.1",
     "tsup": "^8",
-    "tsx": "^4"
+    "tsx": "^4",
+    "typescript-eslint": "^8.59.0"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -53,6 +58,5 @@
     "openai": "^6.25.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.4"
-  },
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
+  }
 }

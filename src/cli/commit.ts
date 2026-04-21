@@ -89,26 +89,26 @@ class Commit {
       : publish ? "Published successfully!"
       : "Pushed successfully!";
 
-    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease))
-      .chain((result) =>
-        Future.concurrently<
-          Error,
-          {
-            commit: repo.CommitMetadata;
-            localBranch: string;
-            upstream: Maybe<string>;
-            remoteUrl: string;
-            pr: pr.PrLookup;
-          }
-        >({
-          commit: repo.getCommitMetadata(),
-          localBranch: repo.getCurrentBranch(),
-          upstream: repo.getUpstream(),
-          remoteUrl: repo.getRemoteUrl(),
-          pr: pr.getOpenPullRequest()
-        }).map((parts) => ({ ...parts, range: result.range }))
-      )
-      .map((metadata) => renderPushNote(metadata));
+    return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).chain((result) =>
+      Future.concurrently<
+        Error,
+        {
+          commit: repo.CommitMetadata;
+          localBranch: string;
+          upstream: Maybe<string>;
+          remoteUrl: string;
+          pr: pr.PrLookup;
+        }
+      >({
+        commit: repo.getCommitMetadata(),
+        localBranch: repo.getCurrentBranch(),
+        upstream: repo.getUpstream(),
+        remoteUrl: repo.getRemoteUrl(),
+        pr: pr.getOpenPullRequest()
+      })
+        .map((parts) => renderPushNote({ ...parts, range: result.range }))
+        .chainRej<Error>(() => Future.resolve(undefined))
+    );
   }
 
   interact(diff: string, message: string): Future<Error, void> {

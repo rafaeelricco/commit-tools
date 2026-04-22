@@ -45,9 +45,9 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.87.0",
+    "@anthropic-ai/sdk": "0.90.0",
     "@clack/prompts": "^1.0.1",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "1.50.1",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "fluture": "^14.0.0",
@@ -55,7 +55,7 @@
     "ink": "^6.8.0",
     "luxon": "^3.7.2",
     "open": "^11.0.0",
-    "openai": "^6.25.0",
+    "openai": "6.34.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.4"
   }

@@ -4,7 +4,7 @@ import * as p from "@clack/prompts";
 
 import type { CommitMetadata, PushRange } from "@/infra/git/repo";
 import type { PrLookup } from "@/infra/github/pr";
-import { Just, type Maybe } from "@/libs/maybe";
+import type { Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
 type PushMetadata = {
@@ -33,20 +33,17 @@ const renderPrLine = (lookup: PrLookup): string[] => {
 };
 
 const renderCommitLines = (commit: Maybe<CommitMetadata>): string[] =>
-  // TODO: Why we check if it's a Just here and not in the caller?
-  commit instanceof Just ?
-    [
-      `commit   ${commit.value.short}  ${commit.value.subject}`,
-      `author   ${commit.value.authorName} <${commit.value.authorEmail}>`,
-      `date     ${formatDate(commit.value.date)}`
-    ]
-  : [];
+  commit.maybe<string[]>([], (value) => [
+    `commit   ${value.short}  ${value.subject}`,
+    `author   ${value.authorName} <${value.authorEmail}>`,
+    `date     ${formatDate(value.date)}`
+  ]);
 
 const renderPushNote = (m: PushMetadata): void => {
-  const branchLine = m.localBranch instanceof Just ? [`branch   ${m.localBranch.value}`] : [];
-  const baseLine = m.baseBranch instanceof Just ? [`base     ${m.baseBranch.value}`] : [];
-  const remoteLine = m.remoteUrl instanceof Just ? [`remote   ${m.remoteUrl.value}`] : [];
-  const rangeLine = m.range instanceof Just ? [`range    ${m.range.value.before}..${m.range.value.after}`] : [];
+  const branchLine = m.localBranch.maybe<string[]>([], (branch) => [`branch   ${branch}`]);
+  const baseLine = m.baseBranch.maybe<string[]>([], (base) => [`base     ${base}`]);
+  const remoteLine = m.remoteUrl.maybe<string[]>([], (url) => [`remote   ${url}`]);
+  const rangeLine = m.range.maybe<string[]>([], (range) => [`range    ${range.before}..${range.after}`]);
 
   const body = [
     ...renderCommitLines(m.commit),

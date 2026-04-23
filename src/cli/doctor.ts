@@ -6,7 +6,7 @@ import * as repo from "@/infra/git/repo";
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { Just, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
@@ -110,17 +110,9 @@ class Doctor {
   }
 
   private collectGitRows(): Future<Error, CheckRow[]> {
-    // TODO: We definetly need to remove these functions; If we need to do this complex thing, maybe the function signature needs to be changed to something more simple
-    const optional = <T>(f: Future<Error, T>): Future<Error, Maybe<T>> =>
-      f.map((v): Maybe<T> => Just(v)).chainRej((): Future<Error, Maybe<T>> => Future.resolve(Nothing<T>()));
-
-    // TODO: We definetly need to remove these functions; If we need to do this complex thing, maybe the function signature needs to be changed to something more simple
-    const recoverMaybe = <T>(f: Future<Error, Maybe<T>>): Future<Error, Maybe<T>> =>
-      f.chainRej((): Future<Error, Maybe<T>> => Future.resolve(Nothing<T>()));
-
     return Future.concurrently<Error, { branch: Maybe<string>; base: Maybe<string>; pr: pr.PrLookup }>({
-      branch: optional(repo.getCurrentBranch()),
-      base: recoverMaybe(repo.getBaseBranch()),
+      branch: repo.findCurrentBranch(),
+      base: repo.findBaseBranch(),
       pr: pr.getOpenPullRequest()
     }).map(({ branch, base, pr: prLookup }): CheckRow[] => [
       renderBranchRow(branch),

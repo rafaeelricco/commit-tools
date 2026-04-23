@@ -89,25 +89,6 @@ class Commit {
       : publish ? "Published successfully!"
       : "Pushed successfully!";
 
-    // TODO: We definetly need to remove these functions; If we need to do this complex thing, maybe the function signature needs to be changed to something more simple
-    // ====================================== //
-    const warnField = (label: string, err: Error): void => p.log.warn(color.yellow(`[${label}] ${err.message}`));
-
-    const optional = <T>(label: string, f: Future<Error, T>): Future<Error, Maybe<T>> =>
-      f
-        .map((v): Maybe<T> => Just(v))
-        .chainRej((err): Future<Error, Maybe<T>> => {
-          warnField(label, err);
-          return Future.resolve(Nothing<T>());
-        });
-
-    const recoverMaybe = <T>(label: string, f: Future<Error, Maybe<T>>): Future<Error, Maybe<T>> =>
-      f.chainRej((err): Future<Error, Maybe<T>> => {
-        warnField(label, err);
-        return Future.resolve(Nothing<T>());
-      });
-    // ====================================== //
-
     return loading(startMsg, endMsg, repo.performPush(branch, publish, forceWithLease)).chain((result) =>
       Future.concurrently<
         Error,
@@ -119,17 +100,12 @@ class Commit {
           pr: pr.PrLookup;
         }
       >({
-        commit: optional("commit", repo.getCommitMetadata()),
-        localBranch: optional("localBranch", repo.getCurrentBranch()),
-        baseBranch: recoverMaybe("baseBranch", repo.getBaseBranch()),
-        remoteUrl: optional("remoteUrl", repo.getTrackingRemoteUrl()),
+        commit: repo.findCommitMetadata(),
+        localBranch: repo.findCurrentBranch(),
+        baseBranch: repo.findBaseBranch(),
+        remoteUrl: repo.findTrackingRemoteUrl(),
         pr: pr.getOpenPullRequest()
-      })
-        .map((parts) => renderPushNote({ ...parts, range: result.range }))
-        .chainRej<Error>((err) => {
-          p.log.warn(color.yellow(`Could not render commit metadata: ${err.message}`));
-          return Future.resolve(undefined);
-        })
+      }).map((parts) => renderPushNote({ ...parts, range: result.range }))
     );
   }
 

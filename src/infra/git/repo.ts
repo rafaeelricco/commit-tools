@@ -4,12 +4,16 @@ export {
   performCommit,
   performPush,
   getCurrentBranch,
+  findCurrentBranch,
   hasUpstream,
   getUpstream,
   getBaseBranch,
+  findBaseBranch,
   getCommitMetadata,
+  findCommitMetadata,
   getRemoteUrl,
   getTrackingRemoteUrl,
+  findTrackingRemoteUrl,
   type CommitMetadata,
   type PushResult,
   type PushRange
@@ -108,6 +112,11 @@ const performPush = (branch?: string, publish = false, forceWithLease = false): 
 const getCurrentBranch = (): Future<Error, string> =>
   execGitChecked(["rev-parse", "--abbrev-ref", "HEAD"], "Failed to get current branch").map((s) => s.trim());
 
+const findCurrentBranch = (): Future<Error, Maybe<string>> =>
+  getCurrentBranch()
+    .map<Maybe<string>>((branch) => Just<string>(branch))
+    .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
+
 const hasUpstream = (): Future<Error, boolean> =>
   execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map(({ exitCode }) => exitCode === 0);
 
@@ -165,6 +174,9 @@ const getBaseBranch = (): Future<Error, Maybe<string>> =>
     )
   );
 
+const findBaseBranch = (): Future<Error, Maybe<string>> =>
+  getBaseBranch().chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
+
 const getRemoteUrl = (remote: string = "origin"): Future<Error, string> =>
   execGitChecked(["remote", "get-url", remote], `Failed to read remote '${remote}' url`).map((s) => s.trim());
 
@@ -179,6 +191,11 @@ const getTrackingRemoteUrl = (): Future<Error, string> =>
     return getRemoteUrl(remote instanceof Just ? remote.value : "origin");
   });
 
+const findTrackingRemoteUrl = (): Future<Error, Maybe<string>> =>
+  getTrackingRemoteUrl()
+    .map<Maybe<string>>((url) => Just<string>(url))
+    .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
+
 const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> =>
   execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain(
     (stdout) => {
@@ -189,3 +206,8 @@ const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> 
         : Future.reject<Error, CommitMetadata>(new Error("Malformed git log output"));
     }
   );
+
+const findCommitMetadata = (ref: string = "HEAD"): Future<Error, Maybe<CommitMetadata>> =>
+  getCommitMetadata(ref)
+    .map<Maybe<CommitMetadata>>((metadata) => Just<CommitMetadata>(metadata))
+    .chainRej(() => Future.resolve<Error, Maybe<CommitMetadata>>(Nothing<CommitMetadata>()));

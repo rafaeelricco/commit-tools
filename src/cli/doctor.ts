@@ -1,8 +1,13 @@
 export { Doctor };
 
+import * as pr from "@/infra/github/pr";
+import * as repo from "@/infra/git/repo";
+
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
 
@@ -20,10 +25,12 @@ class Doctor {
 
   run(): Future<Error, void> {
     return this.checkOAuthCredentials().chain((oauthRow) =>
-      this.checkConfig().map((configRows) => {
-        const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows];
-        this.renderTable(rows);
-      })
+      this.checkConfig().chain((configRows) =>
+        this.checkGitContext().map((gitRows) => {
+          const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows, ...gitRows];
+          this.renderTable(rows);
+        })
+      )
     );
   }
 
@@ -67,7 +74,7 @@ class Doctor {
           const rows: CheckRow[] = [row];
           const ai = config.ai;
 
-          rows.push(["Provider", color.green(ai.provider), `Model: ${ai.model}`]);
+          rows.push(["Provider", color.green(ai.provider), renderModelInfo(ai)]);
 
           const authMethod = ai.auth_method.type;
 
@@ -92,6 +99,36 @@ class Doctor {
     });
   }
 
+  private checkGitContext(): Future<Error, CheckRow[]> {
+    return repo
+      .checkIsGitRepo()
+      .chain((): Future<Error, CheckRow[]> => this.collectGitRows())
+      .chainRej(
+        (): Future<Error, CheckRow[]> =>
+          Future.resolve([["Git Repository", color.yellow("Outside"), "Not a git repository"]])
+      );
+  }
+
+  private collectGitRows(): Future<Error, CheckRow[]> {
+    // TODO: We definetly need to remove these functions; If we need to do this complex thing, maybe the function signature needs to be changed to something more simple
+    const optional = <T>(f: Future<Error, T>): Future<Error, Maybe<T>> =>
+      f.map((v): Maybe<T> => Just(v)).chainRej((): Future<Error, Maybe<T>> => Future.resolve(Nothing<T>()));
+
+    // TODO: We definetly need to remove these functions; If we need to do this complex thing, maybe the function signature needs to be changed to something more simple
+    const recoverMaybe = <T>(f: Future<Error, Maybe<T>>): Future<Error, Maybe<T>> =>
+      f.chainRej((): Future<Error, Maybe<T>> => Future.resolve(Nothing<T>()));
+
+    return Future.concurrently<Error, { branch: Maybe<string>; base: Maybe<string>; pr: pr.PrLookup }>({
+      branch: optional(repo.getCurrentBranch()),
+      base: recoverMaybe(repo.getBaseBranch()),
+      pr: pr.getOpenPullRequest()
+    }).map(({ branch, base, pr: prLookup }): CheckRow[] => [
+      renderBranchRow(branch),
+      renderBaseRow(base),
+      renderPrRow(prLookup)
+    ]);
+  }
+
   private renderTable(rows: CheckRow[]): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
@@ -111,6 +148,38 @@ class Doctor {
       process.stdout.write(color.green("System is ready to generate commits!\n\n"));
     }
   }
+}
+
+function renderBranchRow(branch: Maybe<string>): CheckRow {
+  return branch instanceof Just ?
+      ["Branch", color.green("Current"), branch.value]
+    : ["Branch", color.yellow("Unknown"), "Could not read current branch"];
+}
+
+function renderBaseRow(base: Maybe<string>): CheckRow {
+  return base instanceof Just ?
+      ["Base", color.green("Detected"), base.value]
+    : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
+}
+
+function renderPrRow(lookup: pr.PrLookup): CheckRow {
+  switch (lookup.type) {
+    case "found":
+      return ["Pull Request", color.green("Open"), `#${lookup.pr.number} ${lookup.pr.url}`];
+    case "not-found":
+      return ["Pull Request", color.yellow("None"), "No open PR for this branch"];
+    case "unauthenticated":
+      return ["Pull Request", color.yellow("Auth"), "Run 'gh auth login' to enable PR lookup"];
+    case "unavailable":
+      return ["Pull Request", color.gray("Skipped"), "gh not installed or remote is not GitHub"];
+    default:
+      return absurd(lookup, "PrLookup");
+  }
+}
+
+function renderModelInfo(ai: ProviderConfig): string {
+  const base = `${ai.model}`;
+  return ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
 }
 
 function authMethodLabel(authMethod: AuthMethod): string {

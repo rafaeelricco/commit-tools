@@ -6,6 +6,7 @@ export {
   getCurrentBranch,
   hasUpstream,
   getUpstream,
+  getBaseBranch,
   getCommitMetadata,
   getRemoteUrl,
   getTrackingRemoteUrl,
@@ -16,6 +17,8 @@ export {
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { type Result, Success, Failure } from "@/libs/result";
+import { absurd } from "@/libs/types";
 import { execBin } from "@/infra/shell";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,6 +39,13 @@ type PushResult = {
   output: string;
   range: Maybe<PushRange>;
 };
+
+type BaseLookupError =
+  | { type: "reflog-empty" }
+  | { type: "reflog-not-creation"; subject: string }
+  | { type: "reflog-cmd-failed"; stderr: string };
+
+const CREATED_FROM_RE = /^branch: Created from (\S+)$/;
 
 const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, string> =>
   execBin("git", args).chain(({ stdout, stderr, exitCode }) =>
@@ -106,6 +116,55 @@ const getUpstream = (): Future<Error, Maybe<string>> =>
     exitCode !== 0 ? Nothing<string>() : Just(stdout.trim())
   );
 
+const oldestReflogSubject = (stdout: string): Result<BaseLookupError, string> => {
+  const oldest = stdout.split("\n").filter(Boolean).at(-1);
+  return oldest ? Success(oldest) : Failure({ type: "reflog-empty" });
+};
+
+const parseCreatedFrom = (subject: string): Result<BaseLookupError, string> => {
+  const source = subject.match(CREATED_FROM_RE)?.[1];
+  return source && source !== "HEAD" ? Success(source) : Failure({ type: "reflog-not-creation", subject });
+};
+
+const normalizeBranchRef = (ref: string): string => ref.replace(/^refs\/heads\//, "");
+
+const parseBaseFromReflog = (stdout: string): Result<BaseLookupError, string> =>
+  oldestReflogSubject(stdout).chain(parseCreatedFrom).map(normalizeBranchRef);
+
+const getBaseFromReflog = (branch: string): Future<Error, Result<BaseLookupError, string>> =>
+  execBin("git", ["log", "-g", "--format=%gs", branch]).map(({ stdout, stderr, exitCode }) =>
+    // TODO: exitCode !== 0; why we need this? is there something we could move to handle inside some custom helper function like execGitChecked?
+    exitCode !== 0 ?
+      Failure<BaseLookupError, string>({ type: "reflog-cmd-failed", stderr: stderr.trim() })
+    : parseBaseFromReflog(stdout)
+  );
+
+const getDefaultRemoteBranch = (): Future<Error, Maybe<string>> =>
+  execBin("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).map(({ stdout, exitCode }) =>
+    // TODO: The same
+    exitCode !== 0 ? Nothing<string>() : Just(stdout.trim().replace(/^origin\//, ""))
+  );
+
+const getBaseBranch = (): Future<Error, Maybe<string>> =>
+  getCurrentBranch().chain((branch) =>
+    getBaseFromReflog(branch).chain((result) =>
+      result.either(
+        (err) => {
+          switch (err.type) {
+            case "reflog-empty":
+            case "reflog-not-creation":
+              return getDefaultRemoteBranch();
+            case "reflog-cmd-failed":
+              return Future.reject<Error, Maybe<string>>(new Error(`git reflog failed: ${err.stderr}`));
+            default:
+              return absurd(err, "BaseLookupError");
+          }
+        },
+        (base) => Future.resolve<Error, Maybe<string>>(Just(base))
+      )
+    )
+  );
+
 const getRemoteUrl = (remote: string = "origin"): Future<Error, string> =>
   execGitChecked(["remote", "get-url", remote], `Failed to read remote '${remote}' url`).map((s) => s.trim());
 
@@ -124,6 +183,7 @@ const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> 
   execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain(
     (stdout) => {
       const [hash, short, subject, authorName, authorEmail, iso] = stdout.split("\n");
+      // TODO: This is specially hard to understand and maintain, consider using a more robust serialization format in the future (e.g. JSON output from git log with a custom format)
       return hash && short && subject !== undefined && authorName !== undefined && authorEmail !== undefined && iso ?
           Future.resolve<Error, CommitMetadata>({ hash, short, subject, authorName, authorEmail, date: new Date(iso) })
         : Future.reject<Error, CommitMetadata>(new Error("Malformed git log output"));

@@ -1,9 +1,9 @@
 export { Setup };
 
 import * as p from "@clack/prompts";
-import type { Option } from "@clack/prompts";
 
 import { Future } from "@/libs/future";
+import { type Option } from "@clack/prompts";
 import { saveConfig } from "@/infra/storage/config";
 import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { performOAuthFlow, validateOAuthTokens } from "@/infra/auth/google";
@@ -13,6 +13,7 @@ import { Just, Nothing } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
 import { fetchModels } from "@/domain/commit/models";
 import { selectModelInteractively } from "@/infra/ui/model-picker";
+import { selectEffortForProvider, seedProviderConfig } from "@/domain/llm/effort";
 
 import color from "picocolors";
 
@@ -94,13 +95,9 @@ class Setup {
     }
   }
 
-  private buildConfig(authMethod: ProviderConfig["auth_method"], model: string): Config {
+  private buildConfig(ai: ProviderConfig): Config {
     return {
-      ai: {
-        provider: this.preferences.provider,
-        model,
-        auth_method: authMethod
-      },
+      ai,
       commit_convention: this.preferences.convention,
       custom_template: this.preferences.customTemplate ? Just(this.preferences.customTemplate) : Nothing()
     };
@@ -161,7 +158,8 @@ class Setup {
       fetchModels(this.preferences.provider, authMethod)
     )
       .chain((models) => selectModelInteractively(models))
-      .chain((modelId) => saveConfig(this.buildConfig(authMethod, modelId)))
+      .chain((modelId) => selectEffortForProvider(seedProviderConfig(this.preferences.provider, modelId, authMethod)))
+      .chain((ai) => saveConfig(this.buildConfig(ai)))
       .map(() => {
         p.outro(color.green("Setup complete!"));
       })

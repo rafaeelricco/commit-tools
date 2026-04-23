@@ -13,7 +13,7 @@ const finalizeText = (raw: string | null | undefined): Future<Error, string> => 
 type TextBlock = { type: "text"; text: string };
 type AnthropicContent = Array<{ type: string; text?: string }>;
 
-type GeminiSDKLike = { response: { text: () => string | null | undefined } };
+type GeminiSDKLike = { text?: string | null | undefined };
 type GeminiRESTLike = {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
 };
@@ -54,9 +54,12 @@ const extractOpenAIStreamText = (raw: OpenAIStreamLike): string => {
 const extractResponse = (raw: RawResponse): Future<Error, string> => {
   switch (raw.provider) {
     case "gemini":
+      // TODO: THIS NEEDS TO BE REVIEWED:
+      // 1. Why do we have two different response shapes for Gemini? SDK vs REST? We just need to have one.
+      // 2. Why we have two?
       switch (raw.source) {
         case "sdk":
-          return finalizeText(raw.value.response.text());
+          return finalizeText(raw.value.text);
         case "rest":
           return finalizeText(raw.value.candidates?.[0]?.content?.parts?.[0]?.text);
         default:
@@ -65,6 +68,9 @@ const extractResponse = (raw: RawResponse): Future<Error, string> => {
     case "anthropic":
       return finalizeText(extractAnthropicText(raw.value.content));
     case "openai":
+      // TODO: THIS NEEDS TO BE REVIEWED:
+      // 1. Why do we have two different response shapes for OpenAI? What means "direct" vs "stream"? Can't we unify this in the infra layer and have just one shape here? We just need to have one.
+      // 2. Why we have two? the answer is the same as above, only one response shape is needed.
       switch (raw.source) {
         case "direct":
           return finalizeText(raw.value.output_text);

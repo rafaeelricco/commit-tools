@@ -9,10 +9,16 @@ import { execBin } from "@/infra/shell";
 
 type PullRequest = { url: string; number: number };
 
-type PrLookup = { type: "found"; pr: PullRequest } | { type: "unauthenticated" } | { type: "unavailable" };
+type PrLookup =
+  | { type: "found"; pr: PullRequest }
+  | { type: "not-found" }
+  | { type: "unauthenticated" }
+  | { type: "unavailable" };
 
+// TODO: This looks like a "magical number", we need to think more about this
 const GITHUB_REPO_RE = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/;
 const GH_UNAUTH_RE = /not logged into|gh auth login|authentication required/i;
+const GH_NOT_FOUND_RE = /no pull requests? found/i;
 
 const parseGithubRepo = (url: string): Maybe<string> => {
   const m = url.match(GITHUB_REPO_RE);
@@ -31,7 +37,9 @@ const parsePrJson = (stdout: string): PrLookup =>
   );
 
 const classifyFailure = (stderr: string): PrLookup =>
-  GH_UNAUTH_RE.test(stderr) ? { type: "unauthenticated" } : { type: "unavailable" };
+  GH_UNAUTH_RE.test(stderr) ? { type: "unauthenticated" }
+  : GH_NOT_FOUND_RE.test(stderr) ? { type: "not-found" }
+  : { type: "unavailable" };
 
 const getOpenPullRequest = (): Future<Error, PrLookup> =>
   Future.both(repo.getTrackingRemoteUrl(), repo.getCurrentBranch())

@@ -31,6 +31,20 @@ const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
     )
   );
 
+// TODO: WHY?????
+const withAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
+  switch (ai.provider) {
+    case "openai":
+      return { provider: "openai", model: ai.model, auth_method, effort: ai.effort };
+    case "anthropic":
+      return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
+    case "gemini":
+      return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
+    default:
+      return absurd(ai, "ProviderConfig");
+  }
+};
+
 const resolveProvider: ResolveProvider = (config) => {
   const { ai } = config;
 
@@ -40,18 +54,14 @@ const resolveProvider: ResolveProvider = (config) => {
       return Future.resolve(ai);
 
     case "google_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "google_oauth", content: tokens }
-      }));
+      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) =>
+        withAuthMethod(ai, { type: "google_oauth", content: tokens })
+      );
 
     case "openai_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "openai_oauth", content: tokens }
-      }));
+      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) =>
+        withAuthMethod(ai, { type: "openai_oauth", content: tokens })
+      );
 
     default:
       return absurd(ai.auth_method, "AuthMethod");

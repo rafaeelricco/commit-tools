@@ -8,10 +8,10 @@ import { Just, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
 type PushMetadata = {
-  commit: CommitMetadata;
-  localBranch: string;
-  upstream: Maybe<string>;
-  remoteUrl: string;
+  commit: Maybe<CommitMetadata>;
+  localBranch: Maybe<string>;
+  baseBranch: Maybe<string>;
+  remoteUrl: Maybe<string>;
   range: Maybe<PushRange>;
   pr: PrLookup;
 };
@@ -24,6 +24,7 @@ const renderPrLine = (lookup: PrLookup): string[] => {
       return [`pr       #${lookup.pr.number} ${lookup.pr.url}`];
     case "unauthenticated":
       return [`pr       Tip: run 'gh auth login' to show open PR in the current branch...`];
+    case "not-found":
     case "unavailable":
       return [];
     default:
@@ -31,21 +32,32 @@ const renderPrLine = (lookup: PrLookup): string[] => {
   }
 };
 
-const renderPushNote = (m: PushMetadata): void => {
-  const branchLine =
-    m.upstream instanceof Just ? `branch   ${m.localBranch} → ${m.upstream.value}` : `branch   ${m.localBranch}`;
+const renderCommitLines = (commit: Maybe<CommitMetadata>): string[] =>
+  // TODO: Why we check if it's a Just here and not in the caller?
+  commit instanceof Just ?
+    [
+      `commit   ${commit.value.short}  ${commit.value.subject}`,
+      `author   ${commit.value.authorName} <${commit.value.authorEmail}>`,
+      `date     ${formatDate(commit.value.date)}`
+    ]
+  : [];
 
+const renderPushNote = (m: PushMetadata): void => {
+  const branchLine = m.localBranch instanceof Just ? [`branch   ${m.localBranch.value}`] : [];
+  const baseLine = m.baseBranch instanceof Just ? [`base     ${m.baseBranch.value}`] : [];
+  const remoteLine = m.remoteUrl instanceof Just ? [`remote   ${m.remoteUrl.value}`] : [];
   const rangeLine = m.range instanceof Just ? [`range    ${m.range.value.before}..${m.range.value.after}`] : [];
 
   const body = [
-    `commit   ${m.commit.short}  ${m.commit.subject}`,
-    `author   ${m.commit.authorName} <${m.commit.authorEmail}>`,
-    `date     ${formatDate(m.commit.date)}`,
-    branchLine,
-    `remote   ${m.remoteUrl}`,
+    ...renderCommitLines(m.commit),
+    ...branchLine,
+    ...baseLine,
+    ...remoteLine,
     ...rangeLine,
     ...renderPrLine(m.pr)
   ].join("\n");
+
+  if (!body) return;
 
   p.note(body, "Pushed");
 };

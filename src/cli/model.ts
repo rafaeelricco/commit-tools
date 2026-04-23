@@ -6,6 +6,7 @@ import { Future } from "@/libs/future";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { loadConfig, saveConfig } from "@/infra/storage/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
+import { selectEffortForProvider, withModel } from "@/domain/llm/effort";
 import { fetchModels } from "@/domain/commit/models";
 import { selectModelInteractively } from "@/infra/ui/model-picker";
 import { loading } from "@/infra/ui/spinner";
@@ -35,15 +36,9 @@ class ModelCommand {
       fetchModels(this.providerConfig.provider, this.providerConfig.auth_method)
     )
       .chain((models) => selectModelInteractively(models))
-      .chain((modelId) =>
-        saveConfig({
-          ...this.config,
-          ai: { ...this.config.ai, model: modelId }
-        })
-      )
-      .map(() => {
-        p.outro(color.green("Model updated successfully!"));
-      })
+      .chain((modelId) => selectEffortForProvider(withModel(this.config.ai, modelId)))
+      .chain((ai) => saveConfig({ ...this.config, ai }))
+      .map(() => p.outro(color.green("Model updated successfully!")))
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;

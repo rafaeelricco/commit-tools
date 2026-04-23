@@ -5,7 +5,7 @@ import * as Decoder from "@/libs/json/decoder";
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { execBin } from "@/infra/shell";
+import { execBin, type CommandFailure } from "@/infra/shell";
 
 type PullRequest = { url: string; number: number };
 
@@ -36,18 +36,24 @@ const parsePrJson = (stdout: string): PrLookup =>
     (pr): PrLookup => ({ type: "found", pr })
   );
 
-const classifyFailure = (stderr: string): PrLookup =>
-  GH_UNAUTH_RE.test(stderr) ? { type: "unauthenticated" }
-  : GH_NOT_FOUND_RE.test(stderr) ? { type: "not-found" }
+const commandFailureText = (failure: CommandFailure): string =>
+  failure.output.stderr.trim() || failure.output.stdout.trim() || failure.error.message;
+
+const classifyFailure = (failure: CommandFailure): PrLookup => {
+  return GH_UNAUTH_RE.test(commandFailureText(failure)) 
+  ? { type: "unauthenticated" }
+  : GH_NOT_FOUND_RE.test(commandFailureText(failure)) 
+  ? { type: "not-found" }
   : { type: "unavailable" };
+};
 
 const getOpenPullRequest = (): Future<Error, PrLookup> =>
   Future.both(repo.getTrackingRemoteUrl(), repo.getCurrentBranch())
     .chain(([remoteUrl, branch]) => {
       const slug = parseGithubRepo(remoteUrl);
       return slug instanceof Just ?
-          execBin("gh", ["pr", "view", branch, "-R", slug.value, "--json", "url,number"]).map(
-            ({ stdout, stderr, exitCode }) => (exitCode !== 0 ? classifyFailure(stderr) : parsePrJson(stdout))
+          execBin("gh", ["pr", "view", branch, "-R", slug.value, "--json", "url,number"]).map((result) =>
+            result.either(classifyFailure, ({ stdout }) => parsePrJson(stdout))
           )
         : Future.resolve<Error, PrLookup>({ type: "unavailable" });
     })

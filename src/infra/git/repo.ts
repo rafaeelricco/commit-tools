@@ -23,7 +23,7 @@ import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Result, Success, Failure } from "@/libs/result";
 import { absurd } from "@/libs/types";
-import { execBin } from "@/infra/shell";
+import { execBin, type CommandFailure } from "@/infra/shell";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,16 +47,29 @@ type PushResult = {
 type BaseLookupError =
   | { type: "reflog-empty" }
   | { type: "reflog-not-creation"; subject: string }
-  | { type: "reflog-cmd-failed"; stderr: string };
+  | { type: "reflog-cmd-failed"; message: string };
 
 const CREATED_FROM_RE = /^branch: Created from (\S+)$/;
 
+const commandFailureMessage = (failure: CommandFailure, fallbackMsg: string): string =>
+  failure.output.stderr.trim() || failure.output.stdout.trim() || `${failure.error.message}: ${fallbackMsg}`;
+
 const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, string> =>
-  execBin("git", args).chain(({ stdout, stderr, exitCode }) =>
-    exitCode !== 0 ?
-      Future.reject<Error, string>(new Error(stderr.trim() || stdout.trim() || fallbackMsg))
-    : Future.resolve<Error, string>(stdout)
+  execBin("git", args).chain((result) =>
+    result.either(
+      (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, fallbackMsg))),
+      ({ stdout }) => Future.resolve<Error, string>(stdout)
+    )
   );
+
+const formatCommitOutput = (stdout: string): string =>
+  "\n" +
+  stdout
+    .split("\n")
+    .filter((line) => !line.startsWith("["))
+    .join("\n")
+    .trim() +
+  "\n";
 
 const parsePushRange = (output: string): Maybe<PushRange> => {
   const m = output.match(/([0-9a-f]{7,40})\.\.([0-9a-f]{7,40})/);
@@ -81,31 +94,26 @@ const performCommit = (message: string): Future<Error, string> => {
     Future.attemptP(() => writeFile(tmpPath, message, "utf-8")),
     () => Future.attemptP(() => unlink(tmpPath).catch(() => {})),
     () => execBin("git", ["commit", "-F", tmpPath])
-  ).chain(({ stdout, stderr, exitCode }) =>
-    exitCode !== 0 ?
-      Future.reject<Error, string>(new Error(stderr.trim() || stdout.trim() || "Commit failed"))
-    : Future.resolve<Error, string>(
-        "\n" +
-          stdout
-            .split("\n")
-            .filter((line) => !line.startsWith("["))
-            .join("\n")
-            .trim() +
-          "\n"
-      )
+  ).chain((result) =>
+    result.either(
+      (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, "Commit failed"))),
+      ({ stdout }) => Future.resolve<Error, string>(formatCommitOutput(stdout))
+    )
   );
 };
 
 const performPush = (branch?: string, publish = false, forceWithLease = false): Future<Error, PushResult> => {
   const args = publish && branch ? ["push", "--set-upstream", "origin", branch] : ["push"];
   if (forceWithLease) args.push("--force-with-lease");
-  return execBin("git", args).chain(({ stdout, stderr, exitCode }) =>
-    exitCode !== 0 ?
-      Future.reject<Error, PushResult>(new Error(stderr.trim() || stdout.trim() || "Push failed"))
-    : Future.resolve<Error, PushResult>({
-        output: stdout + stderr,
-        range: parsePushRange(stdout + "\n" + stderr)
-      })
+  return execBin("git", args).chain((result) =>
+    result.either(
+      (failure) => Future.reject<Error, PushResult>(new Error(commandFailureMessage(failure, "Push failed"))),
+      ({ stdout, stderr }) =>
+        Future.resolve<Error, PushResult>({
+          output: stdout + stderr,
+          range: parsePushRange(stdout + "\n" + stderr)
+        })
+    )
   );
 };
 
@@ -118,11 +126,11 @@ const findCurrentBranch = (): Future<Error, Maybe<string>> =>
     .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
 const hasUpstream = (): Future<Error, boolean> =>
-  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map(({ exitCode }) => exitCode === 0);
+  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map((result) => result.either(() => false, () => true));
 
 const getUpstream = (): Future<Error, Maybe<string>> =>
-  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map(({ stdout, exitCode }) =>
-    exitCode !== 0 ? Nothing<string>() : Just(stdout.trim())
+  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map((result) =>
+    result.either(() => Nothing<string>(), ({ stdout }) => Just(stdout.trim()))
   );
 
 const oldestReflogSubject = (stdout: string): Result<BaseLookupError, string> => {
@@ -141,17 +149,23 @@ const parseBaseFromReflog = (stdout: string): Result<BaseLookupError, string> =>
   oldestReflogSubject(stdout).chain(parseCreatedFrom).map(normalizeBranchRef);
 
 const getBaseFromReflog = (branch: string): Future<Error, Result<BaseLookupError, string>> =>
-  execBin("git", ["log", "-g", "--format=%gs", branch]).map(({ stdout, stderr, exitCode }) =>
-    // TODO: exitCode !== 0; why we need this? is there something we could move to handle inside some custom helper function like execGitChecked?
-    exitCode !== 0 ?
-      Failure<BaseLookupError, string>({ type: "reflog-cmd-failed", stderr: stderr.trim() })
-    : parseBaseFromReflog(stdout)
+  execBin("git", ["log", "-g", "--format=%gs", branch]).map((result) =>
+    result.either(
+      (failure) =>
+        Failure<BaseLookupError, string>({
+          type: "reflog-cmd-failed",
+          message: commandFailureMessage(failure, "Failed to read branch reflog")
+        }),
+      ({ stdout }) => parseBaseFromReflog(stdout)
+    )
   );
 
 const getDefaultRemoteBranch = (): Future<Error, Maybe<string>> =>
-  execBin("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).map(({ stdout, exitCode }) =>
-    // TODO: The same
-    exitCode !== 0 ? Nothing<string>() : Just(stdout.trim().replace(/^origin\//, ""))
+  execBin("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).map((result) =>
+    result.either(
+      () => Nothing<string>(),
+      ({ stdout }) => Just(stdout.trim().replace(/^origin\//, ""))
+    )
   );
 
 const getBaseBranch = (): Future<Error, Maybe<string>> =>
@@ -164,7 +178,7 @@ const getBaseBranch = (): Future<Error, Maybe<string>> =>
             case "reflog-not-creation":
               return getDefaultRemoteBranch();
             case "reflog-cmd-failed":
-              return Future.reject<Error, Maybe<string>>(new Error(`git reflog failed: ${err.stderr}`));
+              return Future.reject<Error, Maybe<string>>(new Error(`git reflog failed: ${err.message}`));
             default:
               return absurd(err, "BaseLookupError");
           }

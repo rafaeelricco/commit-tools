@@ -1,20 +1,30 @@
-export { execBin, type ExecResult };
+export { execBin, type CommandOutput, type CommandFailure, type ExecResult };
 
 import { Future } from "@/libs/future";
+import { Failure, type Result, Success } from "@/libs/result";
 import { spawn } from "node:child_process";
 
-type ExecResult = { stdout: string; stderr: string; exitCode: number };
+type CommandOutput = Readonly<{ stdout: string; stderr: string }>;
+type CommandFailure = Readonly<{ output: CommandOutput; error: Error }>;
+type ExecResult = Result<CommandFailure, CommandOutput>;
+
+const commandResult = (output: CommandOutput, exitCode: number | null, signal: NodeJS.Signals | null): ExecResult =>
+  exitCode === 0 ?
+    Success<CommandFailure, CommandOutput>(output)
+  : Failure<CommandFailure, CommandOutput>({ output, error: new Error(`Command failed with exit code ${exitCode}${signal ? ` and signal ${signal}` : ""}`) });
 
 const execBin = (bin: string, args: string[]): Future<Error, ExecResult> =>
   Future.create<Error, ExecResult>((reject, resolve) => {
     const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    
     let stdout = "";
     let stderr = "";
+
     proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
     proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-    proc.on("error", (err) => reject(err instanceof Error ? err : new Error(String(err))));
-    proc.on("close", (exitCode) => resolve({ stdout, stderr, exitCode: exitCode ?? 1 }));
-    return () => {
-      proc.kill();
-    };
+    
+    proc.on("error", (err) => reject(new Error(`Failed to start process: ${err.message}`)));
+    proc.on("close", (exitCode, signal) => resolve(commandResult({ stdout, stderr }, exitCode, signal)));
+
+    return () => proc.kill();
   });

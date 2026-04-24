@@ -71,46 +71,13 @@ const schema_AuthMethod = s.discriminatedUnion([
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 
-// TODO: omg, what is that?
-// Effort value arrays — the one runtime listing the UI and schema need.
-//
-// Provider notes on "why the hand-written list":
-// - OpenAI's `ReasoningEffort` and Anthropic's `OutputConfig.effort` are both
-//   TypeScript string-union types. TS types don't exist at runtime, so we
-//   CAN'T iterate them — the values must be enumerated. Safety comes from
-//   two complementary compile-time checks:
-//     1. `satisfies readonly NonNullable<SDK>[]`  → each element is valid.
-//     2. `assertExhaustive<...>()`                → SDK has no extra value.
-//   If a pinned SDK adds or removes a value, the build breaks immediately.
-// - Gemini's `ThinkingLevel` IS a real (runtime) enum, so we derive the
-//   array directly via `Object.values`. No hand-written list at all.
-const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<
-  OpenAIPkg.Reasoning["effort"]
->[];
-const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<
-  AnthropicPkg.OutputConfig["effort"]
->[];
-
-const isNamedThinkingLevel = (
-  v: ThinkingLevel
-): v is Exclude<ThinkingLevel, typeof ThinkingLevel.THINKING_LEVEL_UNSPECIFIED> =>
-  v !== ThinkingLevel.THINKING_LEVEL_UNSPECIFIED;
-
-const GEMINI_EFFORTS = Object.values(ThinkingLevel).filter(isNamedThinkingLevel);
+const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
+const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<AnthropicPkg.OutputConfig["effort"]>[];
+const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
 
 type OpenAIEffort = (typeof OPENAI_EFFORTS)[number];
 type AnthropicEffort = (typeof ANTHROPIC_EFFORTS)[number];
 type GeminiEffort = (typeof GEMINI_EFFORTS)[number];
-
-// Reverse-direction guard: every SDK-declared value must appear in our array.
-// `satisfies` catches "array has invalid value"; this catches "SDK added a
-// value we haven't listed yet". Together they lock the two sides together.
-type AssertEmpty<T> = [T] extends [never] ? true : ["Missing SDK effort values", T];
-const _openaiCoversSdk: AssertEmpty<Exclude<NonNullable<OpenAIPkg.Reasoning["effort"]>, OpenAIEffort>> = true;
-const _anthropicCoversSdk: AssertEmpty<Exclude<NonNullable<AnthropicPkg.OutputConfig["effort"]>, AnthropicEffort>> =
-  true;
-void _openaiCoversSdk;
-void _anthropicCoversSdk;
 
 const schema_ProviderConfig = s.discriminatedUnion([
   s.variant({

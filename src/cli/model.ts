@@ -21,20 +21,14 @@ class ModelCommand {
 
   static create(): Future<Error, ModelCommand> {
     return loadConfig()
-      .chainRej(() =>
-        Future.reject<Error, Config>(new Error("No configuration found. Run 'commit-tools setup' first."))
-      )
+      .chainRej(() => Future.reject<Error, Config>(new Error("No configuration found. Run 'commit-tools setup' first.")))
       .chain((config) => resolveProvider(config).map((ai) => new ModelCommand(config, ai)));
   }
 
   run(): Future<Error, void> {
     p.intro(color.bgCyan(color.black(" Change Model ")));
 
-    return loading(
-      "Fetching available models...",
-      "Models fetched!",
-      fetchModels(this.providerConfig.provider, this.providerConfig.auth_method)
-    )
+    return loading("Fetching available models...", "Models fetched!", fetchModels(this.providerConfig.provider, this.providerConfig.auth_method))
       .chain((models) => selectModelInteractively(models))
       .chain((modelId) => selectEffortForProvider(withModel(this.config.ai, modelId)))
       .chain((ai) => saveConfig({ ...this.config, ai }))

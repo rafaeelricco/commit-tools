@@ -77,12 +77,7 @@ const buildSetupTokenParams = (
   return base;
 };
 
-const callAnthropicWithApiKey = (
-  apiKey: string,
-  model: string,
-  effort: Maybe<AnthropicEffort>,
-  params: GenerateContentParams
-): Future<Error, string> => {
+const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> => {
   const run = (stage: Stage): Future<Error, string> =>
     Future.attemptP(async () => {
       const client = new Anthropic({ apiKey });
@@ -119,14 +114,9 @@ const buildAttempts = (
   effort: Maybe<AnthropicEffort>,
   run: (stage: Stage) => Future<Error, string>
 ): readonly [EffortAttempt<string>, ...EffortAttempt<string>[]] =>
-  anthropicAdaptiveParam(effort) !== undefined ?
-    [() => run("adaptive"), () => run("enabled"), () => run("off")]
-  : [() => run("off")];
+  anthropicAdaptiveParam(effort) !== undefined ? [() => run("adaptive"), () => run("enabled"), () => run("off")] : [() => run("off")];
 
-const generateContentWithAnthropic = (
-  config: AnthropicConfig,
-  params: GenerateContentParams
-): Future<Error, string> => {
+const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {
     case "api_key":
       return callAnthropicWithApiKey(config.auth_method.content, config.model, config.effort, params);

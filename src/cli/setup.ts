@@ -152,11 +152,7 @@ class Setup {
   }
 
   private finalizeSetup(authMethod: ProviderConfig["auth_method"]): Future<Error, void> {
-    return loading(
-      "Fetching available models...",
-      "Models fetched!",
-      fetchModels(this.preferences.provider, authMethod)
-    )
+    return loading("Fetching available models...", "Models fetched!", fetchModels(this.preferences.provider, authMethod))
       .chain((models) => selectModelInteractively(models))
       .chain((modelId) => selectEffortForProvider(seedProviderConfig(this.preferences.provider, modelId, authMethod)))
       .chain((ai) => saveConfig(this.buildConfig(ai)))
@@ -230,8 +226,7 @@ type ApiKeyPrompt = {
   readonly validate: (value: string | undefined) => string | undefined;
 };
 
-const genericApiKeyValidator = (value: string | undefined): string | undefined =>
-  !value || value.length < 10 ? "API Key is too short" : undefined;
+const genericApiKeyValidator = (value: string | undefined): string | undefined => (!value || value.length < 10 ? "API Key is too short" : undefined);
 
 function apiKeyPromptFor(provider: ProviderConfig["provider"]): ApiKeyPrompt {
   switch (provider) {

@@ -41,9 +41,7 @@ const fetchOpenAIModelsWithOAuth = (tokens: ProviderConfig["auth_method"]["conte
       }
 
       const data = (await response.json()) as { models: CodexModel[] };
-      return data.models
-        .sort((a, b) => a.slug.localeCompare(b.slug))
-        .map((m) => ({ id: m.slug, description: m.description }));
+      return data.models.sort((a, b) => a.slug.localeCompare(b.slug)).map((m) => ({ id: m.slug, description: m.description }));
     })
   );
 
@@ -112,15 +110,10 @@ const fetchAnthropicModels = (authMethod: ProviderConfig["auth_method"]): Future
       data?: Array<{ id: string; display_name?: string }>;
     };
 
-    return (data.data ?? [])
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((m) => ({ id: m.id, description: m.display_name ?? "" }));
+    return (data.data ?? []).sort((a, b) => a.id.localeCompare(b.id)).map((m) => ({ id: m.id, description: m.display_name ?? "" }));
   });
 
-const fetchModels = (
-  provider: ProviderConfig["provider"],
-  authMethod: ProviderConfig["auth_method"]
-): Future<Error, Model[]> => {
+const fetchModels = (provider: ProviderConfig["provider"], authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> => {
   switch (provider) {
     case "openai":
       return fetchOpenAIModels(authMethod);

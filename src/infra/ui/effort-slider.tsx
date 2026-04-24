@@ -26,8 +26,7 @@ const PALETTE: Record<number, readonly ChalkColor[]> = {
 
 const paletteFor = (n: number): readonly ChalkColor[] => PALETTE[n] ?? PALETTE[6]!;
 
-const colorize = (color: ChalkColor, text: string, bold: boolean): string =>
-  bold ? chalk[color].bold(text) : chalk[color](text);
+const colorize = (color: ChalkColor, text: string, bold: boolean): string => (bold ? chalk[color].bold(text) : chalk[color](text));
 
 const EffortSlider = <V extends string>({ title, options, initialIndex, onSubmit, onCancel }: EffortSliderProps<V>) => {
   const { exit } = useApp();
@@ -72,9 +71,7 @@ const EffortSlider = <V extends string>({ title, options, initialIndex, onSubmit
   const markerCol = index * step;
   const markerColor = palette[index] ?? "cyan";
 
-  const railChars = Array.from({ length: cols }).map((_, c) =>
-    c === markerCol ? chalk[markerColor]("▲") : chalk.dim("─")
-  );
+  const railChars = Array.from({ length: cols }).map((_, c) => (c === markerCol ? chalk[markerColor]("▲") : chalk.dim("─")));
   const rail = railChars.join("");
 
   const labelParts: string[] = options.map((opt, i) => {

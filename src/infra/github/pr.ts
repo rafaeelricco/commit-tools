@@ -9,11 +9,7 @@ import { execBin, type CommandFailure } from "@/infra/shell";
 
 type PullRequest = { url: string; number: number };
 
-type PrLookup =
-  | { type: "found"; pr: PullRequest }
-  | { type: "not-found" }
-  | { type: "unauthenticated" }
-  | { type: "unavailable" };
+type PrLookup = { type: "found"; pr: PullRequest } | { type: "not-found" } | { type: "unauthenticated" } | { type: "unavailable" };
 
 // TODO: This looks like a "magical number", we need to think more about this
 const GITHUB_REPO_RE = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/;
@@ -36,15 +32,14 @@ const parsePrJson = (stdout: string): PrLookup =>
     (pr): PrLookup => ({ type: "found", pr })
   );
 
-const commandFailureText = (failure: CommandFailure): string =>
-  failure.output.stderr.trim() || failure.output.stdout.trim() || failure.error.message;
+const commandFailureText = (failure: CommandFailure): string => failure.output.stderr.trim() || failure.output.stdout.trim() || failure.error.message;
 
 const classifyFailure = (failure: CommandFailure): PrLookup => {
-  return GH_UNAUTH_RE.test(commandFailureText(failure)) 
-  ? { type: "unauthenticated" }
-  : GH_NOT_FOUND_RE.test(commandFailureText(failure)) 
-  ? { type: "not-found" }
-  : { type: "unavailable" };
+  return (
+    GH_UNAUTH_RE.test(commandFailureText(failure)) ? { type: "unauthenticated" }
+    : GH_NOT_FOUND_RE.test(commandFailureText(failure)) ? { type: "not-found" }
+    : { type: "unavailable" }
+  );
 };
 
 const getOpenPullRequest = (): Future<Error, PrLookup> =>

@@ -14,17 +14,7 @@ Values can be extracted using `instsanceof` tests.
             x satisfies never;
    }
 */
-export {
-  type Maybe,
-  type Nullable,
-  type Infer,
-  CallableJust as Just,
-  CallableNothing as Nothing,
-  fromOptional,
-  fromNullable,
-  catMaybes,
-  mapMaybe
-};
+export { type Maybe, type Nullable, type Infer, CallableJust as Just, CallableNothing as Nothing, fromOptional, fromNullable, catMaybes, mapMaybe };
 
 import Callable from "@/libs/callable";
 

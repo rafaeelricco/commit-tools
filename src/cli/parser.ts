@@ -4,13 +4,7 @@ import * as D from "@/libs/json/decoder";
 
 import { Result } from "@/libs/result";
 
-type CliCommand =
-  | { type: "generate" }
-  | { type: "setup" }
-  | { type: "doctor" }
-  | { type: "model" }
-  | { type: "version" }
-  | { type: "help" };
+type CliCommand = { type: "generate" } | { type: "setup" } | { type: "doctor" } | { type: "model" } | { type: "version" } | { type: "help" };
 
 const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) => {
   const cmd = args[0] || "generate";
@@ -36,8 +30,7 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
   }
 });
 
-const parseArgs = (args: string[]): Result<Error, CliCommand> =>
-  D.decode(args, cliCommandDecoder).mapFailure((err) => new Error(err));
+const parseArgs = (args: string[]): Result<Error, CliCommand> => D.decode(args, cliCommandDecoder).mapFailure((err) => new Error(err));
 
 const showHelp = (): void => {
   console.log(`

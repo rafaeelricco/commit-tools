@@ -103,10 +103,7 @@ class Doctor {
     return repo
       .checkIsGitRepo()
       .chain((): Future<Error, CheckRow[]> => this.collectGitRows())
-      .chainRej(
-        (): Future<Error, CheckRow[]> =>
-          Future.resolve([["Git Repository", color.yellow("Outside"), "Not a git repository"]])
-      );
+      .chainRej((): Future<Error, CheckRow[]> => Future.resolve([["Git Repository", color.yellow("Outside"), "Not a git repository"]]));
   }
 
   private collectGitRows(): Future<Error, CheckRow[]> {
@@ -114,11 +111,7 @@ class Doctor {
       branch: repo.findCurrentBranch(),
       base: repo.findBaseBranch(),
       pr: pr.getOpenPullRequest()
-    }).map(({ branch, base, pr: prLookup }): CheckRow[] => [
-      renderBranchRow(branch),
-      renderBaseRow(base),
-      renderPrRow(prLookup)
-    ]);
+    }).map(({ branch, base, pr: prLookup }): CheckRow[] => [renderBranchRow(branch), renderBaseRow(base), renderPrRow(prLookup)]);
   }
 
   private renderTable(rows: CheckRow[]): void {
@@ -143,15 +136,11 @@ class Doctor {
 }
 
 function renderBranchRow(branch: Maybe<string>): CheckRow {
-  return branch instanceof Just ?
-      ["Branch", color.green("Current"), branch.value]
-    : ["Branch", color.yellow("Unknown"), "Could not read current branch"];
+  return branch instanceof Just ? ["Branch", color.green("Current"), branch.value] : ["Branch", color.yellow("Unknown"), "Could not read current branch"];
 }
 
 function renderBaseRow(base: Maybe<string>): CheckRow {
-  return base instanceof Just ?
-      ["Base", color.green("Detected"), base.value]
-    : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
+  return base instanceof Just ? ["Base", color.green("Detected"), base.value] : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
 }
 
 function renderPrRow(lookup: pr.PrLookup): CheckRow {

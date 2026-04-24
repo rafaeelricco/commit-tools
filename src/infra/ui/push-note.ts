@@ -45,14 +45,7 @@ const renderPushNote = (m: PushMetadata): void => {
   const remoteLine = m.remoteUrl.maybe<string[]>([], (url) => [`remote   ${url}`]);
   const rangeLine = m.range.maybe<string[]>([], (range) => [`range    ${range.before}..${range.after}`]);
 
-  const body = [
-    ...renderCommitLines(m.commit),
-    ...branchLine,
-    ...baseLine,
-    ...remoteLine,
-    ...rangeLine,
-    ...renderPrLine(m.pr)
-  ].join("\n");
+  const body = [...renderCommitLines(m.commit), ...branchLine, ...baseLine, ...remoteLine, ...rangeLine, ...renderPrLine(m.pr)].join("\n");
 
   if (!body) return;
 

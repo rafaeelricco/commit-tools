@@ -13,9 +13,7 @@ import { tryWithEffort, type EffortAttempt } from "@/infra/llm/effort-fallback";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 
-type GeminiAuthCredentials =
-  | { readonly method: "api_key"; readonly apiKey: string }
-  | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
+type GeminiAuthCredentials = { readonly method: "api_key"; readonly apiKey: string } | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
 
 type Stage = "level" | "budget" | "off";
 
@@ -34,11 +32,7 @@ const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
   }
 };
 
-const buildConfigForStage = (
-  effort: Maybe<GeminiEffort>,
-  params: GenerateContentParams,
-  stage: Stage
-): GenerateContentConfig => {
+const buildConfigForStage = (effort: Maybe<GeminiEffort>, params: GenerateContentParams, stage: Stage): GenerateContentConfig => {
   const base: GenerateContentConfig = {};
   if (params.systemInstruction !== undefined) base.systemInstruction = params.systemInstruction;
   if (stage === "level") Object.assign(base, geminiLevelConfig(effort));
@@ -50,16 +44,9 @@ const buildAttempts = (
   effort: Maybe<GeminiEffort>,
   run: (stage: Stage) => Future<Error, string>
 ): readonly [EffortAttempt<string>, ...EffortAttempt<string>[]] =>
-  geminiLevelConfig(effort) !== undefined ?
-    [() => run("level"), () => run("budget"), () => run("off")]
-  : [() => run("off")];
+  geminiLevelConfig(effort) !== undefined ? [() => run("level"), () => run("budget"), () => run("off")] : [() => run("off")];
 
-const generateContentWithApiKey = (
-  apiKey: string,
-  model: string,
-  effort: Maybe<GeminiEffort>,
-  params: GenerateContentParams
-): Future<Error, string> => {
+const generateContentWithApiKey = (apiKey: string, model: string, effort: Maybe<GeminiEffort>, params: GenerateContentParams): Future<Error, string> => {
   const run = (stage: Stage): Future<Error, string> =>
     Future.attemptP(async () => {
       const ai = new GoogleGenAI({ apiKey });
@@ -72,11 +59,7 @@ const generateContentWithApiKey = (
   return tryWithEffort<string>(buildAttempts(effort, run));
 };
 
-const buildOAuthBody = (
-  effort: Maybe<GeminiEffort>,
-  params: GenerateContentParams,
-  stage: Stage
-): Record<string, unknown> => {
+const buildOAuthBody = (effort: Maybe<GeminiEffort>, params: GenerateContentParams, stage: Stage): Record<string, unknown> => {
   const body: Record<string, unknown> = {
     contents: [{ parts: [{ text: params.prompt }] }]
   };

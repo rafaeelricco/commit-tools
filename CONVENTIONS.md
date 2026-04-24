@@ -61,11 +61,7 @@ Favour static types, explicit data flow, immutability, pure functions, compositi
 - Bundle related state into **union-driven state machines**. Don't use loose boolean flags (`isStreaming`, `isError`, `isLoading`) spread across stores.
 
   ```ts
-  type Stream<E, R> =
-    | { type: "not_started" }
-    | { type: "streaming"; results: R[] }
-    | { type: "done"; results: R[] }
-    | { type: "error"; error: E };
+  type Stream<E, R> = { type: "not_started" } | { type: "streaming"; results: R[] } | { type: "done"; results: R[] } | { type: "error"; error: E };
 
   type VoiceConnection =
     | { type: "disconnected" }

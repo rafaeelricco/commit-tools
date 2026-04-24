@@ -31,9 +31,5 @@ const generateCommitMessage = (
   customTemplate: Maybe<string> = Nothing()
 ): Future<Error, string> => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) });
 
-const refineCommitMessage = (
-  config: ProviderConfig,
-  currentMessage: string,
-  adjustment: string,
-  diff: string
-): Future<Error, string> => generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment }));
+const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, string> =>
+  generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment }));

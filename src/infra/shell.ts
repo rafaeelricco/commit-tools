@@ -11,18 +11,21 @@ type ExecResult = Result<CommandFailure, CommandOutput>;
 const commandResult = (output: CommandOutput, exitCode: number | null, signal: NodeJS.Signals | null): ExecResult =>
   exitCode === 0 ?
     Success<CommandFailure, CommandOutput>(output)
-  : Failure<CommandFailure, CommandOutput>({ output, error: new Error(`Command failed with exit code ${exitCode}${signal ? ` and signal ${signal}` : ""}`) });
+  : Failure<CommandFailure, CommandOutput>({
+      output,
+      error: new Error(`Command failed with exit code ${exitCode}${signal ? ` and signal ${signal}` : ""}`)
+    });
 
 const execBin = (bin: string, args: string[]): Future<Error, ExecResult> =>
   Future.create<Error, ExecResult>((reject, resolve) => {
     const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
-    
+
     let stdout = "";
     let stderr = "";
 
     proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
     proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-    
+
     proc.on("error", (err) => reject(new Error(`Failed to start process: ${err.message}`)));
     proc.on("close", (exitCode, signal) => resolve(commandResult({ stdout, stderr }, exitCode, signal)));
 

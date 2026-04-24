@@ -5,8 +5,7 @@ import { Future } from "@/libs/future";
 
 type EffortAttempt<T> = () => Future<Error, T>;
 
-const EFFORT_FIELD_RE =
-  /reasoning|thinking|thinking_config|output_config|budget_tokens|thinkingconfig|thinkinglevel|thinkingbudget/i;
+const EFFORT_FIELD_RE = /reasoning|thinking|thinking_config|output_config|budget_tokens|thinkingconfig|thinkinglevel|thinkingbudget/i;
 const BAD_REQUEST_RE = /(\b400\b|invalid_request|unsupported_parameter|bad_request|invalid_parameter)/i;
 
 const isEffortRejection = (err: Error): boolean => {

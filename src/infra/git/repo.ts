@@ -44,10 +44,7 @@ type PushResult = {
   range: Maybe<PushRange>;
 };
 
-type BaseLookupError =
-  | { type: "reflog-empty" }
-  | { type: "reflog-not-creation"; subject: string }
-  | { type: "reflog-cmd-failed"; message: string };
+type BaseLookupError = { type: "reflog-empty" } | { type: "reflog-not-creation"; subject: string } | { type: "reflog-cmd-failed"; message: string };
 
 const CREATED_FROM_RE = /^branch: Created from (\S+)$/;
 
@@ -78,14 +75,11 @@ const parsePushRange = (output: string): Maybe<PushRange> => {
   return before && after ? Just({ before, after }) : Nothing();
 };
 
-const checkIsGitRepo = (): Future<Error, void> =>
-  execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
+const checkIsGitRepo = (): Future<Error, void> => execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
 
 const getStagedDiff = (): Future<Error, string> =>
   execGitChecked(["diff", "--staged"], "Failed to get staged changes").chain((stdout) =>
-    stdout.trim() ?
-      Future.resolve<Error, string>(stdout)
-    : Future.reject<Error, string>(new Error("No staged changes found"))
+    stdout.trim() ? Future.resolve<Error, string>(stdout) : Future.reject<Error, string>(new Error("No staged changes found"))
   );
 
 const performCommit = (message: string): Future<Error, string> => {
@@ -126,11 +120,19 @@ const findCurrentBranch = (): Future<Error, Maybe<string>> =>
     .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
 const hasUpstream = (): Future<Error, boolean> =>
-  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map((result) => result.either(() => false, () => true));
+  execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map((result) =>
+    result.either(
+      () => false,
+      () => true
+    )
+  );
 
 const getUpstream = (): Future<Error, Maybe<string>> =>
   execBin("git", ["rev-parse", "--abbrev-ref", "@{u}"]).map((result) =>
-    result.either(() => Nothing<string>(), ({ stdout }) => Just(stdout.trim()))
+    result.either(
+      () => Nothing<string>(),
+      ({ stdout }) => Just(stdout.trim())
+    )
   );
 
 const oldestReflogSubject = (stdout: string): Result<BaseLookupError, string> => {
@@ -188,8 +190,7 @@ const getBaseBranch = (): Future<Error, Maybe<string>> =>
     )
   );
 
-const findBaseBranch = (): Future<Error, Maybe<string>> =>
-  getBaseBranch().chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
+const findBaseBranch = (): Future<Error, Maybe<string>> => getBaseBranch().chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
 const getRemoteUrl = (remote: string = "origin"): Future<Error, string> =>
   execGitChecked(["remote", "get-url", remote], `Failed to read remote '${remote}' url`).map((s) => s.trim());
@@ -211,15 +212,13 @@ const findTrackingRemoteUrl = (): Future<Error, Maybe<string>> =>
     .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
 const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> =>
-  execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain(
-    (stdout) => {
-      const [hash, short, subject, authorName, authorEmail, iso] = stdout.split("\n");
-      // TODO: This is specially hard to understand and maintain, consider using a more robust serialization format in the future (e.g. JSON output from git log with a custom format)
-      return hash && short && subject !== undefined && authorName !== undefined && authorEmail !== undefined && iso ?
-          Future.resolve<Error, CommitMetadata>({ hash, short, subject, authorName, authorEmail, date: new Date(iso) })
-        : Future.reject<Error, CommitMetadata>(new Error("Malformed git log output"));
-    }
-  );
+  execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain((stdout) => {
+    const [hash, short, subject, authorName, authorEmail, iso] = stdout.split("\n");
+    // TODO: This is specially hard to understand and maintain, consider using a more robust serialization format in the future (e.g. JSON output from git log with a custom format)
+    return hash && short && subject !== undefined && authorName !== undefined && authorEmail !== undefined && iso ?
+        Future.resolve<Error, CommitMetadata>({ hash, short, subject, authorName, authorEmail, date: new Date(iso) })
+      : Future.reject<Error, CommitMetadata>(new Error("Malformed git log output"));
+  });
 
 const findCommitMetadata = (ref: string = "HEAD"): Future<Error, Maybe<CommitMetadata>> =>
   getCommitMetadata(ref)

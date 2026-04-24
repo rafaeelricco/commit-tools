@@ -12,11 +12,7 @@ type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => May
 type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;
 type PersistProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, void>;
 
-type RefreshAndPersistFlow = <T extends RefreshTokens>(
-  tokens: T,
-  refresh: RefreshProvider<T>,
-  persist: PersistProvider<T>
-) => Future<Error, T>;
+type RefreshAndPersistFlow = <T extends RefreshTokens>(tokens: T, refresh: RefreshProvider<T>, persist: PersistProvider<T>) => Future<Error, T>;
 
 type ResolveProvider = (config: Config) => Future<Error, ProviderConfig>;
 

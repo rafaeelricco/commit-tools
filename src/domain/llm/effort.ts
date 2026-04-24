@@ -12,12 +12,7 @@ export {
 import { type ThinkingConfig, ThinkingLevel } from "@google/genai";
 import { type Future } from "@/libs/future";
 import { Nothing, type Maybe } from "@/libs/maybe";
-import {
-  type ProviderConfig,
-  type OpenAIEffort,
-  type AnthropicEffort,
-  type GeminiEffort
-} from "@/domain/config/config";
+import { type ProviderConfig, type OpenAIEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
 import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort } from "@/infra/ui/effort-picker";
 import { absurd } from "@/libs/types";
 
@@ -32,13 +27,10 @@ const openaiReasoningParam = (effort: Maybe<OpenAIEffort>): { reasoning: OpenAI.
 const anthropicAdaptiveParam = (
   effort: Maybe<AnthropicEffort>
 ): { thinking: Anthropic.ThinkingConfigAdaptive; output_config: Anthropic.OutputConfig } | undefined =>
-  effort.maybe<{ thinking: Anthropic.ThinkingConfigAdaptive; output_config: Anthropic.OutputConfig } | undefined>(
-    undefined,
-    (e) => ({
-      thinking: { type: "adaptive" },
-      output_config: { effort: e }
-    })
-  );
+  effort.maybe<{ thinking: Anthropic.ThinkingConfigAdaptive; output_config: Anthropic.OutputConfig } | undefined>(undefined, (e) => ({
+    thinking: { type: "adaptive" },
+    output_config: { effort: e }
+  }));
 
 const BUDGET_BY_EFFORT: Record<AnthropicEffort, number> = {
   low: 1024,
@@ -84,11 +76,7 @@ const geminiBudgetConfig = (effort: Maybe<GeminiEffort>): { thinkingConfig: Thin
     thinkingConfig: { thinkingBudget: BUDGET_BY_LEVEL[e] }
   }));
 
-const seedProviderConfig = (
-  provider: ProviderConfig["provider"],
-  model: string,
-  auth_method: ProviderConfig["auth_method"]
-): ProviderConfig => {
+const seedProviderConfig = (provider: ProviderConfig["provider"], model: string, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
   switch (provider) {
     case "openai":
       return { provider, model, auth_method, effort: Nothing<OpenAIEffort>() };

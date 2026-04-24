@@ -15,12 +15,7 @@ type OpenAIConfig = Extract<Config["ai"], { provider: "openai" }>;
 
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
 
-const callOpenAIWithApiKey = (
-  authToken: string,
-  model: string,
-  effort: Maybe<OpenAIEffort>,
-  params: GenerateContentParams
-): Future<Error, string> => {
+const callOpenAIWithApiKey = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> => {
   const run = (withReasoning: boolean): Future<Error, string> =>
     Future.attemptP(async () => {
       const client = new OpenAI({ apiKey: authToken });
@@ -43,12 +38,7 @@ const callOpenAIWithApiKey = (
   return tryWithEffort<string>(attempts);
 };
 
-const callOpenAIWithOAuth = (
-  authToken: string,
-  model: string,
-  effort: Maybe<OpenAIEffort>,
-  params: GenerateContentParams
-): Future<Error, string> => {
+const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> => {
   const run = (withReasoning: boolean): Future<Error, string> =>
     Future.attemptP(async () => {
       const client = new OpenAI({
@@ -91,20 +81,15 @@ const callOpenAIWithOAuth = (
   return tryWithEffort<string>(attempts);
 };
 
-const generateContentWithApiKey = (
-  apiKey: string,
-  model: string,
-  effort: Maybe<OpenAIEffort>,
-  params: GenerateContentParams
-): Future<Error, string> => callOpenAIWithApiKey(apiKey, model, effort, params);
+const generateContentWithApiKey = (apiKey: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+  callOpenAIWithApiKey(apiKey, model, effort, params);
 
 const generateContentWithOAuth = (
   tokens: OpenAITokens,
   model: string,
   effort: Maybe<OpenAIEffort>,
   params: GenerateContentParams
-): Future<Error, string> =>
-  getOpenAIAccessToken(tokens).chain((accessToken) => callOpenAIWithOAuth(accessToken, model, effort, params));
+): Future<Error, string> => getOpenAIAccessToken(tokens).chain((accessToken) => callOpenAIWithOAuth(accessToken, model, effort, params));
 
 const generateContentWithOpenAI = (config: OpenAIConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {

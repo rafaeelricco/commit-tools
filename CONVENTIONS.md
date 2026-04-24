@@ -58,14 +58,6 @@ Favour static types, explicit data flow, immutability, pure functions, compositi
     s.variant({ type: "error", message: s.string, code: s.optional(s.string) })
   ]);
   ```
-- Embed **immutable snapshots** in event payloads when referencing mutable external data (e.g. a property's price at the time of booking).
-  ```ts
-  const schema_UserActions = s.discriminatedUnion([
-    s.variant({ type: "view_property", property: schema_PropertySnapshot }),
-    s.variant({ type: "start_booking", property: schema_PropertySnapshot, draftId: DraftId.schema }),
-    s.variant({ type: "confirm_booking", draftId: DraftId.schema })
-  ]);
-  ```
 - Bundle related state into **union-driven state machines**. Don't use loose boolean flags (`isStreaming`, `isError`, `isLoading`) spread across stores.
 
   ```ts

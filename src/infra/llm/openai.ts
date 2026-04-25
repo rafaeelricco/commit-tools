@@ -18,8 +18,6 @@ type StreamBundle = {
   deltaSnapshotText: string;
 };
 
-const BASE_MAX_TOKENS = 16384;
-
 const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
   const fromOutput = bundle.response.output
     .flatMap((item) => (item.type === "message" ? item.content : []))
@@ -27,7 +25,7 @@ const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
     .join("");
 
   const candidates = [fromOutput, bundle.response.output_text, bundle.doneEventText, bundle.deltaSnapshotText];
-  return fromOptional(candidates.find((v) => v.trim().length > 0));
+  return fromOptional(candidates.find((v): v is string => typeof v === "string" && v.trim().length > 0));
 };
 
 const openaiReasoning = (effort: Maybe<OpenAIEffort>): Maybe<OpenAI.Reasoning> => effort.map((e) => ({ effort: e }));
@@ -40,8 +38,7 @@ const buildApiKeyParams = (
   const core: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
     model,
     instructions: params.systemInstruction ?? null,
-    input: params.prompt,
-    max_output_tokens: BASE_MAX_TOKENS
+    input: params.prompt
   };
   return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
 };
@@ -52,8 +49,7 @@ const buildOAuthParams = (model: string, effort: Maybe<OpenAIEffort>, params: Ge
     instructions: params.systemInstruction ?? "",
     input: [{ role: "user", content: params.prompt }],
     store: false,
-    stream: true,
-    max_output_tokens: BASE_MAX_TOKENS
+    stream: true
   };
   return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
 };

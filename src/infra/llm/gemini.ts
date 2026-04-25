@@ -20,8 +20,6 @@ type OAuthRequestBody = {
   generationConfig?: GenerationConfig;
 };
 
-const BASE_MAX_TOKENS = 16384;
-
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
   if (config.ai.provider !== "gemini") return Nothing();
 
@@ -37,7 +35,6 @@ const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
 
 const buildSDKConfig = (effort: Maybe<GeminiEffort>, params: GenerateContentParams): GenerateContentConfig => {
   const core: GenerateContentConfig = {
-    maxOutputTokens: BASE_MAX_TOKENS,
     thinkingConfig: { thinkingLevel: effort.withDefault(ThinkingLevel.MEDIUM) }
   };
   return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: s }));
@@ -46,7 +43,7 @@ const buildSDKConfig = (effort: Maybe<GeminiEffort>, params: GenerateContentPara
 const buildOAuthBody = (effort: Maybe<GeminiEffort>, params: GenerateContentParams): OAuthRequestBody => {
   const core: OAuthRequestBody = {
     contents: [{ parts: [{ text: params.prompt }] }],
-    generationConfig: { maxOutputTokens: BASE_MAX_TOKENS, thinkingConfig: { thinkingLevel: effort.withDefault(ThinkingLevel.MEDIUM) } }
+    generationConfig: { thinkingConfig: { thinkingLevel: effort.withDefault(ThinkingLevel.MEDIUM) } }
   };
   return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: { parts: [{ text: s }] } }));
 };

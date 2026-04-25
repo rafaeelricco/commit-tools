@@ -8,6 +8,7 @@ import { Future } from "@/libs/future";
 import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/anthropic";
 import { absurd } from "@/libs/types";
 import { extractResponse } from "@/domain/llm/response-parser";
+import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
@@ -38,10 +39,10 @@ const buildParams = (
 };
 
 const buildSetupTokenSystem = (instruction: Maybe<string>): SystemParam =>
-  instruction.maybe<Anthropic.TextBlockParam[]>(
-    [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }],
-    (text) => [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }, { type: "text", text }]
-  );
+  instruction.maybe<Anthropic.TextBlockParam[]>([{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }], (text) => [
+    { type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT },
+    { type: "text", text }
+  ]);
 
 const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
@@ -77,7 +78,7 @@ const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateC
       return callAnthropicWithSetupToken(config.auth_method.content, config.model, config.effort, params);
     case "google_oauth":
     case "openai_oauth":
-      return Future.reject(new Error(`Unsupported auth method for Anthropic: ${config.auth_method.type}`));
+      return unsupportedAuth("anthropic", config.auth_method.type);
     default:
       return absurd(config.auth_method, "AuthMethod");
   }

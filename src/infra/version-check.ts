@@ -42,8 +42,10 @@ const refreshCacheInBackground = (): void => {
   const script = [
     `fetch(${JSON.stringify(REGISTRY_URL)})`,
     `.then(r => r.ok ? r.json() : Promise.reject())`,
-    `.then(j => require("fs").writeFileSync(${JSON.stringify(CACHE_FILE)},`,
-    `JSON.stringify({ checkedAt: Date.now(), latestVersion: j.version })))`,
+    `.then(j => { const fs = require("fs");`,
+    `fs.mkdirSync(${JSON.stringify(CONFIG_DIR)}, { recursive: true });`,
+    `fs.writeFileSync(${JSON.stringify(CACHE_FILE)},`,
+    `JSON.stringify({ checkedAt: Date.now(), latestVersion: j.version })); })`,
     `.catch(() => {});`
   ].join("");
   try {

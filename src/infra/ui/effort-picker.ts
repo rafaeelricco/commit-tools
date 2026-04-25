@@ -44,7 +44,7 @@ const selectOpenAIEffort = (modelId: string, current: Maybe<OpenAIEffort>): Futu
   selectEffort<OpenAIEffort>(OPENAI_EFFORTS, modelId, current, "medium");
 
 const selectAnthropicEffort = (modelId: string, current: Maybe<AnthropicEffort>): Future<Error, Maybe<AnthropicEffort>> =>
-  selectEffort<AnthropicEffort>(ANTHROPIC_EFFORTS, modelId, current, "high");
+  selectEffort<AnthropicEffort>(ANTHROPIC_EFFORTS, modelId, current, "medium");
 
 const selectGeminiEffort = (modelId: string, current: Maybe<GeminiEffort>): Future<Error, Maybe<GeminiEffort>> =>
-  selectEffort<GeminiEffort>(GEMINI_EFFORTS, modelId, current, ThinkingLevel.HIGH);
+  selectEffort<GeminiEffort>(GEMINI_EFFORTS, modelId, current, ThinkingLevel.MEDIUM);

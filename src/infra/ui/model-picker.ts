@@ -5,11 +5,13 @@ import { Model } from "@/domain/config/config";
 
 const selectModelInteractively = (models: Model[]): Future<Error, string> =>
   Future.attemptP(async () => {
+    // Lazy-load Ink/React so non-interactive CLI paths don't pay their startup cost.
     const { render } = await import("ink");
     const React = await import("react");
     const { ModelSelector } = await import("@/infra/ui/model-selector");
-
-    return new Promise<string>((resolve, reject) => {
+    return { render, React, ModelSelector };
+  }).chain(({ render, React, ModelSelector }) =>
+    Future.create<Error, string>((reject, resolve) => {
       const { unmount } = render(
         React.createElement(ModelSelector, {
           models,
@@ -23,5 +25,6 @@ const selectModelInteractively = (models: Model[]): Future<Error, string> =>
           }
         })
       );
-    });
-  });
+      return () => unmount();
+    })
+  );

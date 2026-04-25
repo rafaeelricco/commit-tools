@@ -15,12 +15,12 @@ const selectEffort = <V extends string>(options: readonly V[], modelId: string, 
   });
 
   return Future.attemptP(async () => {
-    // TODO: Why this is imported here and not at the top of the file?
     const { render } = await import("ink");
     const React = await import("react");
     const sliderModule: EffortSliderModule = await import("@/infra/ui/effort-slider");
-
-    return new Promise<Maybe<V>>((resolve, reject) => {
+    return { render, React, sliderModule };
+  }).chain(({ render, React, sliderModule }) =>
+    Future.create<Error, Maybe<V>>((_reject, resolve) => {
       const { unmount } = render(
         React.createElement(sliderModule.EffortSlider<V>, {
           title: `Reasoning effort for ${modelId}`,
@@ -32,12 +32,13 @@ const selectEffort = <V extends string>(options: readonly V[], modelId: string, 
           },
           onCancel: () => {
             unmount();
-            reject(new Error("Selection cancelled"));
+            resolve(Nothing<V>());
           }
         })
       );
-    });
-  }).chainRej((err) => (err.message === "Selection cancelled" ? Future.resolve(Nothing<V>()) : Future.reject(err)));
+      return () => unmount();
+    })
+  );
 };
 
 const selectOpenAIEffort = (modelId: string, current: Maybe<OpenAIEffort>): Future<Error, Maybe<OpenAIEffort>> =>

@@ -26,7 +26,6 @@ const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
     )
   );
 
-// TODO: WHY?????
 const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
   switch (ai.provider) {
     case "openai":

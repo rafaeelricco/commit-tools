@@ -2,7 +2,7 @@ export { resolveProvider };
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
+import { resolveAuthMethod, type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
 import { ensureFreshTokens } from "@/infra/auth/google";
 import { ensureFreshOpenAITokens } from "@/infra/auth/openai";
 import { updateGoogleTokens, updateOpenAITokens } from "@/infra/storage/config";
@@ -25,19 +25,6 @@ const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
       (changed) => persist(changed).map(() => fresh)
     )
   );
-
-const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
-  switch (ai.provider) {
-    case "openai":
-      return { provider: "openai", model: ai.model, auth_method, effort: ai.effort };
-    case "anthropic":
-      return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
-    case "gemini":
-      return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
-    default:
-      return absurd(ai, "ProviderConfig");
-  }
-};
 
 const resolveProvider: ResolveProvider = (config) => {
   const { ai } = config;

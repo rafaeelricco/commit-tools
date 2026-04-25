@@ -14,6 +14,7 @@ export {
   schema_OpenAITokens,
   schema_AuthMethod,
   schema_ProviderConfig,
+  resolveAuthMethod,
   AI_PROVIDERS,
   COMMIT_CONVENTIONS,
   OPENAI_EFFORTS,
@@ -23,6 +24,7 @@ export {
 
 import * as s from "@/libs/json/schema";
 
+import { absurd } from "@/libs/types";
 import { ThinkingLevel } from "@google/genai";
 
 import type OpenAIPkg from "openai";
@@ -100,6 +102,19 @@ const schema_ProviderConfig = s.discriminatedUnion([
   })
 ]);
 type ProviderConfig = s.Infer<typeof schema_ProviderConfig>;
+
+const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
+  switch (ai.provider) {
+    case "openai":
+      return { provider: "openai", model: ai.model, auth_method, effort: ai.effort };
+    case "anthropic":
+      return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
+    case "gemini":
+      return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
+    default:
+      return absurd(ai, "ProviderConfig");
+  }
+};
 
 const Config = s.object({
   ai: schema_ProviderConfig,

@@ -6,7 +6,8 @@ import { Future } from "@/libs/future";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { Config, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
+import { Config, resolveAuthMethod, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
+import { absurd } from "@/libs/types";
 
 const CONFIG_DIR = resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
@@ -31,34 +32,36 @@ const saveConfig = (config: Config): Future<Error, void> =>
 
 const updateGoogleTokens = (tokens: OAuthTokens): Future<Error, void> =>
   loadConfig().chain((config) => {
-    // TODO: Why we are doing this?
-    if (config.ai.provider !== "gemini" || config.ai.auth_method.type !== "google_oauth") {
-      return Future.reject<Error, void>(new Error("Cannot update tokens: not using Google OAuth authentication"));
+    switch (config.ai.auth_method.type) {
+      case "google_oauth":
+        return saveConfig({
+          ai: resolveAuthMethod(config.ai, { type: "google_oauth", content: tokens }),
+          commit_convention: config.commit_convention,
+          custom_template: config.custom_template
+        });
+      case "api_key":
+      case "openai_oauth":
+      case "anthropic_setup_token":
+        return Future.reject<Error, void>(new Error("Cannot update tokens: not using Google OAuth authentication"));
+      default:
+        return absurd(config.ai.auth_method, "AuthMethod");
     }
-    return saveConfig({
-      ...config,
-      ai: {
-        provider: "gemini",
-        model: config.ai.model,
-        auth_method: { type: "google_oauth", content: tokens },
-        effort: config.ai.effort
-      }
-    });
   });
 
 const updateOpenAITokens = (tokens: OpenAITokens): Future<Error, void> =>
   loadConfig().chain((config) => {
-    // TODO: Why we are doing this?
-    if (config.ai.provider !== "openai" || config.ai.auth_method.type !== "openai_oauth") {
-      return Future.reject<Error, void>(new Error("Cannot update tokens: not using OpenAI OAuth authentication"));
+    switch (config.ai.auth_method.type) {
+      case "openai_oauth":
+        return saveConfig({
+          ai: resolveAuthMethod(config.ai, { type: "openai_oauth", content: tokens }),
+          commit_convention: config.commit_convention,
+          custom_template: config.custom_template
+        });
+      case "api_key":
+      case "google_oauth":
+      case "anthropic_setup_token":
+        return Future.reject<Error, void>(new Error("Cannot update tokens: not using OpenAI OAuth authentication"));
+      default:
+        return absurd(config.ai.auth_method, "AuthMethod");
     }
-    return saveConfig({
-      ...config,
-      ai: {
-        provider: "openai",
-        model: config.ai.model,
-        auth_method: { type: "openai_oauth", content: tokens },
-        effort: config.ai.effort
-      }
-    });
   });

@@ -13,7 +13,6 @@ type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;
 type PersistProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, void>;
 
 type RefreshAndPersistFlow = <T extends RefreshTokens>(tokens: T, refresh: RefreshProvider<T>, persist: PersistProvider<T>) => Future<Error, T>;
-
 type ResolveProvider = (config: Config) => Future<Error, ProviderConfig>;
 
 const tokensChanged: DetectTokenChange = (original, fresh) =>
@@ -28,7 +27,7 @@ const refreshAndPersist: RefreshAndPersistFlow = (tokens, refresh, persist) =>
   );
 
 // TODO: WHY?????
-const withAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
+const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
   switch (ai.provider) {
     case "openai":
       return { provider: "openai", model: ai.model, auth_method, effort: ai.effort };
@@ -51,12 +50,12 @@ const resolveProvider: ResolveProvider = (config) => {
 
     case "google_oauth":
       return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) =>
-        withAuthMethod(ai, { type: "google_oauth", content: tokens })
+        resolveAuthMethod(ai, { type: "google_oauth", content: tokens })
       );
 
     case "openai_oauth":
       return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) =>
-        withAuthMethod(ai, { type: "openai_oauth", content: tokens })
+        resolveAuthMethod(ai, { type: "openai_oauth", content: tokens })
       );
 
     default:

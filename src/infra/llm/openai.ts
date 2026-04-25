@@ -30,20 +30,7 @@ const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
 
 const openaiReasoning = (effort: Maybe<OpenAIEffort>): Maybe<OpenAI.Reasoning> => effort.map((e) => ({ effort: e }));
 
-const buildApiKeyParams = (
-  model: string,
-  effort: Maybe<OpenAIEffort>,
-  params: GenerateContentParams
-): OpenAI.Responses.ResponseCreateParamsNonStreaming => {
-  const core: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
-    model,
-    instructions: params.systemInstruction ?? null,
-    input: params.prompt
-  };
-  return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
-};
-
-const buildOAuthParams = (model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): OpenAI.Responses.ResponseCreateParamsStreaming => {
+const buildStreamParams = (model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): OpenAI.Responses.ResponseCreateParamsStreaming => {
   const core: OpenAI.Responses.ResponseCreateParamsStreaming = {
     model,
     instructions: params.systemInstruction ?? "",
@@ -54,18 +41,9 @@ const buildOAuthParams = (model: string, effort: Maybe<OpenAIEffort>, params: Ge
   return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
 };
 
-const callOpenAIWithApiKey = (apiKey: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+const callOpenAIStream = (client: OpenAI, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
-    const client = new OpenAI({ apiKey });
-    return await client.responses.create(buildApiKeyParams(model, effort, params));
-  })
-    .mapRej((error) => new Error(`Failed to create OpenAI response: ${error instanceof Error ? error.message : String(error)}`))
-    .chain((response) => extractResponse({ text: fromOptional(response.output_text) }));
-
-const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
-  Future.attemptP(async () => {
-    const client = new OpenAI({ baseURL: "https://chatgpt.com/backend-api/codex", apiKey: authToken });
-    const stream = client.responses.stream(buildOAuthParams(model, effort, params));
+    const stream = client.responses.stream(buildStreamParams(model, effort, params));
 
     let deltaSnapshotText = "";
     let doneEventText = "";
@@ -83,6 +61,12 @@ const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<Ope
   })
     .mapRej((error) => new Error(`Failed to create OpenAI response: ${error instanceof Error ? error.message : String(error)}`))
     .chain((bundle) => extractResponse({ text: extractStreamText(bundle) }));
+
+const callOpenAIWithApiKey = (apiKey: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+  callOpenAIStream(new OpenAI({ apiKey }), model, effort, params);
+
+const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+  callOpenAIStream(new OpenAI({ baseURL: "https://chatgpt.com/backend-api/codex", apiKey: authToken }), model, effort, params);
 
 const generateContentWithOpenAI = (config: OpenAIConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {

@@ -5,17 +5,30 @@ export {
   type RefreshTokens,
   type AuthMethod,
   type ProviderConfig,
+  type OpenAIEffort,
+  type AnthropicEffort,
+  type GeminiEffort,
   type Model,
   Config,
   schema_OAuthTokens,
   schema_OpenAITokens,
   schema_AuthMethod,
   schema_ProviderConfig,
+  resolveAuthMethod,
+  AI_PROVIDERS,
   COMMIT_CONVENTIONS,
-  AI_PROVIDERS
+  OPENAI_EFFORTS,
+  ANTHROPIC_EFFORTS,
+  GEMINI_EFFORTS
 };
 
 import * as s from "@/libs/json/schema";
+
+import { absurd } from "@/libs/types";
+import { ThinkingLevel } from "@google/genai";
+
+import type OpenAIPkg from "openai";
+import type AnthropicPkg from "@anthropic-ai/sdk";
 
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
@@ -60,24 +73,48 @@ const schema_AuthMethod = s.discriminatedUnion([
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 
+const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
+const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<AnthropicPkg.OutputConfig["effort"]>[];
+const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
+
+type OpenAIEffort = (typeof OPENAI_EFFORTS)[number];
+type AnthropicEffort = (typeof ANTHROPIC_EFFORTS)[number];
+type GeminiEffort = (typeof GEMINI_EFFORTS)[number];
+
 const schema_ProviderConfig = s.discriminatedUnion([
   s.variant({
     provider: "gemini",
     model: s.string,
-    auth_method: schema_AuthMethod
+    auth_method: schema_AuthMethod,
+    effort: s.optionalMaybe(s.stringEnum([...GEMINI_EFFORTS]))
   }),
   s.variant({
     provider: "openai",
     model: s.string,
-    auth_method: schema_AuthMethod
+    auth_method: schema_AuthMethod,
+    effort: s.optionalMaybe(s.stringEnum([...OPENAI_EFFORTS]))
   }),
   s.variant({
     provider: "anthropic",
     model: s.string,
-    auth_method: schema_AuthMethod
+    auth_method: schema_AuthMethod,
+    effort: s.optionalMaybe(s.stringEnum([...ANTHROPIC_EFFORTS]))
   })
 ]);
 type ProviderConfig = s.Infer<typeof schema_ProviderConfig>;
+
+const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
+  switch (ai.provider) {
+    case "openai":
+      return { provider: "openai", model: ai.model, auth_method, effort: ai.effort };
+    case "anthropic":
+      return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
+    case "gemini":
+      return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
+    default:
+      return absurd(ai, "ProviderConfig");
+  }
+};
 
 const Config = s.object({
   ai: schema_ProviderConfig,

@@ -45,11 +45,7 @@ class Commit {
     return repo
       .checkIsGitRepo()
       .chain(() => this.diff())
-      .chain((diff) =>
-        this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) =>
-          this.interact(diff, message)
-        )
-      )
+      .chain((diff) => this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message)))
       .mapRej((e) => {
         if (e instanceof Error) {
           p.log.error(color.red(e.message));
@@ -63,11 +59,7 @@ class Commit {
   }
 
   generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, string> {
-    return loading(
-      "Generating commit message...",
-      "Message generated!",
-      generateCommitMessage(this.providerConfig, diff, convention, template)
-    );
+    return loading("Generating commit message...", "Message generated!", generateCommitMessage(this.providerConfig, diff, convention, template));
   }
 
   refine(message: string, adjustment: string, diff: string): Future<Error, string> {
@@ -93,21 +85,19 @@ class Commit {
       Future.concurrently<
         Error,
         {
-          commit: repo.CommitMetadata;
-          localBranch: string;
-          upstream: Maybe<string>;
-          remoteUrl: string;
+          commit: Maybe<repo.CommitMetadata>;
+          localBranch: Maybe<string>;
+          baseBranch: Maybe<string>;
+          remoteUrl: Maybe<string>;
           pr: pr.PrLookup;
         }
       >({
-        commit: repo.getCommitMetadata(),
-        localBranch: repo.getCurrentBranch(),
-        upstream: repo.getUpstream(),
-        remoteUrl: repo.getTrackingRemoteUrl(),
+        commit: repo.findCommitMetadata(),
+        localBranch: repo.findCurrentBranch(),
+        baseBranch: repo.findBaseBranch(),
+        remoteUrl: repo.findTrackingRemoteUrl(),
         pr: pr.getOpenPullRequest()
-      })
-        .map((parts) => renderPushNote({ ...parts, range: result.range }))
-        .chainRej<Error>(() => Future.resolve(undefined))
+      }).map((parts) => renderPushNote({ ...parts, range: result.range }))
     );
   }
 
@@ -119,9 +109,7 @@ class Commit {
         case "commit_push":
           return this.handleCommitAndPush(message);
         case "regenerate":
-          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) =>
-            this.interact(diff, msg)
-          );
+          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, msg));
         case "adjust":
           return this.handleAdjust(diff, message);
         case "cancel":

@@ -281,9 +281,7 @@ function getRefinePrompt(params: { diff: string; currentMessage: string; adjustm
 } {
   return {
     prompt:
-      `<diff>\n${params.diff}\n</diff>\n` +
-      `<current>\n${params.currentMessage}\n</current>\n` +
-      `<adjustment>\n${params.adjustment}\n</adjustment>`,
+      `<diff>\n${params.diff}\n</diff>\n` + `<current>\n${params.currentMessage}\n</current>\n` + `<adjustment>\n${params.adjustment}\n</adjustment>`,
     systemInstruction:
       "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. " +
       "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '. " +

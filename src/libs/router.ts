@@ -104,35 +104,16 @@ type Response = Render | JSON | Redirect | SSE;
 
 // Convenience constructors for responses.
 
-const json = ({
-  status = 200,
-  headers = {},
-  content
-}: {
-  status?: number;
-  headers?: Headers;
-  content: Json;
-}): Response => new JSON({ status, headers, content });
+const json = ({ status = 200, headers = {}, content }: { status?: number; headers?: Headers; content: Json }): Response =>
+  new JSON({ status, headers, content });
 
 const redirect = (path: string): Response => new Redirect({ path });
 
-const render = ({
-  status = 200,
-  headers = {},
-  content
-}: {
-  status?: number;
-  headers?: Headers;
-  content: string | Json;
-}): Response => new Render({ status, headers, content });
+const render = ({ status = 200, headers = {}, content }: { status?: number; headers?: Headers; content: string | Json }): Response =>
+  new Render({ status, headers, content });
 
-const sse = ({
-  headers = {},
-  stream
-}: {
-  headers?: Headers;
-  stream: (emit: SendMessage, onError: OnError) => Future<Error, null>;
-}): Response => new SSE({ headers, stream });
+const sse = ({ headers = {}, stream }: { headers?: Headers; stream: (emit: SendMessage, onError: OnError) => Future<Error, null> }): Response =>
+  new SSE({ headers, stream });
 
 // A middleware is something that transforms the environment.
 type Middleware<A, B> = (req: express.Request, env: A) => Future<Response, B>;
@@ -169,10 +150,7 @@ function send(response: Response, res: express.Response): void {
   }
 }
 
-function streamSSEResponse(
-  res: express.Response,
-  stream: (emit: SendMessage, onError: OnError) => Future<Error, null>
-): void {
+function streamSSEResponse(res: express.Response, stream: (emit: SendMessage, onError: OnError) => Future<Error, null>): void {
   let connectionClosed = false;
   let endStream: Cancel = () => {};
   const closeConnection = () => {

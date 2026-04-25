@@ -2,7 +2,7 @@ export { resolveProvider };
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
+import { resolveAuthMethod, type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
 import { ensureFreshTokens } from "@/infra/auth/google";
 import { ensureFreshOpenAITokens } from "@/infra/auth/openai";
 import { updateGoogleTokens, updateOpenAITokens } from "@/infra/storage/config";
@@ -12,12 +12,7 @@ type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => May
 type RefreshProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, T>;
 type PersistProvider<T extends RefreshTokens> = (tokens: T) => Future<Error, void>;
 
-type RefreshAndPersistFlow = <T extends RefreshTokens>(
-  tokens: T,
-  refresh: RefreshProvider<T>,
-  persist: PersistProvider<T>
-) => Future<Error, T>;
-
+type RefreshAndPersistFlow = <T extends RefreshTokens>(tokens: T, refresh: RefreshProvider<T>, persist: PersistProvider<T>) => Future<Error, T>;
 type ResolveProvider = (config: Config) => Future<Error, ProviderConfig>;
 
 const tokensChanged: DetectTokenChange = (original, fresh) =>
@@ -40,18 +35,14 @@ const resolveProvider: ResolveProvider = (config) => {
       return Future.resolve(ai);
 
     case "google_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "google_oauth", content: tokens }
-      }));
+      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) =>
+        resolveAuthMethod(ai, { type: "google_oauth", content: tokens })
+      );
 
     case "openai_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) => ({
-        provider: ai.provider,
-        model: ai.model,
-        auth_method: { type: "openai_oauth", content: tokens }
-      }));
+      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) =>
+        resolveAuthMethod(ai, { type: "openai_oauth", content: tokens })
+      );
 
     default:
       return absurd(ai.auth_method, "AuthMethod");

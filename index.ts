@@ -2,6 +2,7 @@ import { Commit } from "@/cli/commit";
 import { Setup } from "@/cli/setup";
 import { Doctor } from "@/cli/doctor";
 import { ModelCommand } from "@/cli/model";
+import { EffortCommand } from "@/cli/effort";
 import { parseArgs, showHelp, showVersion } from "@/cli/parser";
 import { Future } from "@/libs/future";
 
@@ -26,6 +27,8 @@ const main = () => {
           return Doctor.create().run();
         case "model":
           return ModelCommand.create().chain((m) => m.run());
+        case "effort":
+          return EffortCommand.create().chain((e) => e.run());
         case "version":
           showVersion();
           return Future.resolve(undefined);

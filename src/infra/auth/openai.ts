@@ -171,27 +171,16 @@ const performOpenAIOAuthFlow = (): Future<Error, OpenAITokens> =>
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("originator", "codex_cli_rs");
 
-    return Future.bracket<Error, CallbackServer, OpenAITokens, void>(
-      startCallbackServer(port, state),
-      stopCallbackServer,
-      (cs) => {
-        const waitForCode: Future<Error, string> = openBrowser(authUrl.toString()).chain(() =>
-          Future.attemptP(() => cs.codePromise)
-        );
+    return Future.bracket<Error, CallbackServer, OpenAITokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
+      const waitForCode: Future<Error, string> = openBrowser(authUrl.toString()).chain(() => Future.attemptP(() => cs.codePromise));
 
-        const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-          const timer = setTimeout(
-            () => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")),
-            OAUTH_TIMEOUT_MS
-          );
-          return () => clearTimeout(timer);
-        });
+      const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
+        const timer = setTimeout(() => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")), OAUTH_TIMEOUT_MS);
+        return () => clearTimeout(timer);
+      });
 
-        return Future.race(waitForCode, timeout).chain((code) =>
-          exchangeCodeForTokens(code, codeVerifier, redirectUri)
-        );
-      }
-    );
+      return Future.race(waitForCode, timeout).chain((code) => exchangeCodeForTokens(code, codeVerifier, redirectUri));
+    });
   });
 
 const ensureFreshOpenAITokens = (tokens: OpenAITokens): Future<Error, OpenAITokens> => {
@@ -242,11 +231,7 @@ const ensureFreshOpenAITokens = (tokens: OpenAITokens): Future<Error, OpenAIToke
 };
 
 const validateOpenAITokens = (tokens: OpenAITokens): Future<Error, void> =>
-  tokens.access_token && tokens.access_token.length > 0 ?
-    Future.resolve(undefined)
-  : Future.reject(new Error("No valid OpenAI access token available"));
+  tokens.access_token && tokens.access_token.length > 0 ? Future.resolve(undefined) : Future.reject(new Error("No valid OpenAI access token available"));
 
 const getOpenAIAccessToken = (tokens: OpenAITokens): Future<Error, string> =>
-  tokens.access_token ?
-    Future.resolve(tokens.access_token)
-  : Future.reject(new Error("No OpenAI access token provided"));
+  tokens.access_token ? Future.resolve(tokens.access_token) : Future.reject(new Error("No OpenAI access token provided"));

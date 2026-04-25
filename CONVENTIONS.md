@@ -58,22 +58,10 @@ Favour static types, explicit data flow, immutability, pure functions, compositi
     s.variant({ type: "error", message: s.string, code: s.optional(s.string) })
   ]);
   ```
-- Embed **immutable snapshots** in event payloads when referencing mutable external data (e.g. a property's price at the time of booking).
-  ```ts
-  const schema_UserActions = s.discriminatedUnion([
-    s.variant({ type: "view_property", property: schema_PropertySnapshot }),
-    s.variant({ type: "start_booking", property: schema_PropertySnapshot, draftId: DraftId.schema }),
-    s.variant({ type: "confirm_booking", draftId: DraftId.schema })
-  ]);
-  ```
 - Bundle related state into **union-driven state machines**. Don't use loose boolean flags (`isStreaming`, `isError`, `isLoading`) spread across stores.
 
   ```ts
-  type Stream<E, R> =
-    | { type: "not_started" }
-    | { type: "streaming"; results: R[] }
-    | { type: "done"; results: R[] }
-    | { type: "error"; error: E };
+  type Stream<E, R> = { type: "not_started" } | { type: "streaming"; results: R[] } | { type: "done"; results: R[] } | { type: "error"; error: E };
 
   type VoiceConnection =
     | { type: "disconnected" }
@@ -232,28 +220,74 @@ Use `Future<E, T>` instead of `Promise` for lazy, cancelable async.
 - `TreeSet`: `.insert()`, `.remove()`, `.union()` mutate in place. Use `TreeSet.from()` to clone first.
 - Use `.has()` for O(log n) membership. Don't use `.values().includes()` — that's O(n).
 
-### MVar & BoundedBuffer — Async Coordination
+### MVar — Async Coordination
 
-- Use `MVar<T>` for async synchronization. `put(v)` blocks if full, `take()` blocks if empty. Resolves in FIFO order.
-- Use `BoundedBuffer<T>` for backpressure queues with max capacity. `enqueue(v)` blocks if full, `dequeue()` blocks if empty.
+Use `MVar<T>` to coordinate concurrent operations through a single mutable cell. Operations are FIFO — fair across waiters, no starvation.
 
-  ```ts
-  const textBuffer = new BoundedBuffer<string>(100);
-  const endSignal = MVar.newEmpty<null>();
+- Construct with `MVar.new(v)` (full) or `MVar.newEmpty()` (empty).
+- `put`/`take`/`read`/`modify` block; `tryPut`/`tryTake`/`tryRead` don't.
+- `tryPut` returns `boolean`; `tryTake`/`tryRead` return `Maybe<A>` — pattern match with `instanceof Just` / `instanceof Nothing`.
+- Use `modify` (not external locks) to atomically transform shared state — the original value is restored if the callback rejects.
+- Don't busy-loop on `tryTake` — use `take` to block.
+- Don't use boolean flags or unbounded arrays for "done" state — use `MVar` to block until populated.
 
-  model.onToken((token) => {
-    textBuffer.enqueue(token);
-  });
-  model.onDone(() => {
-    endSignal.put(null);
-  });
+**Completion/error latch with `MVar<Maybe<Error>>`** — surface either "closed cleanly" or "closed with error" from a callback-based lifecycle.
 
-  for await (const text of iterable) {
-    await ttsService.synthesize(text);
+```ts
+const done: MVar<Maybe<Error>> = MVar.newEmpty();
+ws.on("close", () => {
+  done.tryPut(Nothing());
+});
+ws.on("error", (err) => {
+  done.tryPut(Just(err));
+});
+
+const result = await done.take();
+if (result instanceof Just) throw result.value;
+```
+
+**End-of-stream latch with `MVar<null>`** — convert a callback-based "done" signal into a value awaitable from an `AsyncIterable`.
+
+```ts
+const end = MVar.newEmpty<null>();
+const finished = end.take();
+
+const iterable: AsyncIterable<string> = {
+  [Symbol.asyncIterator]() {
+    return {
+      next: () => Promise.race([buffer.dequeue().then((value) => ({ done: false, value })), finished.then(() => ({ done: true, value: undefined }))])
+    };
   }
-  ```
+};
 
-- Don't use unbounded arrays for streaming — memory leak risk. Don't use boolean flags for "done" state — use `MVar` to block until populated.
+model.onDone(() => {
+  end.put(null);
+});
+```
+
+**Atomic state via `modify`** — guard mutable shared state with automatic rollback on rejection.
+
+```ts
+const counter = MVar.new(0);
+const previous = await counter.modify(async (n) => [n + 1, n]);
+```
+
+### Queue & MQueue — Functional Queues
+
+- Use `Queue<T>` for immutable persistent queues — `enqueue` returns a new `Queue`; safe to share across async boundaries without copying.
+- Use `MQueue<T>` for transient producer-consumer queues where mutation is local (e.g. waiter queues inside coordination primitives).
+- `Queue.dequeue()` returns `Maybe<[T, Queue<T>]>`; `MQueue.dequeue()` returns `Maybe<T>` — both must be pattern-matched.
+- Both have amortised O(1) enqueue/dequeue via two-list (front/back) representation.
+- Don't reach for native `Array.shift()` for FIFO — it's O(n) and mutates.
+
+```ts
+let q = Queue.fromArray([1, 2, 3]);
+const r = q.dequeue();
+if (r instanceof Just) {
+  const [head, rest] = r.value;
+  q = rest; // thread the new queue
+}
+```
 
 ---
 

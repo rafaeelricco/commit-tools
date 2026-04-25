@@ -31,8 +31,7 @@ type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
 //
 //    UnionToTuple<A | B> == [ A , B ]
 //
-type UnionToTuple<T, A extends unknown[] = []> =
-  IsUnion<T> extends true ? UnionToTuple<Exclude<T, PopUnion<T>>, [PopUnion<T>, ...A]> : [T, ...A];
+type UnionToTuple<T, A extends unknown[] = []> = IsUnion<T> extends true ? UnionToTuple<Exclude<T, PopUnion<T>>, [PopUnion<T>, ...A]> : [T, ...A];
 
 // Pick an option from a union
 //

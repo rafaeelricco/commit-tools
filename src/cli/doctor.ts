@@ -1,8 +1,13 @@
 export { Doctor };
 
+import * as pr from "@/infra/github/pr";
+import * as repo from "@/infra/git/repo";
+
 import { Future } from "@/libs/future";
 import { CONFIG_FILE, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
+import { Just, type Maybe } from "@/libs/maybe";
+import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
 
@@ -19,11 +24,14 @@ class Doctor {
   }
 
   run(): Future<Error, void> {
+    const start = performance.now();
     return this.checkOAuthCredentials().chain((oauthRow) =>
-      this.checkConfig().map((configRows) => {
-        const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows];
-        this.renderTable(rows);
-      })
+      this.checkConfig().chain((configRows) =>
+        this.checkGitContext().map((gitRows) => {
+          const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows, ...gitRows];
+          this.renderTable(rows, performance.now() - start);
+        })
+      )
     );
   }
 
@@ -67,7 +75,7 @@ class Doctor {
           const rows: CheckRow[] = [row];
           const ai = config.ai;
 
-          rows.push(["Provider", color.green(ai.provider), `Model: ${ai.model}`]);
+          rows.push(["Provider", color.green(ai.provider), renderModelInfo(ai)]);
 
           const authMethod = ai.auth_method.type;
 
@@ -92,7 +100,22 @@ class Doctor {
     });
   }
 
-  private renderTable(rows: CheckRow[]): void {
+  private checkGitContext(): Future<Error, CheckRow[]> {
+    return repo
+      .checkIsGitRepo()
+      .chain((): Future<Error, CheckRow[]> => this.collectGitRows())
+      .chainRej((): Future<Error, CheckRow[]> => Future.resolve([["Git Repository", color.yellow("Outside"), "Not a git repository"]]));
+  }
+
+  private collectGitRows(): Future<Error, CheckRow[]> {
+    return Future.concurrently<Error, { branch: Maybe<string>; base: Maybe<string>; pr: pr.PrLookup }>({
+      branch: repo.findCurrentBranch(),
+      base: repo.findBaseBranch(),
+      pr: pr.getOpenPullRequest()
+    }).map(({ branch, base, pr: prLookup }): CheckRow[] => [renderBranchRow(branch), renderBaseRow(base), renderPrRow(prLookup)]);
+  }
+
+  private renderTable(rows: CheckRow[], elapsedMs: number): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
       colWidths: [20, 15, 40]
@@ -108,9 +131,37 @@ class Doctor {
     if (!hasConfig) {
       process.stdout.write(color.yellow("! Please run 'commit-tools setup' to configure your API key.\n\n"));
     } else {
-      process.stdout.write(color.green("System is ready to generate commits!\n\n"));
+      process.stdout.write(color.green(`System is ready to generate commits! Done in ${(elapsedMs / 1000).toFixed(2)}s`));
     }
   }
+}
+
+function renderBranchRow(branch: Maybe<string>): CheckRow {
+  return branch instanceof Just ? ["Branch", color.green("Current"), branch.value] : ["Branch", color.yellow("Unknown"), "Could not read current branch"];
+}
+
+function renderBaseRow(base: Maybe<string>): CheckRow {
+  return base instanceof Just ? ["Base", color.green("Detected"), base.value] : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
+}
+
+function renderPrRow(lookup: pr.PrLookup): CheckRow {
+  switch (lookup.type) {
+    case "found":
+      return ["Pull Request", color.green("Open"), `#${lookup.pr.number} ${lookup.pr.url}`];
+    case "not-found":
+      return ["Pull Request", color.yellow("None"), "No open PR for this branch"];
+    case "unauthenticated":
+      return ["Pull Request", color.yellow("Auth"), "Run 'gh auth login' to enable PR lookup"];
+    case "unavailable":
+      return ["Pull Request", color.gray("Skipped"), "gh not installed or remote is not GitHub"];
+    default:
+      return absurd(lookup, "PrLookup");
+  }
+}
+
+function renderModelInfo(ai: ProviderConfig): string {
+  const base = `${ai.model}`;
+  return ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
 }
 
 function authMethodLabel(authMethod: AuthMethod): string {

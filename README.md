@@ -1,6 +1,6 @@
 # commit-tools
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.2.5-blue.svg)](#)
 
 Writing good commit messages _can_ have a high cognitive cost, especially when you make dozens of commits a day. That energy should be directed toward solving hard problems and shipping features, not summarizing them.
 
@@ -113,6 +113,12 @@ After setup, you can switch AI models from your configured provider at any time:
 commit model
 ```
 
+This flow also lets you adjust the reasoning effort for the chosen model. If the model is already the one you want and you only need to change the effort level, run:
+
+```bash
+commit effort
+```
+
 ### 3. Generate a Commit
 
 Stage your changes, then run:
@@ -144,16 +150,17 @@ To see all available commands at any time, run:
 commit --help
 ```
 
-| Command                  | Description                              |
-| ------------------------ | ---------------------------------------- |
-| `commit`                 | Generate a commit message (default)      |
-| `commit generate`        | Generate a commit message                |
-| `commit setup`           | Configure authentication and conventions |
-| `commit login`           | Alias for setup — re-authenticate        |
-| `commit doctor`          | Check installation and environment       |
-| `commit model`           | Select a different AI model              |
-| `commit --version`, `-v` | Show version                             |
-| `commit --help`, `-h`    | Show help                                |
+| Command                  | Description                                       |
+| ------------------------ | ------------------------------------------------- |
+| `commit`                 | Generate a commit message (default)               |
+| `commit generate`        | Generate a commit message                         |
+| `commit setup`           | Configure authentication and conventions          |
+| `commit login`           | Alias for setup — re-authenticate                 |
+| `commit doctor`          | Check installation and environment                |
+| `commit model`           | Select a different AI model                       |
+| `commit effort`          | Adjust the reasoning effort for the current model |
+| `commit --version`, `-v` | Show version                                      |
+| `commit --help`, `-h`    | Show help                                         |
 
 ## Providers
 

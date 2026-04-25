@@ -1,42 +1,49 @@
 export { generateContentWithOpenAI };
 
-import { type Config, type OpenAITokens } from "@/domain/config/config";
+import OpenAI from "openai";
+
+import { type Config, type OpenAIEffort } from "@/domain/config/config";
 import { type GenerateContentParams } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
 import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { extractResponse } from "@/domain/llm/response-parser";
-
-import OpenAI from "openai";
+import { unsupportedAuth } from "@/domain/llm/auth-error";
+import { absurd } from "@/libs/types";
+import { fromOptional, type Maybe } from "@/libs/maybe";
 
 type OpenAIConfig = Extract<Config["ai"], { provider: "openai" }>;
+type StreamBundle = {
+  response: OpenAI.Responses.Response;
+  doneEventText: string;
+  deltaSnapshotText: string;
+};
 
-const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
+  const fromOutput = bundle.response.output
+    .flatMap((item) => (item.type === "message" ? item.content : []))
+    .map((c) => (c.type === "output_text" ? c.text : ""))
+    .join("");
 
-const callOpenAIWithApiKey = (authToken: string, model: string, params: GenerateContentParams): Future<Error, string> =>
+  const candidates = [fromOutput, bundle.response.output_text, bundle.doneEventText, bundle.deltaSnapshotText];
+  return fromOptional(candidates.find((v): v is string => typeof v === "string" && v.trim().length > 0));
+};
+
+const openaiReasoning = (effort: Maybe<OpenAIEffort>): Maybe<OpenAI.Reasoning> => effort.map((e) => ({ effort: e }));
+
+const buildStreamParams = (model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): OpenAI.Responses.ResponseCreateParamsStreaming => {
+  const core: OpenAI.Responses.ResponseCreateParamsStreaming = {
+    model,
+    instructions: params.systemInstruction ?? "",
+    input: [{ role: "user", content: params.prompt }],
+    store: false,
+    stream: true
+  };
+  return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
+};
+
+const callOpenAIStream = (client: OpenAI, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
-    const client = new OpenAI({ apiKey: authToken });
-    return await client.responses.create({
-      model,
-      instructions: params.systemInstruction ?? null,
-      input: params.prompt
-    });
-  })
-    .mapRej(toError)
-    .chain((response) => extractResponse({ provider: "openai", source: "direct", value: response }));
-
-const callOpenAIWithOAuth = (authToken: string, model: string, params: GenerateContentParams): Future<Error, string> =>
-  Future.attemptP(async () => {
-    const client = new OpenAI({
-      baseURL: "https://chatgpt.com/backend-api/codex",
-      apiKey: authToken
-    });
-
-    const stream = client.responses.stream({
-      model,
-      instructions: params.systemInstruction ?? "",
-      input: [{ role: "user", content: params.prompt }],
-      store: false
-    });
+    const stream = client.responses.stream(buildStreamParams(model, effort, params));
 
     let deltaSnapshotText = "";
     let doneEventText = "";
@@ -52,29 +59,27 @@ const callOpenAIWithOAuth = (authToken: string, model: string, params: GenerateC
     const response = await stream.finalResponse();
     return { response, doneEventText, deltaSnapshotText };
   })
-    .mapRej(toError)
-    .chain((bundle) => extractResponse({ provider: "openai", source: "stream", value: bundle }));
+    .mapRej((error) => new Error(`Failed to create OpenAI response: ${error instanceof Error ? error.message : String(error)}`))
+    .chain((bundle) => extractResponse({ text: extractStreamText(bundle) }));
 
-const generateContentWithApiKey = (
-  apiKey: string,
-  model: string,
-  params: GenerateContentParams
-): Future<Error, string> => callOpenAIWithApiKey(apiKey, model, params);
+const callOpenAIWithApiKey = (apiKey: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+  callOpenAIStream(new OpenAI({ apiKey }), model, effort, params);
 
-const generateContentWithOAuth = (
-  tokens: OpenAITokens,
-  model: string,
-  params: GenerateContentParams
-): Future<Error, string> =>
-  getOpenAIAccessToken(tokens).chain((accessToken) => callOpenAIWithOAuth(accessToken, model, params));
+const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> =>
+  callOpenAIStream(new OpenAI({ baseURL: "https://chatgpt.com/backend-api/codex", apiKey: authToken }), model, effort, params);
 
 const generateContentWithOpenAI = (config: OpenAIConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {
     case "api_key":
-      return generateContentWithApiKey(config.auth_method.content, config.model, params);
+      return callOpenAIWithApiKey(config.auth_method.content, config.model, config.effort, params);
     case "openai_oauth":
-      return generateContentWithOAuth(config.auth_method.content, config.model, params);
+      return getOpenAIAccessToken(config.auth_method.content).chain((accessToken) =>
+        callOpenAIWithOAuth(accessToken, config.model, config.effort, params)
+      );
+    case "google_oauth":
+    case "anthropic_setup_token":
+      return unsupportedAuth("openai", config.auth_method.type);
     default:
-      return Future.reject(new Error(`Unsupported auth method for OpenAI: ${config.auth_method.type}`));
+      return absurd(config.auth_method, "AuthMethod");
   }
 };

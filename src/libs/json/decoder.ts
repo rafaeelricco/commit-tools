@@ -127,22 +127,16 @@ const both = <T, U>(left: Decoder<T>, right: Decoder<U>): Decoder<[T, U]> =>
     return Success([l.value, r.value]);
   });
 
-const string: Decoder<string> = new Decoder((v) =>
-  typeof v === "string" ? Success(v) : failure("expected string but found " + typeof v)
-);
+const string: Decoder<string> = new Decoder((v) => (typeof v === "string" ? Success(v) : failure("expected string but found " + typeof v)));
 
-const number: Decoder<number> = new Decoder((v) =>
-  typeof v === "number" ? Success(v) : failure("expected number but found " + typeof v)
-);
+const number: Decoder<number> = new Decoder((v) => (typeof v === "number" ? Success(v) : failure("expected number but found " + typeof v)));
 
 const stringNumber: Decoder<number> = string.chain((s) => {
   const v = parseInt(s, 10);
   return isNaN(v) ? fail("not a valid number: " + s) : succeed(v);
 });
 
-const boolean: Decoder<boolean> = new Decoder((v) =>
-  typeof v === "boolean" ? Success(v) : failure("expected boolean but found " + typeof v)
-);
+const boolean: Decoder<boolean> = new Decoder((v) => (typeof v === "boolean" ? Success(v) : failure("expected boolean but found " + typeof v)));
 
 const array = <V>(decodeValue: Decoder<V>): Decoder<Array<V>> =>
   new Decoder((input) => {
@@ -270,13 +264,9 @@ const maybe = <V>(decoder: Decoder<V>): Decoder<Maybe<V>> =>
 
 const nullable = <V>(decoder: Decoder<V>): Decoder<Nullable<V>> => oneOf([nullP, decoder]);
 
-const nullP: Decoder<null> = new Decoder((v) =>
-  v === null ? Success(null) : failure("expected null but found " + typeof v)
-);
+const nullP: Decoder<null> = new Decoder((v) => (v === null ? Success(null) : failure("expected null but found " + typeof v)));
 
-const undefinedP: Decoder<undefined> = new Decoder((v) =>
-  v === undefined ? Success(undefined) : failure("expected `undefined` " + typeof v)
-);
+const undefinedP: Decoder<undefined> = new Decoder((v) => (v === undefined ? Success(undefined) : failure("expected `undefined` " + typeof v)));
 
 // Useful for parsing tag names in discriminated unions.
 const stringLiteral = <T extends string>(str: T): Decoder<T> =>
@@ -297,8 +287,7 @@ class DecoderOptional<A> {
 
 const optionalMaybe = <V>(decoder: Decoder<V>): DecoderOptional<Maybe<V>> => DecoderOptional.from(decoder);
 
-const optionalNullable = <V>(decoder: Decoder<NonNullable<V>>): DecoderOptional<Nullable<V>> =>
-  optionalMaybe(decoder).map((v) => v.asNullable());
+const optionalNullable = <V>(decoder: Decoder<NonNullable<V>>): DecoderOptional<Nullable<V>> => optionalMaybe(decoder).map((v) => v.asNullable());
 
 // An object field that may be absent.
 const optional = <V>(decoder: Decoder<V>): DecoderOptional<V | undefined> =>

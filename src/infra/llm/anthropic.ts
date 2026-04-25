@@ -11,15 +11,13 @@ import { extractResponse } from "@/domain/llm/response-parser";
 import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
-type TextBlock = { type: "text"; text: string };
 type SystemParam = NonNullable<Anthropic.MessageCreateParamsNonStreaming["system"]>;
 
-const BASE_MAX_TOKENS = 4096;
-const claudeCodeBlock: TextBlock = { type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT };
+const BASE_MAX_TOKENS = 16384;
 
-const extractAnthropicText = (content: Array<{ type: string; text?: string }>): string =>
+const extractAnthropicText = (content: Anthropic.ContentBlock[]): string =>
   content
-    .filter((b): b is TextBlock => b.type === "text" && typeof b.text === "string")
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
 
@@ -40,7 +38,10 @@ const buildParams = (
 };
 
 const buildSetupTokenSystem = (instruction: Maybe<string>): SystemParam =>
-  instruction.maybe<TextBlock[]>([claudeCodeBlock], (text) => [claudeCodeBlock, { type: "text", text }]);
+  instruction.maybe<Anthropic.TextBlockParam[]>(
+    [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }],
+    (text) => [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }, { type: "text", text }]
+  );
 
 const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {

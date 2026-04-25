@@ -4,7 +4,14 @@ import * as D from "@/libs/json/decoder";
 
 import { Result } from "@/libs/result";
 
-type CliCommand = { type: "generate" } | { type: "setup" } | { type: "doctor" } | { type: "model" } | { type: "version" } | { type: "help" };
+type CliCommand =
+  | { type: "generate" }
+  | { type: "setup" }
+  | { type: "doctor" }
+  | { type: "model" }
+  | { type: "effort" }
+  | { type: "version" }
+  | { type: "help" };
 
 const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) => {
   const cmd = args[0] || "generate";
@@ -19,6 +26,8 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
       return D.succeed({ type: "doctor" as const });
     case "model":
       return D.succeed({ type: "model" as const });
+    case "effort":
+      return D.succeed({ type: "effort" as const });
     case "--version":
     case "-v":
       return D.succeed({ type: "version" as const });
@@ -42,6 +51,7 @@ Commands:
   login               Alias for setup (re-authenticate)
   doctor              Check installation and environment
   model               Select a different AI model
+  effort              Adjust the reasoning effort for the current model
   --version, -v       Show version
   --help, -h          Show help
   `);
@@ -49,7 +59,7 @@ Commands:
 
 const showVersion = (): void => {
   const start = performance.now();
-  console.log("commit-tools 0.2.0 (node)");
+  console.log("commit-tools 0.2.5 (node)");
   const elapsed = performance.now() - start;
   console.log(`Done in ${elapsed.toLocaleString()}ms`);
 };

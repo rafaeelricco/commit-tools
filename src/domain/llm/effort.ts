@@ -1,13 +1,4 @@
-export {
-  openaiReasoningParam,
-  anthropicAdaptiveParam,
-  anthropicEnabledParam,
-  geminiLevelConfig,
-  geminiBudgetConfig,
-  seedProviderConfig,
-  withModel,
-  selectEffortForProvider
-};
+export { openaiReasoningParam, geminiLevelConfig, geminiBudgetConfig, seedProviderConfig, withModel, selectEffortForProvider };
 
 import { type ThinkingConfig, ThinkingLevel } from "@google/genai";
 import { type Future } from "@/libs/future";
@@ -17,40 +8,11 @@ import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort } from "@
 import { absurd } from "@/libs/types";
 
 import type OpenAI from "openai";
-import type Anthropic from "@anthropic-ai/sdk";
 
 const openaiReasoningParam = (effort: Maybe<OpenAIEffort>): { reasoning: OpenAI.Reasoning } | undefined =>
   effort.maybe<{ reasoning: OpenAI.Reasoning } | undefined>(undefined, (e) => ({
     reasoning: { effort: e }
   }));
-
-const anthropicAdaptiveParam = (
-  effort: Maybe<AnthropicEffort>
-): { thinking: Anthropic.ThinkingConfigAdaptive; output_config: Anthropic.OutputConfig } | undefined =>
-  effort.maybe<{ thinking: Anthropic.ThinkingConfigAdaptive; output_config: Anthropic.OutputConfig } | undefined>(undefined, (e) => ({
-    thinking: { type: "adaptive" },
-    output_config: { effort: e }
-  }));
-
-const BUDGET_BY_EFFORT: Record<AnthropicEffort, number> = {
-  low: 1024,
-  medium: 4096,
-  high: 16384,
-  xhigh: 20480,
-  max: 24576
-};
-
-const anthropicEnabledParam = (
-  effort: Maybe<AnthropicEffort>,
-  baseMaxTokens: number
-): { thinking: Anthropic.ThinkingConfigEnabled; max_tokens: number } | undefined =>
-  effort.maybe<{ thinking: Anthropic.ThinkingConfigEnabled; max_tokens: number } | undefined>(undefined, (e) => {
-    const budget = BUDGET_BY_EFFORT[e];
-    return {
-      thinking: { type: "enabled", budget_tokens: budget },
-      max_tokens: Math.max(baseMaxTokens, budget + 1024)
-    };
-  });
 
 const LEVEL_MAP: Record<GeminiEffort, ThinkingLevel> = {
   MINIMAL: ThinkingLevel.MINIMAL,

@@ -8,20 +8,14 @@ import { Future } from "@/libs/future";
 import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/anthropic";
 import { absurd } from "@/libs/types";
 import { extractResponse } from "@/domain/llm/response-parser";
-import { anthropicAdaptiveParam, anthropicEnabledParam } from "@/domain/llm/effort";
-import { tryWithEffort, type EffortAttempt } from "@/infra/llm/effort-fallback";
-import { Just, type Maybe } from "@/libs/maybe";
+import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
-
 type TextBlock = { type: "text"; text: string };
-
-type Stage = "adaptive" | "enabled" | "off";
+type SystemParam = NonNullable<Anthropic.MessageCreateParamsNonStreaming["system"]>;
 
 const BASE_MAX_TOKENS = 4096;
-
-// TODO: We really need this?
-const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+const claudeCodeBlock: TextBlock = { type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT };
 
 const extractAnthropicText = (content: Array<{ type: string; text?: string }>): string =>
   content
@@ -29,98 +23,50 @@ const extractAnthropicText = (content: Array<{ type: string; text?: string }>): 
     .map((b) => b.text)
     .join("");
 
-const buildApiKeyParams = (
+const buildParams = (
   model: string,
+  system: Maybe<SystemParam>,
   effort: Maybe<AnthropicEffort>,
-  params: GenerateContentParams,
-  stage: Stage
+  params: GenerateContentParams
 ): Anthropic.MessageCreateParamsNonStreaming => {
-  const base: Anthropic.MessageCreateParamsNonStreaming = {
+  const core: Anthropic.MessageCreateParamsNonStreaming = {
     model,
     max_tokens: BASE_MAX_TOKENS,
-    ...(params.systemInstruction !== undefined ? { system: params.systemInstruction } : {}),
-    messages: [{ role: "user", content: params.prompt }]
+    messages: [{ role: "user", content: params.prompt }],
+    thinking: { type: "adaptive" },
+    output_config: { effort: effort.withDefault("medium") }
   };
-
-  // TODO: That's is interesting. These both if's are wrong. We don't want the adaptive. and we don't want to verify if the effort is enabled. The effort should be ever enabled. If any effort level is set, use the "medium" or "high" as default.
-  if (stage === "adaptive") {
-    const adaptive = anthropicAdaptiveParam(effort);
-    return adaptive ? { ...base, ...adaptive } : base;
-  }
-  if (stage === "enabled") {
-    const enabled = anthropicEnabledParam(effort, BASE_MAX_TOKENS);
-    return enabled ? { ...base, thinking: enabled.thinking, max_tokens: enabled.max_tokens } : base;
-  }
-  return base;
+  return system.maybe(core, (s) => ({ ...core, system: s }));
 };
 
-const buildSetupTokenParams = (
-  model: string,
-  effort: Maybe<AnthropicEffort>,
-  params: GenerateContentParams,
-  stage: Stage
-): Anthropic.MessageCreateParamsNonStreaming => {
-  const systemBlocks: TextBlock[] = [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }];
-  if (params.systemInstruction !== undefined) {
-    systemBlocks.push({ type: "text", text: params.systemInstruction });
-  }
+const buildSetupTokenSystem = (instruction: Maybe<string>): SystemParam =>
+  instruction.maybe<TextBlock[]>([claudeCodeBlock], (text) => [claudeCodeBlock, { type: "text", text }]);
 
-  const base: Anthropic.MessageCreateParamsNonStreaming = {
-    model,
-    max_tokens: BASE_MAX_TOKENS,
-    system: systemBlocks,
-    messages: [{ role: "user", content: params.prompt }]
-  };
-
-  if (stage === "adaptive") {
-    const adaptive = anthropicAdaptiveParam(effort);
-    return adaptive ? { ...base, ...adaptive } : base;
-  }
-  if (stage === "enabled") {
-    const enabled = anthropicEnabledParam(effort, BASE_MAX_TOKENS);
-    return enabled ? { ...base, thinking: enabled.thinking, max_tokens: enabled.max_tokens } : base;
-  }
-  return base;
-};
-
-const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> => {
-  const run = (stage: Stage): Future<Error, string> =>
-    Future.attemptP(async () => {
-      const client = new Anthropic({ apiKey });
-      return await client.messages.create(buildApiKeyParams(model, effort, params, stage));
-    })
-      .mapRej(toError)
-      .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
-
-  return tryWithEffort<string>(buildAttempts(effort, run));
-};
+const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> =>
+  Future.attemptP(async () => {
+    const client = new Anthropic({ apiKey });
+    return await client.messages.create(buildParams(model, fromOptional(params.systemInstruction), effort, params));
+  })
+    .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`))
+    .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
 
 const callAnthropicWithSetupToken = (
   authToken: string,
   model: string,
   effort: Maybe<AnthropicEffort>,
   params: GenerateContentParams
-): Future<Error, string> => {
-  const run = (stage: Stage): Future<Error, string> =>
-    Future.attemptP(async () => {
-      const client = new Anthropic({
-        apiKey: null,
-        authToken,
-        defaultHeaders: anthropicOAuthHeaders()
-      });
-      return await client.messages.create(buildSetupTokenParams(model, effort, params, stage));
-    })
-      .mapRej(toError)
-      .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
-
-  return tryWithEffort<string>(buildAttempts(effort, run));
-};
-
-const buildAttempts = (
-  effort: Maybe<AnthropicEffort>,
-  run: (stage: Stage) => Future<Error, string>
-): readonly [EffortAttempt<string>, ...EffortAttempt<string>[]] =>
-  anthropicAdaptiveParam(effort) !== undefined ? [() => run("adaptive"), () => run("enabled"), () => run("off")] : [() => run("off")];
+): Future<Error, string> =>
+  Future.attemptP(async () => {
+    const client = new Anthropic({
+      apiKey: null,
+      authToken,
+      defaultHeaders: anthropicOAuthHeaders()
+    });
+    const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
+    return await client.messages.create(buildParams(model, system, effort, params));
+  })
+    .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`))
+    .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
 
 const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {

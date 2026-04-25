@@ -8,14 +8,17 @@ type Value<T> =
   | { tag: "full"; value: T }
   | { tag: "in_use" };
 
-/*
-  A mutable variable that can be full or empty.
-  Use state-based coordination of concurrent operations. e.g. block until a condition is true/false.
-  MVars are fair. Puts and takes are resolved in the order in which they were made.
-
-  Trying to put on a full MVar blocks until the MVar is empty.
-  Trying to take on an empty MVar blocks until the MVar is full.
-*/
+/**
+ * A mutable variable that is either empty or holds one value of type `A`.
+ *
+ * Coordinates concurrent operations via FIFO fairness: blocked `put`/`take`/`modify`
+ * calls resume in the order they were enqueued, so no waiter is starved.
+ *
+ * Reach for `MVar` when you need:
+ * - a completion/error latch (`MVar<Maybe<Error>>`)
+ * - a single-slot mailbox between producer and consumer
+ * - atomic mutation of shared state without an external lock (`modify`)
+ */
 class MVar<A> {
   // Queued writes and modifications are resolved in the order in which they arrive.
   private waitingEmpty: MQueue<[A, () => void]> = MQueue.new();
@@ -26,10 +29,12 @@ class MVar<A> {
     this.value = initial.maybe<Value<A>>({ tag: "empty" }, (value) => ({ tag: "full", value }));
   }
 
+  /** Create a full `MVar` holding `v`. The first `take` returns immediately; the first `put` blocks until taken. */
   static new<A>(v: A): MVar<A> {
     return new MVar(Just(v));
   }
 
+  /** Create an empty `MVar`. The first `put` returns immediately; the first `take` blocks until populated. */
   static newEmpty<A>(): MVar<A> {
     return new MVar(Nothing());
   }
@@ -44,8 +49,10 @@ class MVar<A> {
     }
   }
 
-  // Put a value into an empty MVar.
-  // If the MVar is full, it blocks until it becomes empty.
+  /**
+   * Place `v` into the MVar. Resolves once stored.
+   * If full or in use, blocks (FIFO) until empty.
+   */
   put(v: A): Promise<void> {
     const enqueue = () =>
       new Promise<void>((resolve) => {
@@ -71,8 +78,10 @@ class MVar<A> {
     }
   }
 
-  // Like put, but doesn't block.
-  // Returns whether the put was successful or not.
+  /**
+   * Non-blocking `put`. Returns `true` if stored, `false` if the MVar
+   * was full/in-use (and the value was discarded).
+   */
   tryPut(v: A): boolean {
     switch (this.value.tag) {
       case "empty":
@@ -103,8 +112,10 @@ class MVar<A> {
     }
   }
 
-  // Take the value in the MVar, leaving it empty.
-  // If the MVar is empty, it blocks until it becomes full.
+  /**
+   * Remove and return the held value, leaving the MVar empty.
+   * If empty or in use, blocks (FIFO) until a value is put.
+   */
   take(): Promise<A> {
     const enqueue = () =>
       new Promise<A>((resolve) => {
@@ -130,8 +141,10 @@ class MVar<A> {
     }
   }
 
-  // Like take, but doesn't block.
-  // Returns whether the take was successful or not.
+  /**
+   * Non-blocking `take`. Returns `Just(v)` if a value was taken,
+   * `Nothing()` if the MVar was empty/in-use.
+   */
   tryTake(): Maybe<A> {
     switch (this.value.tag) {
       case "empty":
@@ -148,8 +161,13 @@ class MVar<A> {
     }
   }
 
-  // Modify the value in the MVar. Allows returning a value in the computation too.
-  // If the MVar is empty, it blocks until it becomes full.
+  /**
+   * Atomically transform the held value. `f` receives the current value
+   * and returns `[newValue, result]`. The MVar is marked in-use during the
+   * call, blocking other consumers.
+   *
+   * If `f` rejects, the original value is restored — safe under failure.
+   */
   async modify<B>(f: (v: A) => Promise<[A, B]>): Promise<B> {
     const resume = async (value: A): Promise<B> => {
       try {
@@ -177,13 +195,15 @@ class MVar<A> {
     }
   }
 
-  /* Like 'modify' but without returning a value.
-   */
+  /** Like `modify`, but `f` returns only the new value; no result is computed. */
   async modify_(f: (v: A) => Promise<A>): Promise<void> {
     return this.modify((v) => f(v).then((x) => [x, undefined]));
   }
 
-  // Get the value of the MVar without removing it.
+  /**
+   * Read the held value without removing it.
+   * If empty or in use, blocks (FIFO) until a value is put.
+   */
   async read(): Promise<A> {
     const v = this.tryRead();
     if (v instanceof Just) {
@@ -192,8 +212,10 @@ class MVar<A> {
     return await this.modify(async (v) => [v, v]);
   }
 
-  // Like read, but doesn't block.
-  // Returns the value if the MVar was full.
+  /**
+   * Non-blocking `read`. Returns `Just(v)` if a value is held,
+   * `Nothing()` if the MVar is empty/in-use.
+   */
   tryRead(): Maybe<A> {
     switch (this.value.tag) {
       case "empty":

@@ -5,7 +5,7 @@ import { GoogleGenAI, type GenerateContentConfig } from "@google/genai";
 import { Future } from "@/libs/future";
 import { type Config, type OAuthTokens, type GeminiEffort } from "@/domain/config/config";
 import { getAccessToken } from "@/infra/auth/google";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, fromOptional, type Maybe } from "@/libs/maybe";
 import { type GenerateContentParams } from "@/domain/llm/router";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { geminiLevelConfig, geminiBudgetConfig } from "@/domain/llm/effort";
@@ -54,7 +54,7 @@ const generateContentWithApiKey = (apiKey: string, model: string, effort: Maybe<
       return await ai.models.generateContent({ model, contents: params.prompt, config });
     })
       .mapRej(toError)
-      .chain((result) => extractResponse({ provider: "gemini", source: "sdk", value: result }));
+      .chain((result) => extractResponse({ text: fromOptional(result.text) }));
 
   return tryWithEffort<string>(buildAttempts(effort, run));
 };
@@ -109,7 +109,7 @@ const generateContentWithOAuth = (
         };
       })
         .mapRej(toError)
-        .chain((json) => extractResponse({ provider: "gemini", source: "rest", value: json }));
+        .chain((json) => extractResponse({ text: fromOptional(json.candidates?.[0]?.content?.parts?.[0]?.text) }));
 
     return tryWithEffort<string>(buildAttempts(effort, run));
   });

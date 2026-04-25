@@ -10,7 +10,7 @@ import { absurd } from "@/libs/types";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { anthropicAdaptiveParam, anthropicEnabledParam } from "@/domain/llm/effort";
 import { tryWithEffort, type EffortAttempt } from "@/infra/llm/effort-fallback";
-import { type Maybe } from "@/libs/maybe";
+import { Just, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 
@@ -22,6 +22,12 @@ const BASE_MAX_TOKENS = 4096;
 
 // TODO: We really need this?
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+
+const extractAnthropicText = (content: Array<{ type: string; text?: string }>): string =>
+  content
+    .filter((b): b is TextBlock => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("");
 
 const buildApiKeyParams = (
   model: string,
@@ -84,7 +90,7 @@ const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<An
       return await client.messages.create(buildApiKeyParams(model, effort, params, stage));
     })
       .mapRej(toError)
-      .chain((response) => extractResponse({ provider: "anthropic", value: response }));
+      .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
 
   return tryWithEffort<string>(buildAttempts(effort, run));
 };
@@ -105,7 +111,7 @@ const callAnthropicWithSetupToken = (
       return await client.messages.create(buildSetupTokenParams(model, effort, params, stage));
     })
       .mapRej(toError)
-      .chain((response) => extractResponse({ provider: "anthropic", value: response }));
+      .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
 
   return tryWithEffort<string>(buildAttempts(effort, run));
 };

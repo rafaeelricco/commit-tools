@@ -9,11 +9,30 @@ import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { openaiReasoningParam } from "@/domain/llm/effort";
 import { tryWithEffort, type EffortAttempt } from "@/infra/llm/effort-fallback";
-import { type Maybe } from "@/libs/maybe";
+import { fromOptional, type Maybe } from "@/libs/maybe";
 
 type OpenAIConfig = Extract<Config["ai"], { provider: "openai" }>;
 
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+
+type StreamBundle = {
+  response: {
+    output: Array<{ type: string; content?: Array<{ type: string; text?: string }> }>;
+    output_text?: string | null;
+  };
+  doneEventText: string;
+  deltaSnapshotText: string;
+};
+
+const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
+  const fromOutput = bundle.response.output
+    .flatMap((item) => (item.type === "message" ? (item.content ?? []) : []))
+    .map((c) => (c.type === "output_text" ? (c.text ?? "") : ""))
+    .join("");
+
+  const candidates = [fromOutput, bundle.response.output_text ?? "", bundle.doneEventText, bundle.deltaSnapshotText];
+  return fromOptional(candidates.find((v) => v.trim().length > 0));
+};
 
 const callOpenAIWithApiKey = (authToken: string, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Future<Error, string> => {
   const run = (withReasoning: boolean): Future<Error, string> =>
@@ -29,7 +48,7 @@ const callOpenAIWithApiKey = (authToken: string, model: string, effort: Maybe<Op
       });
     })
       .mapRej(toError)
-      .chain((response) => extractResponse({ provider: "openai", source: "direct", value: response }));
+      .chain((response) => extractResponse({ text: fromOptional(response.output_text) }));
 
   // TODO: the implementation is not good if we need to do attempts to return some response. Remove this attempt and also think in a way to do this type-safe, no helpers and do the calls via SDK instead of REST, that way we can have better types and avoid all this "tryWithEffort" and "EffortAttempt" and "Maybe" and all that. We just need a simple function that tries to call the API with different parameters until it succeeds or runs out of options.
   const attempts: readonly [EffortAttempt<string>, ...EffortAttempt<string>[]] =
@@ -72,7 +91,7 @@ const callOpenAIWithOAuth = (authToken: string, model: string, effort: Maybe<Ope
       return { response, doneEventText, deltaSnapshotText };
     })
       .mapRej(toError)
-      .chain((bundle) => extractResponse({ provider: "openai", source: "stream", value: bundle }));
+      .chain((bundle) => extractResponse({ text: extractStreamText(bundle) }));
 
   // TODO: the implementation is not good if we need to do attempts to return some response. Remove this attempt and also think in a way to do this type-safe, no helpers and do the calls via SDK instead of REST, that way we can have better types and avoid all this "tryWithEffort" and "EffortAttempt" and "Maybe" and all that. We just need a simple function that tries to call the API with different parameters until it succeeds or runs out of options.
   const attempts: readonly [EffortAttempt<string>, ...EffortAttempt<string>[]] =

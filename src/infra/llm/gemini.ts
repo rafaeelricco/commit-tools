@@ -21,8 +21,6 @@ type OAuthRequestBody = {
 };
 
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
-  if (config.ai.provider !== "gemini") return Nothing();
-
   switch (config.ai.auth_method.type) {
     case "google_oauth":
       return Just({ method: "google_oauth", tokens: config.ai.auth_method.content });
@@ -48,18 +46,43 @@ const buildOAuthBody = (effort: Maybe<GeminiEffort>, params: GenerateContentPara
   return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: { parts: [{ text: s }] } }));
 };
 
-const parseOAuthResponse = async (response: Response): Promise<GenerateContentResponse> => {
+const extractSSEEventText = (event: string): string => {
+  const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
+  if (!dataLine) return "";
+  const json = JSON.parse(dataLine.slice(6)) as GenerateContentResponse;
+  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+};
+
+const accumulateSSEText = async (response: Response): Promise<string> => {
   if (!response.ok) throw new Error(`Gemini API error (${response.status}): ${await response.text()}`);
-  return (await response.json()) as GenerateContentResponse;
+  if (!response.body) throw new Error("Gemini stream returned no body");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    for (const ev of events) text += extractSSEEventText(ev);
+  }
+  return text;
 };
 
 const generateContentWithApiKey = (apiKey: string, model: string, effort: Maybe<GeminiEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
     const ai = new GoogleGenAI({ apiKey });
-    return await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
+    const stream = await ai.models.generateContentStream({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
+    let text = "";
+    for await (const chunk of stream) {
+      if (chunk.text) text += chunk.text;
+    }
+    return text;
   })
     .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
-    .chain((result) => extractResponse({ text: fromOptional(result.text) }));
+    .chain((text) => extractResponse({ text: fromOptional(text) }));
 
 const generateContentWithOAuth = (
   tokens: OAuthTokens,
@@ -69,16 +92,16 @@ const generateContentWithOAuth = (
 ): Future<Error, string> =>
   getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
       const response = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(buildOAuthBody(effort, params))
       });
-      return await parseOAuthResponse(response);
+      return await accumulateSSEText(response);
     })
       .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
-      .chain((json) => extractResponse({ text: fromOptional(json.candidates?.[0]?.content?.parts?.[0]?.text) }))
+      .chain((text) => extractResponse({ text: fromOptional(text) }))
   );
 
 const generateContentWithGemini = (config: GeminiConfig, params: GenerateContentParams): Future<Error, string> => {

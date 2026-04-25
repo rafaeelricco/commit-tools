@@ -105,10 +105,10 @@ class MVar<A> {
       // nope, let's just mark it as empty
       this.value = { tag: "empty" };
     } else {
-      // yes, there is a new value here.
-      const [newVal, trigger] = r.value;
+      // hand off to the next pending writer; its trigger closure
+      // takes care of placing the value and resolving the put.
+      const [, trigger] = r.value;
       trigger();
-      this._unblockWaitingFull(newVal);
     }
   }
 

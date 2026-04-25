@@ -15,26 +15,26 @@ type CliCommand =
   | { type: "help" };
 
 const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) => {
-  const cmd = args[0] || "generate";
+  const cmd = args[0] || "-h";
 
   switch (cmd) {
     case "generate":
-      return D.succeed({ type: "generate" as const });
+      return D.succeed({ type: "generate" });
     case "setup":
     case "login":
-      return D.succeed({ type: "setup" as const });
+      return D.succeed({ type: "setup" });
     case "doctor":
-      return D.succeed({ type: "doctor" as const });
+      return D.succeed({ type: "doctor" });
     case "model":
-      return D.succeed({ type: "model" as const });
+      return D.succeed({ type: "model" });
     case "effort":
-      return D.succeed({ type: "effort" as const });
+      return D.succeed({ type: "effort" });
     case "--version":
     case "-v":
-      return D.succeed({ type: "version" as const });
+      return D.succeed({ type: "version" });
     case "--help":
     case "-h":
-      return D.succeed({ type: "help" as const });
+      return D.succeed({ type: "help" });
     default:
       return D.fail(`Unknown command: ${cmd}`);
   }

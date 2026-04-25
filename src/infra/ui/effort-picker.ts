@@ -3,7 +3,7 @@ export { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort };
 import { ThinkingLevel } from "@google/genai";
 
 import { Future } from "@/libs/future";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { Just, type Maybe } from "@/libs/maybe";
 import { OPENAI_EFFORTS, ANTHROPIC_EFFORTS, GEMINI_EFFORTS, type OpenAIEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
 
 type EffortSliderModule = typeof import("@/infra/ui/effort-slider");
@@ -39,7 +39,7 @@ const selectEffort = <V extends string>(options: readonly V[], modelId: string, 
           },
           onCancel: () => {
             unmount();
-            resolve(Nothing<V>());
+            resolve(currentEffort);
           }
         })
       );

@@ -1,7 +1,7 @@
 export { performOAuthFlow, createAuthenticatedClient, ensureFreshTokens, validateOAuthTokens, getAccessToken };
 
 import { type OAuthTokens } from "@/domain/config/config";
-import { SUCCESS_HTML, ERROR_HTML } from "@/infra/auth/templates";
+import { GOOGLE_SUCCESS_HTML, ERROR_HTML } from "@/infra/auth/templates";
 import { OAuth2Client, CodeChallengeMethod } from "google-auth-library";
 import { Future } from "@/libs/future";
 import { environment } from "@/infra/env";
@@ -99,7 +99,7 @@ const startCallbackServer = (port: number, state: string): Future<Error, Callbac
 
       resolveCode(code);
       res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(SUCCESS_HTML);
+      res.end(GOOGLE_SUCCESS_HTML);
     });
 
     server.once("error", (err) => {

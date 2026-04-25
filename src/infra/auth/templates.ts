@@ -1,4 +1,4 @@
-export { COMMON_STYLE, SUCCESS_HTML, ERROR_HTML };
+export { COMMON_STYLE, SUCCESS_HTML, GOOGLE_SUCCESS_HTML, ERROR_HTML };
 
 const COMMON_STYLE = `
 <style>
@@ -61,10 +61,25 @@ const COMMON_STYLE = `
   .icon-error { color: hsl(var(--destructive)); }
   h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.5rem; letter-spacing: -0.025em; }
   p { font-size: 0.875rem; color: hsl(var(--muted-foreground)); margin: 0; line-height: 1.5; }
+  .notice-badge {
+    margin: 1.25rem 0 0;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    background-color: hsl(var(--muted) / 0.65);
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    text-align: left;
+  }
+  .notice-badge strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
 </style>
 `;
 
-const SUCCESS_HTML = `<!DOCTYPE html>
+const successHtml = (notice?: string): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -79,9 +94,20 @@ const SUCCESS_HTML = `<!DOCTYPE html>
     </svg>
     <h1>Authentication Successful</h1>
     <p>You have successfully connected your account. You can now close this tab and return to your terminal.</p>
+    ${notice ?? ""}
   </div>
 </body>
 </html>`;
+
+const SUCCESS_HTML = successHtml();
+
+const GOOGLE_OAUTH_NOTICE = `
+    <div class="notice-badge" role="note">
+      <strong>Google OAuth:</strong> It can take 1-2 minutes after this page appears for the terminal to
+      continue. Keep the terminal open while it finishes.
+    </div>`;
+
+const GOOGLE_SUCCESS_HTML = successHtml(GOOGLE_OAUTH_NOTICE);
 
 const ERROR_HTML = (message: string): string => `<!DOCTYPE html>
 <html lang="en">

@@ -12,7 +12,7 @@ import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
-type SystemParam = NonNullable<Anthropic.MessageCreateParamsNonStreaming["system"]>;
+type SystemParam = NonNullable<Anthropic.MessageStreamParams["system"]>;
 
 const BASE_MAX_TOKENS = 16384;
 
@@ -27,8 +27,8 @@ const buildParams = (
   system: Maybe<SystemParam>,
   effort: Maybe<AnthropicEffort>,
   params: GenerateContentParams
-): Anthropic.MessageCreateParamsNonStreaming => {
-  const core: Anthropic.MessageCreateParamsNonStreaming = {
+): Anthropic.MessageStreamParams => {
+  const core: Anthropic.MessageStreamParams = {
     model,
     max_tokens: BASE_MAX_TOKENS,
     messages: [{ role: "user", content: params.prompt }],
@@ -47,10 +47,11 @@ const buildSetupTokenSystem = (instruction: Maybe<string>): SystemParam =>
 const callAnthropicWithApiKey = (apiKey: string, model: string, effort: Maybe<AnthropicEffort>, params: GenerateContentParams): Future<Error, string> =>
   Future.attemptP(async () => {
     const client = new Anthropic({ apiKey });
-    return await client.messages.create(buildParams(model, fromOptional(params.systemInstruction), effort, params));
+    const stream = client.messages.stream(buildParams(model, fromOptional(params.systemInstruction), effort, params));
+    return await stream.finalMessage();
   })
     .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`))
-    .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
+    .chain((message) => extractResponse({ text: Just(extractAnthropicText(message.content)) }));
 
 const callAnthropicWithSetupToken = (
   authToken: string,
@@ -65,10 +66,11 @@ const callAnthropicWithSetupToken = (
       defaultHeaders: anthropicOAuthHeaders()
     });
     const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
-    return await client.messages.create(buildParams(model, system, effort, params));
+    const stream = client.messages.stream(buildParams(model, system, effort, params));
+    return await stream.finalMessage();
   })
     .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`))
-    .chain((response) => extractResponse({ text: Just(extractAnthropicText(response.content)) }));
+    .chain((message) => extractResponse({ text: Just(extractAnthropicText(message.content)) }));
 
 const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateContentParams): Future<Error, string> => {
   switch (config.auth_method.type) {

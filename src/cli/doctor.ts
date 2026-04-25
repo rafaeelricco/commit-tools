@@ -24,11 +24,12 @@ class Doctor {
   }
 
   run(): Future<Error, void> {
+    const start = performance.now();
     return this.checkOAuthCredentials().chain((oauthRow) =>
       this.checkConfig().chain((configRows) =>
         this.checkGitContext().map((gitRows) => {
           const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows, ...gitRows];
-          this.renderTable(rows);
+          this.renderTable(rows, performance.now() - start);
         })
       )
     );
@@ -114,7 +115,7 @@ class Doctor {
     }).map(({ branch, base, pr: prLookup }): CheckRow[] => [renderBranchRow(branch), renderBaseRow(base), renderPrRow(prLookup)]);
   }
 
-  private renderTable(rows: CheckRow[]): void {
+  private renderTable(rows: CheckRow[], elapsedMs: number): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
       colWidths: [20, 15, 40]
@@ -130,7 +131,7 @@ class Doctor {
     if (!hasConfig) {
       process.stdout.write(color.yellow("! Please run 'commit-tools setup' to configure your API key.\n\n"));
     } else {
-      process.stdout.write(color.green("System is ready to generate commits!\n\n"));
+      process.stdout.write(color.green(`System is ready to generate commits! Done in ${(elapsedMs / 1000).toFixed(2)}s`));
     }
   }
 }

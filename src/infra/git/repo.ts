@@ -145,7 +145,7 @@ const parseCreatedFrom = (subject: string): Result<BaseLookupError, string> => {
   return source && source !== "HEAD" ? Success(source) : Failure({ type: "reflog-not-creation", subject });
 };
 
-const normalizeBranchRef = (ref: string): string => ref.replace(/^refs\/heads\//, "");
+const normalizeBranchRef = (ref: string): string => ref.replace(/^refs\/heads\//, "").replace(/^refs\/remotes\/[^/]+\//, "");
 
 const parseBaseFromReflog = (stdout: string): Result<BaseLookupError, string> =>
   oldestReflogSubject(stdout).chain(parseCreatedFrom).map(normalizeBranchRef);
@@ -185,7 +185,7 @@ const getBaseBranch = (): Future<Error, Maybe<string>> =>
               return absurd(err, "BaseLookupError");
           }
         },
-        (base) => Future.resolve<Error, Maybe<string>>(Just(base))
+        (base) => (base === branch ? getDefaultRemoteBranch() : Future.resolve<Error, Maybe<string>>(Just(base)))
       )
     )
   );

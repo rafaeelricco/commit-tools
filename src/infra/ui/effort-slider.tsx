@@ -103,7 +103,7 @@ const EffortSlider = <V extends string>({ title, options, initialIndex, onSubmit
       </Box>
       <Box>
         <Text color="gray">│ </Text>
-        <Text>{labels}</Text>
+        <Text>{labels.toLocaleLowerCase()}</Text>
       </Box>
       <Box>
         <Text color="gray">│</Text>

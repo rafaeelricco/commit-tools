@@ -212,7 +212,9 @@ const findTrackingRemoteUrl = (): Future<Error, Maybe<string>> =>
     .map<Maybe<string>>((url) => Just<string>(url))
     .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
-const nonEmptyString: Decoder.Decoder<string> = Decoder.string.chain((s) => (s.length > 0 ? Decoder.always(s) : Decoder.fail("expected non-empty string")));
+const nonEmptyString: Decoder.Decoder<string> = Decoder.string.chain((s) =>
+  s.length > 0 ? Decoder.always(s) : Decoder.fail("expected non-empty string")
+);
 
 const isoDate: Decoder.Decoder<Date> = nonEmptyString.chain((s) => {
   const d = new Date(s);

@@ -23,7 +23,7 @@ class MVar<A> {
   private value: Value<A>;
 
   private constructor(initial: Maybe<A>) {
-    this.value = initial.maybe<Value<A>>({ tag: "empty" }, value => ({ tag: "full", value }));
+    this.value = initial.maybe<Value<A>>({ tag: "empty" }, (value) => ({ tag: "full", value }));
   }
 
   static new<A>(v: A): MVar<A> {
@@ -48,13 +48,13 @@ class MVar<A> {
   // If the MVar is full, it blocks until it becomes empty.
   put(v: A): Promise<void> {
     const enqueue = () =>
-      new Promise<void>(resolve => {
+      new Promise<void>((resolve) => {
         this.waitingEmpty.enqueue([
           v,
           () => {
             this._unblockWaitingFull(v);
             resolve();
-          },
+          }
         ]);
       });
 
@@ -107,8 +107,8 @@ class MVar<A> {
   // If the MVar is empty, it blocks until it becomes full.
   take(): Promise<A> {
     const enqueue = () =>
-      new Promise<A>(resolve => {
-        this.waitingFull.enqueue(v => {
+      new Promise<A>((resolve) => {
+        this.waitingFull.enqueue((v) => {
           this._unblockWaitingEmpty();
           resolve(v);
           return Promise.resolve();
@@ -163,8 +163,7 @@ class MVar<A> {
       }
     };
 
-    const enqueue = (): Promise<B> =>
-      new Promise((resolve, reject) => this.waitingFull.enqueue(value => resume(value).then(resolve).catch(reject)));
+    const enqueue = (): Promise<B> => new Promise((resolve, reject) => this.waitingFull.enqueue((value) => resume(value).then(resolve).catch(reject)));
 
     switch (this.value.tag) {
       case "empty":
@@ -181,7 +180,7 @@ class MVar<A> {
   /* Like 'modify' but without returning a value.
    */
   async modify_(f: (v: A) => Promise<A>): Promise<void> {
-    return this.modify(v => f(v).then(x => [x, undefined]));
+    return this.modify((v) => f(v).then((x) => [x, undefined]));
   }
 
   // Get the value of the MVar without removing it.
@@ -190,7 +189,7 @@ class MVar<A> {
     if (v instanceof Just) {
       return v.value;
     }
-    return await this.modify(async v => [v, v]);
+    return await this.modify(async (v) => [v, v]);
   }
 
   // Like read, but doesn't block.

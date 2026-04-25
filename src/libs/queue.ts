@@ -8,7 +8,7 @@ class Queue<T> {
   private constructor(
     public readonly length: number,
     private front: List<T>,
-    private back: List<T>,
+    private back: List<T>
   ) {}
 
   static new<T>(): Queue<T> {
@@ -48,9 +48,7 @@ class Queue<T> {
       return queue.dequeue();
     };
 
-    return this.front
-      .head()
-      .unwrap(reverseBack, v => Just([v, new Queue(this.length - 1, this.front.tail(), this.back)]));
+    return this.front.head().unwrap(reverseBack, (v) => Just([v, new Queue(this.length - 1, this.front.tail(), this.back)]));
   }
 }
 
@@ -90,7 +88,7 @@ class MQueue<T> {
       ([v, queue]) => {
         this.queue = queue;
         return Just(v);
-      },
+      }
     );
   }
 }

@@ -6,6 +6,8 @@ import { Box, Text, useInput, useApp, type Key } from "ink";
 
 import chalk from "chalk";
 
+import { search } from "@/libs/fuzzy";
+
 type Model = {
   id: string;
   description: string;
@@ -16,20 +18,6 @@ type ModelSelectorProps = {
   onSelect: (modelId: string) => void;
   onCancel: () => void;
 };
-
-function fuzzyMatch(pattern: string, target: string): boolean {
-  const p = pattern.toLowerCase();
-  const t = target.toLowerCase();
-  let pi = 0;
-  let ti = 0;
-
-  while (pi < p.length && ti < t.length) {
-    if (p[pi] === t[ti]) pi++;
-    ti++;
-  }
-
-  return pi === p.length;
-}
 
 function deleteWordLeft(value: string, cursor: number): [string, number] {
   let i = cursor - 1;
@@ -58,11 +46,7 @@ const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
   const [cursorOffset, setCursorOffset] = React.useState(0);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
 
-  const filteredModels = models.filter((m) => {
-    const q = query.trim();
-    if (!q) return true;
-    return fuzzyMatch(q, m.id) || (m.description && fuzzyMatch(q, m.description));
-  });
+  const filteredModels = React.useMemo(() => search(query, models, [(m) => m.id, (m) => m.description]).map((r) => r.item), [query, models]);
 
   const handleLifecycle = (key: Key): boolean => {
     if (key.escape) {

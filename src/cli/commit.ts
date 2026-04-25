@@ -47,9 +47,7 @@ class Commit {
       .chain(() => this.diff())
       .chain((diff) => this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message)))
       .mapRej((e) => {
-        if (e instanceof Error) {
-          p.log.error(color.red(e.message));
-        }
+        p.log.error(color.red(e.message));
         return e;
       });
   }

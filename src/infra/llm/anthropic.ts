@@ -14,8 +14,6 @@ import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 type SystemParam = NonNullable<Anthropic.MessageStreamParams["system"]>;
 
-const BASE_MAX_TOKENS = 16384;
-
 const extractAnthropicText = (content: Anthropic.ContentBlock[]): string =>
   content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -30,7 +28,7 @@ const buildParams = (
 ): Anthropic.MessageStreamParams => {
   const core: Anthropic.MessageStreamParams = {
     model,
-    max_tokens: BASE_MAX_TOKENS,
+    max_tokens: 16384,
     messages: [{ role: "user", content: params.prompt }],
     thinking: { type: "adaptive" },
     output_config: { effort: effort.withDefault("medium") }
@@ -60,11 +58,7 @@ const callAnthropicWithSetupToken = (
   params: GenerateContentParams
 ): Future<Error, string> =>
   Future.attemptP(async () => {
-    const client = new Anthropic({
-      apiKey: null,
-      authToken,
-      defaultHeaders: anthropicOAuthHeaders()
-    });
+    const client = new Anthropic({ apiKey: null, authToken, defaultHeaders: anthropicOAuthHeaders() });
     const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
     const stream = client.messages.stream(buildParams(model, system, effort, params));
     return await stream.finalMessage();

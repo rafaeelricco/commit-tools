@@ -11,6 +11,7 @@ type CliCommand =
   | { type: "doctor" }
   | { type: "model" }
   | { type: "effort" }
+  | { type: "update" }
   | { type: "version" }
   | { type: "help" };
 
@@ -29,6 +30,8 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
       return D.succeed({ type: "model" });
     case "effort":
       return D.succeed({ type: "effort" });
+    case "update":
+      return D.succeed({ type: "update" });
     case "--version":
     case "-v":
       return D.succeed({ type: "version" });
@@ -53,14 +56,10 @@ Commands:
   doctor              Check installation and environment
   model               Select a different AI model
   effort              Adjust the reasoning effort for the current model
+  update              Install the latest version from npm
   --version, -v       Show version
   --help, -h          Show help
   `);
 };
 
-const showVersion = (): void => {
-  const start = performance.now();
-  console.log(`commit-tools ${packageVersion} (node)`);
-  const elapsed = performance.now() - start;
-  console.log(`Done in ${elapsed.toLocaleString()}ms`);
-};
+const showVersion = (): void => console.log(packageVersion);

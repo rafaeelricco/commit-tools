@@ -24,6 +24,7 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Result, Success, Failure } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { execBin, type CommandFailure } from "@/infra/shell";
+import * as Decoder from "@/libs/json/decoder";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -211,14 +212,50 @@ const findTrackingRemoteUrl = (): Future<Error, Maybe<string>> =>
     .map<Maybe<string>>((url) => Just<string>(url))
     .chainRej(() => Future.resolve<Error, Maybe<string>>(Nothing<string>()));
 
+const nonEmptyString: Decoder.Decoder<string> = Decoder.string.chain((s) => (s.length > 0 ? Decoder.always(s) : Decoder.fail("expected non-empty string")));
+
+const isoDate: Decoder.Decoder<Date> = nonEmptyString.chain((s) => {
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? Decoder.fail(`invalid ISO date: ${s}`) : Decoder.always(d);
+});
+
+const commitMetadataDecoder: Decoder.Decoder<CommitMetadata> = Decoder.object({
+  hash: nonEmptyString,
+  short: nonEmptyString,
+  subject: Decoder.string,
+  authorName: Decoder.string,
+  authorEmail: Decoder.string,
+  date: isoDate
+});
+
+const COMMIT_FIELDS = [
+  ["hash", "%H"],
+  ["short", "%h"],
+  ["subject", "%s"],
+  ["authorName", "%an"],
+  ["authorEmail", "%ae"],
+  ["date", "%aI"]
+] as const;
+
+const COMMIT_FORMAT = COMMIT_FIELDS.map(([, p]) => p).join("%x00");
+const COMMIT_KEYS = COMMIT_FIELDS.map(([n]) => n);
+
+const splitCommitFields = (stdout: string): Result<string, Record<string, unknown>> => {
+  const parts = stdout.replace(/\n$/, "").split("\x00");
+  return parts.length === COMMIT_KEYS.length ?
+      Success(Object.fromEntries(COMMIT_KEYS.map((k, i) => [k, parts[i]])))
+    : Failure(`expected ${COMMIT_KEYS.length} fields, got ${parts.length}`);
+};
+
 const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> =>
-  execGitChecked(["log", "-1", `--format=%H%n%h%n%s%n%an%n%ae%n%aI`, ref], "Failed to read commit metadata").chain((stdout) => {
-    const [hash, short, subject, authorName, authorEmail, iso] = stdout.split("\n");
-    // TODO: This is specially hard to understand and maintain, consider using a more robust serialization format in the future (e.g. JSON output from git log with a custom format)
-    return hash && short && subject !== undefined && authorName !== undefined && authorEmail !== undefined && iso ?
-        Future.resolve<Error, CommitMetadata>({ hash, short, subject, authorName, authorEmail, date: new Date(iso) })
-      : Future.reject<Error, CommitMetadata>(new Error("Malformed git log output"));
-  });
+  execGitChecked(["log", "-1", `--format=${COMMIT_FORMAT}`, ref], "Failed to read commit metadata").chain((stdout) =>
+    splitCommitFields(stdout)
+      .chain((obj) => Decoder.decode(obj, commitMetadataDecoder))
+      .either(
+        (msg) => Future.reject<Error, CommitMetadata>(new Error(`Malformed git log output: ${msg}`)),
+        (md) => Future.resolve<Error, CommitMetadata>(md)
+      )
+  );
 
 const findCommitMetadata = (ref: string = "HEAD"): Future<Error, Maybe<CommitMetadata>> =>
   getCommitMetadata(ref)

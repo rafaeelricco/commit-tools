@@ -3,6 +3,7 @@ export { type CliCommand, parseArgs, showHelp, showVersion };
 import * as D from "@/libs/json/decoder";
 
 import { Result } from "@/libs/result";
+import { version as packageVersion } from "@/package.json";
 
 type CliCommand =
   | { type: "generate" }
@@ -59,7 +60,7 @@ Commands:
 
 const showVersion = (): void => {
   const start = performance.now();
-  console.log("commit-tools 0.2.5 (node)");
+  console.log(`commit-tools ${packageVersion} (node)`);
   const elapsed = performance.now() - start;
   console.log(`Done in ${elapsed.toLocaleString()}ms`);
 };

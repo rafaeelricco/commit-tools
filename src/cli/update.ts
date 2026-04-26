@@ -71,7 +71,12 @@ class Update {
       })
       .chain((pm): Future<Error, void> => {
         p.note(`Running: ${color.cyan(`${pm.cmd} ${pm.args.join(" ")}`)}`, "Updating commit-tools");
-        return execBinInteractive(pm.cmd, pm.args).mapRej((err) => new Error(`Update failed: ${err.message}`));
+        return execBinInteractive(pm.cmd, pm.args)
+          .mapRej((err) => new Error(`Update failed: ${err.message}`))
+          .chainRej((err): Future<Error, void> => {
+            p.log.error(color.red(err.message));
+            return Future.reject(err);
+          });
       });
   }
 }

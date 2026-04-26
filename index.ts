@@ -4,17 +4,17 @@ import { Doctor } from "@/cli/doctor";
 import { ModelCommand } from "@/cli/model";
 import { EffortCommand } from "@/cli/effort";
 import { Update } from "@/cli/update";
-import { parseArgs, showHelp, showVersion } from "@/cli/parser";
+import { type CliCommand, parseArgs, showHelp, showVersion } from "@/cli/parser";
 import { Future } from "@/libs/future";
 import { absurd } from "@/libs/types";
 import { checkUpdate } from "@/cli/show-update-banner";
 
 import color from "picocolors";
 
+const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort"]);
+
 const main = () => {
   const args = process.argv.slice(2);
-
-  checkUpdate();
 
   const action = parseArgs(args).either(
     (err): Future<Error, void> => {
@@ -22,6 +22,8 @@ const main = () => {
       return Future.reject(err);
     },
     (command): Future<Error, void> => {
+      if (NOTIFIER_COMMANDS.has(command.type)) checkUpdate();
+
       switch (command.type) {
         case "generate":
           return Commit.create().chain((c) => c.run());

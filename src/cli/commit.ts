@@ -133,10 +133,10 @@ class Commit {
 
       if (p.isCancel(action) || action === "cancel") {
         p.outro("Operation cancelled.");
-        return "cancel" as UserAction;
+        return "cancel";
       }
 
-      return action as UserAction;
+      return action;
     });
   }
 
@@ -202,7 +202,7 @@ class Commit {
         message: "What adjustments would you like?",
         placeholder: "e.g. make it more concise"
       });
-      return p.isCancel(adj) ? Nothing<string>() : Just(adj as string);
+      return p.isCancel(adj) ? Nothing<string>() : Just(adj);
     });
   }
 }

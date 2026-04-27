@@ -7,7 +7,7 @@ import { Update } from "@/cli/update";
 import { type CliCommand, parseArgs, showHelp, showVersion } from "@/cli/parser";
 import { Future } from "@/libs/future";
 import { absurd } from "@/libs/types";
-import { checkUpdate } from "@/cli/show-update-banner";
+import { checkUpdate } from "@/cli/update";
 
 import color from "picocolors";
 

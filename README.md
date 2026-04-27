@@ -1,6 +1,6 @@
 # commit-tools
 
-[![Version](https://img.shields.io/badge/version-0.2.5-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)](#)
 
 Writing good commit messages _can_ have a high cognitive cost, especially when you make dozens of commits a day. That energy should be directed toward solving hard problems and shipping features, not summarizing them.
 
@@ -142,6 +142,24 @@ Verify your installation, environment, and configuration:
 commit doctor
 ```
 
+### Stay Up to Date
+
+`commit-tools` checks the npm registry once per day and shows a banner when a newer version is available. To install the latest release, run:
+
+```bash
+commit update
+```
+
+The command auto-detects your global package manager (npm, pnpm, or Yarn 1). Modern Yarn (≥ 2) does not support global installs — use npm or pnpm instead.
+
+To silence the update banner (e.g. for CI or scripted environments), set:
+
+```bash
+NO_UPDATE_NOTIFIER=true
+```
+
+The banner is also suppressed automatically in non-interactive shells and when `CI=true`.
+
 ## Commands
 
 To see all available commands at any time, run:
@@ -159,6 +177,7 @@ commit --help
 | `commit doctor`          | Check installation and environment                |
 | `commit model`           | Select a different AI model                       |
 | `commit effort`          | Adjust the reasoning effort for the current model |
+| `commit update`          | Install the latest version from npm               |
 | `commit --version`, `-v` | Show version                                      |
 | `commit --help`, `-h`    | Show help                                         |
 

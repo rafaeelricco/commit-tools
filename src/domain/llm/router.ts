@@ -1,4 +1,12 @@
-export { type GenerateContentParams, generateCommitMessage, refineCommitMessage };
+export {
+  type GenerateContentParams,
+  type GeneratedContent,
+  type LlmRequestMetadata,
+  type ProviderGeneratedContent,
+  type TokenUsage,
+  generateCommitMessage,
+  refineCommitMessage
+};
 
 import { Future } from "@/libs/future";
 import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
@@ -13,14 +21,46 @@ type GenerateContentParams = {
   readonly systemInstruction?: string;
 };
 
-const generateContent = (config: ProviderConfig, params: GenerateContentParams): Future<Error, string> => {
+type TokenUsage = {
+  readonly input: Maybe<number>;
+  readonly output: Maybe<number>;
+  readonly total: Maybe<number>;
+};
+
+type LlmRequestMetadata = {
+  readonly durationMs: number;
+  readonly tokens: Maybe<TokenUsage>;
+};
+
+type GeneratedContent = {
+  readonly text: string;
+  readonly metadata: LlmRequestMetadata;
+};
+
+type ProviderGeneratedContent = {
+  readonly text: string;
+  readonly tokens: Maybe<TokenUsage>;
+};
+
+const withRequestMetadata = (f: Future<Error, ProviderGeneratedContent>): Future<Error, GeneratedContent> => {
+  const startedAt = Date.now();
+  return f.map(({ text, tokens }) => ({
+    text,
+    metadata: {
+      durationMs: Date.now() - startedAt,
+      tokens
+    }
+  }));
+};
+
+const generateContent = (config: ProviderConfig, params: GenerateContentParams): Future<Error, GeneratedContent> => {
   switch (config.provider) {
     case "gemini":
-      return generateContentWithGemini(config, params);
+      return withRequestMetadata(generateContentWithGemini(config, params));
     case "openai":
-      return generateContentWithOpenAI(config, params);
+      return withRequestMetadata(generateContentWithOpenAI(config, params));
     case "anthropic":
-      return generateContentWithAnthropic(config, params);
+      return withRequestMetadata(generateContentWithAnthropic(config, params));
   }
 };
 
@@ -29,7 +69,7 @@ const generateCommitMessage = (
   diff: string,
   convention: CommitConvention,
   customTemplate: Maybe<string> = Nothing()
-): Future<Error, string> => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) });
+): Future<Error, GeneratedContent> => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) });
 
-const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, string> =>
+const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
   generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment }));

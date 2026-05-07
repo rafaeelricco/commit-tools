@@ -2,6 +2,7 @@ export {
   type GenerateContentParams,
   type GeneratedContent,
   type LlmRequestMetadata,
+  type ModelRequestMetadata,
   type ProviderGeneratedContent,
   type TokenUsage,
   generateCommitMessage,
@@ -27,8 +28,15 @@ type TokenUsage = {
   readonly total: Maybe<number>;
 };
 
+type ModelRequestMetadata = {
+  readonly provider: ProviderConfig["provider"];
+  readonly model: string;
+  readonly effort: string;
+};
+
 type LlmRequestMetadata = {
   readonly durationMs: number;
+  readonly model: ModelRequestMetadata;
   readonly tokens: Maybe<TokenUsage>;
 };
 
@@ -42,12 +50,23 @@ type ProviderGeneratedContent = {
   readonly tokens: Maybe<TokenUsage>;
 };
 
-const withRequestMetadata = (f: Future<Error, ProviderGeneratedContent>): Future<Error, GeneratedContent> => {
+const modelRequestMetadata = (config: ProviderConfig): ModelRequestMetadata => {
+  switch (config.provider) {
+    case "openai":
+      return { provider: config.provider, model: config.model, effort: config.effort.maybe<string>("provider default", (effort) => effort) };
+    case "gemini":
+    case "anthropic":
+      return { provider: config.provider, model: config.model, effort: config.effort.maybe<string>("medium", (effort) => effort) };
+  }
+};
+
+const withRequestMetadata = (config: ProviderConfig, f: Future<Error, ProviderGeneratedContent>): Future<Error, GeneratedContent> => {
   const startedAt = Date.now();
   return f.map(({ text, tokens }) => ({
     text,
     metadata: {
       durationMs: Date.now() - startedAt,
+      model: modelRequestMetadata(config),
       tokens
     }
   }));
@@ -56,11 +75,11 @@ const withRequestMetadata = (f: Future<Error, ProviderGeneratedContent>): Future
 const generateContent = (config: ProviderConfig, params: GenerateContentParams): Future<Error, GeneratedContent> => {
   switch (config.provider) {
     case "gemini":
-      return withRequestMetadata(generateContentWithGemini(config, params));
+      return withRequestMetadata(config, generateContentWithGemini(config, params));
     case "openai":
-      return withRequestMetadata(generateContentWithOpenAI(config, params));
+      return withRequestMetadata(config, generateContentWithOpenAI(config, params));
     case "anthropic":
-      return withRequestMetadata(generateContentWithAnthropic(config, params));
+      return withRequestMetadata(config, generateContentWithAnthropic(config, params));
   }
 };
 

@@ -9,10 +9,10 @@ import { loadConfig } from "@/infra/storage/config";
 import { Setup } from "@/cli/setup";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
-import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
+import { generateCommitMessage, refineCommitMessage, type GeneratedContent, type LlmRequestMetadata } from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
-import { renderPushNote } from "@/infra/ui/push-note";
+import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
 
@@ -56,11 +56,11 @@ class Commit {
     return repo.getStagedDiff();
   }
 
-  generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, string> {
+  generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, GeneratedContent> {
     return loading("Generating commit message...", "Message generated!", generateCommitMessage(this.providerConfig, diff, convention, template));
   }
 
-  refine(message: string, adjustment: string, diff: string): Future<Error, string> {
+  refine(message: string, adjustment: string, diff: string): Future<Error, GeneratedContent> {
     return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
   }
 
@@ -68,7 +68,7 @@ class Commit {
     return repo.performCommit(message);
   }
 
-  push(branch?: string, publish = false, forceWithLease = false): Future<Error, void> {
+  push(request: Maybe<LlmRequestMetadata>, branch?: string, publish = false, forceWithLease = false): Future<Error, void> {
     const startMsg =
       forceWithLease ? "Force pushing with lease..."
       : publish ? `Publishing '${branch}'...`
@@ -95,21 +95,21 @@ class Commit {
         baseBranch: repo.findBaseBranch(),
         remoteUrl: repo.findTrackingRemoteUrl(),
         pr: pr.getOpenPullRequest()
-      }).map((parts) => renderPushNote({ ...parts, range: result.range }))
+      }).map((parts) => renderPushNote({ ...parts, range: result.range, request }))
     );
   }
 
-  interact(diff: string, message: string): Future<Error, void> {
-    return this.promptAction(message).chain((action) => {
+  interact(diff: string, generated: GeneratedContent): Future<Error, void> {
+    return this.promptAction(generated.text).chain((action) => {
       switch (action) {
         case "commit":
-          return this.handleCommit(message);
+          return this.handleCommit(generated);
         case "commit_push":
-          return this.handleCommitAndPush(message);
+          return this.handleCommitAndPush(generated);
         case "regenerate":
           return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, msg));
         case "adjust":
-          return this.handleAdjust(diff, message);
+          return this.handleAdjust(diff, generated);
         case "cancel":
           return Future.resolve(undefined);
       }
@@ -140,59 +140,62 @@ class Commit {
     });
   }
 
-  private handleCommit(message: string): Future<Error, void> {
-    return this.commit(message).map((stats) => {
-      process.stdout.write(stats);
-      p.outro(color.green("Committed successfully!"));
-    });
+  private handleCommit(generated: GeneratedContent): Future<Error, void> {
+    return this.commit(generated.text).chain((stats) =>
+      repo.findCommitMetadata().map((commit) => {
+        process.stdout.write(stats);
+        renderCommitNote({ commit, request: Just(generated.metadata) });
+        p.outro(color.green("Committed successfully!"));
+      })
+    );
   }
 
-  private handleCommitAndPush(message: string): Future<Error, void> {
-    return this.commit(message)
+  private handleCommitAndPush(generated: GeneratedContent): Future<Error, void> {
+    return this.commit(generated.text)
       .chain((stats) => {
         process.stdout.write(stats);
-        return this.pushAfterCommit();
+        return this.pushAfterCommit(Just(generated.metadata));
       })
       .map(() => {
         p.outro(color.green("Done!"));
       });
   }
 
-  private pushAfterCommit(): Future<Error, void> {
+  private pushAfterCommit(request: Maybe<LlmRequestMetadata>): Future<Error, void> {
     return repo
       .hasUpstream()
       .chain((exists) =>
         exists ?
-          this.push().chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease() : Future.reject(err)))
-        : this.promptPublishBranch()
+          this.push(request).chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease(request) : Future.reject(err)))
+        : this.promptPublishBranch(request)
       );
   }
 
-  private promptPublishBranch(): Future<Error, void> {
+  private promptPublishBranch(request: Maybe<LlmRequestMetadata>): Future<Error, void> {
     return repo.getCurrentBranch().chain((branch) =>
       Future.attemptP(async () => {
         const publish = await p.confirm({
           message: `Branch '${branch}' has no upstream. Publish to origin?`
         });
         return !(p.isCancel(publish) || !publish);
-      }).chain((shouldPublish) => (shouldPublish ? this.push(branch, true) : Future.resolve(undefined)))
+      }).chain((shouldPublish) => (shouldPublish ? this.push(request, branch, true) : Future.resolve(undefined)))
     );
   }
 
-  private promptForceWithLease(): Future<Error, void> {
+  private promptForceWithLease(request: Maybe<LlmRequestMetadata>): Future<Error, void> {
     return Future.attemptP(async () => {
       const force = await p.confirm({
         message: "Push was rejected (branch is behind remote). Force push with lease?"
       });
       return !(p.isCancel(force) || !force);
-    }).chain((shouldForce) => (shouldForce ? this.push(undefined, false, true) : Future.resolve(undefined)));
+    }).chain((shouldForce) => (shouldForce ? this.push(request, undefined, false, true) : Future.resolve(undefined)));
   }
 
-  private handleAdjust(diff: string, message: string): Future<Error, void> {
+  private handleAdjust(diff: string, generated: GeneratedContent): Future<Error, void> {
     return this.promptAdjustment().chain((maybeAdj) =>
       maybeAdj instanceof Nothing ?
-        this.interact(diff, message)
-      : this.refine(message, maybeAdj.value, diff).chain((refined) => this.interact(diff, refined))
+        this.interact(diff, generated)
+      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, refined))
     );
   }
 

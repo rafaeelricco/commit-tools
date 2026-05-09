@@ -83,7 +83,7 @@ const callOpenAIWithApiKey = (
   model: string,
   effort: Maybe<OpenAIEffort>,
   params: GenerateContentParams
-): Future<Error, ProviderGeneratedContent> => callOpenAIStream(new OpenAI({ apiKey }), model, effort, params);
+): Future<Error, ProviderGeneratedContent> => callOpenAIStream(new OpenAI({ apiKey, maxRetries: 3, timeout: 120_000 }), model, effort, params);
 
 const callOpenAIWithOAuth = (
   authToken: string,
@@ -91,7 +91,12 @@ const callOpenAIWithOAuth = (
   effort: Maybe<OpenAIEffort>,
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
-  callOpenAIStream(new OpenAI({ baseURL: "https://chatgpt.com/backend-api/codex", apiKey: authToken }), model, effort, params);
+  callOpenAIStream(
+    new OpenAI({ baseURL: "https://chatgpt.com/backend-api/codex", apiKey: authToken, maxRetries: 3, timeout: 120_000 }),
+    model,
+    effort,
+    params
+  );
 
 const generateContentWithOpenAI = (config: OpenAIConfig, params: GenerateContentParams): Future<Error, ProviderGeneratedContent> => {
   switch (config.auth_method.type) {

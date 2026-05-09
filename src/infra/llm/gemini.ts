@@ -27,6 +27,14 @@ const toTokenUsage = (usage: GenerateContentResponse["usageMetadata"]): Maybe<To
     total: fromOptional(u.totalTokenCount)
   }));
 
+const extractGeminiText = (response: GenerateContentResponse): string =>
+  response.text ?? response.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+
+const toGeneratedContent = (response: GenerateContentResponse): ProviderGeneratedContent => ({
+  text: extractGeminiText(response),
+  tokens: toTokenUsage(response.usageMetadata)
+});
+
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {
   switch (config.ai.auth_method.type) {
     case "google_oauth":
@@ -53,37 +61,15 @@ const buildOAuthBody = (effort: Maybe<GeminiEffort>, params: GenerateContentPara
   return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: { parts: [{ text: s }] } }));
 };
 
-const extractSSEEvent = (event: string): ProviderGeneratedContent => {
-  const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
-  if (!dataLine) return { text: "", tokens: Nothing() };
-  const json = JSON.parse(dataLine.slice(6)) as GenerateContentResponse;
-  return {
-    text: json.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
-    tokens: toTokenUsage(json.usageMetadata)
-  };
-};
-
-const accumulateSSEContent = async (response: Response): Promise<ProviderGeneratedContent> => {
+const parseOAuthResponse = async (response: Response): Promise<ProviderGeneratedContent> => {
   if (!response.ok) throw new Error(`Gemini API error (${response.status}): ${await response.text()}`);
-  if (!response.body) throw new Error("Gemini stream returned no body");
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let text = "";
-  let tokens: Maybe<TokenUsage> = Nothing();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split(/\r?\n\r?\n/);
-    buffer = events.pop() ?? "";
-    for (const ev of events) {
-      const chunk = extractSSEEvent(ev);
-      text += chunk.text;
-      tokens = chunk.tokens.alt(tokens);
-    }
-  }
-  return { text, tokens };
+
+  // The REST OAuth path receives the same JSON wire shape that @google/genai maps
+  // to GenerateContentResponse for API-key calls. Response.json() cannot prove that
+  // shape to TypeScript, so this cast keeps both auth paths on one metadata mapper.
+  // If this breaks, compare the REST payload with the fields used below:
+  // response.text, candidates[].content.parts[].text, and usageMetadata token counts.
+  return toGeneratedContent((await response.json()) as GenerateContentResponse);
 };
 
 const generateContentWithApiKey = (
@@ -93,15 +79,12 @@ const generateContentWithApiKey = (
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
   Future.attemptP(async () => {
-    const ai = new GoogleGenAI({ apiKey });
-    const stream = await ai.models.generateContentStream({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
-    let text = "";
-    let tokens: Maybe<TokenUsage> = Nothing();
-    for await (const chunk of stream) {
-      if (chunk.text) text += chunk.text;
-      tokens = toTokenUsage(chunk.usageMetadata).alt(tokens);
-    }
-    return { text, tokens };
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { timeout: 120_000, retryOptions: { attempts: 3 } }
+    });
+    const response = await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
+    return toGeneratedContent(response);
   })
     .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
     .chain((content) => extractResponse({ text: fromOptional(content.text) }).map((text) => ({ ...content, text })));
@@ -114,13 +97,13 @@ const generateContentWithOAuth = (
 ): Future<Error, ProviderGeneratedContent> =>
   getAccessToken(tokens).chain((accessToken) =>
     Future.attemptP(async () => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       const response = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(buildOAuthBody(effort, params))
       });
-      return await accumulateSSEContent(response);
+      return await parseOAuthResponse(response);
     })
       .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
       .chain((content) => extractResponse({ text: fromOptional(content.text) }).map((text) => ({ ...content, text })))

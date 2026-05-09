@@ -9,7 +9,6 @@ import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/a
 import { absurd } from "@/libs/types";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
-import { withTransientRetry } from "@/infra/llm/retry";
 import { Just, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
@@ -58,18 +57,18 @@ const callAnthropicWithApiKey = (
   effort: Maybe<AnthropicEffort>,
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
-  withTransientRetry(() =>
-    Future.attemptP(async () => {
-      const client = new Anthropic({ apiKey, maxRetries: 3, timeout: 120_000 });
-      const stream = client.messages.stream(buildParams(model, fromOptional(params.systemInstruction), effort, params));
-      return await stream.finalMessage();
-    }).mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
-  ).chain((message) =>
-    extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
-      text,
-      tokens: Just(toTokenUsage(message.usage))
-    }))
-  );
+  Future.attemptP(async () => {
+    const client = new Anthropic({ apiKey, maxRetries: 3, timeout: 120_000 });
+    const stream = client.messages.stream(buildParams(model, fromOptional(params.systemInstruction), effort, params));
+    return await stream.finalMessage();
+  })
+    .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
+    .chain((message) =>
+      extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
+        text,
+        tokens: Just(toTokenUsage(message.usage))
+      }))
+    );
 
 const callAnthropicWithSetupToken = (
   authToken: string,
@@ -77,25 +76,25 @@ const callAnthropicWithSetupToken = (
   effort: Maybe<AnthropicEffort>,
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
-  withTransientRetry(() =>
-    Future.attemptP(async () => {
-      const client = new Anthropic({
-        apiKey: null,
-        authToken,
-        defaultHeaders: anthropicOAuthHeaders(),
-        maxRetries: 3,
-        timeout: 120_000
-      });
-      const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
-      const stream = client.messages.stream(buildParams(model, system, effort, params));
-      return await stream.finalMessage();
-    }).mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
-  ).chain((message) =>
-    extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
-      text,
-      tokens: Just(toTokenUsage(message.usage))
-    }))
-  );
+  Future.attemptP(async () => {
+    const client = new Anthropic({
+      apiKey: null,
+      authToken,
+      defaultHeaders: anthropicOAuthHeaders(),
+      maxRetries: 3,
+      timeout: 120_000
+    });
+    const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
+    const stream = client.messages.stream(buildParams(model, system, effort, params));
+    return await stream.finalMessage();
+  })
+    .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
+    .chain((message) =>
+      extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
+        text,
+        tokens: Just(toTokenUsage(message.usage))
+      }))
+    );
 
 const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateContentParams): Future<Error, ProviderGeneratedContent> => {
   switch (config.auth_method.type) {

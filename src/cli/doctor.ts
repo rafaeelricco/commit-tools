@@ -34,8 +34,8 @@ class Doctor {
             this.checkRuntime(),
             this.checkPlatform(),
             oauthRow
-          ].concat(configRows, gitRows);
-          this.renderTable(rows, performance.now() - start);
+          ];
+          this.renderTable(rows.concat(configRows, gitRows), performance.now() - start);
         })
       )
     );

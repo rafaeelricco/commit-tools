@@ -11,9 +11,6 @@ import { extractResponse } from "@/domain/llm/response-parser";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { absurd } from "@/libs/types";
 
-/** Dummy apiKey silences SDK constructor warning; Bearer Authorization wins at request time. */
-const OAUTH_API_KEY_PLACEHOLDER = "oauth-bearer-placeholder";
-
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 type GeminiAuthCredentials = { readonly method: "api_key"; readonly apiKey: string } | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
 
@@ -55,6 +52,22 @@ const geminiHttpOptions = {
   retryOptions: { attempts: 3 }
 } as const;
 
+/** Gemini OAuth must not send `x-goog-api-key`; `GoogleGenAI` reads `GEMINI_API_KEY` / `GOOGLE_API_KEY` from the environment as `apiKey`, which would add that header after `Authorization`. */
+const withEnvWithoutGeminiApiKeys = async <T>(run: () => Promise<T>): Promise<T> => {
+  const savedGoogle = process.env["GOOGLE_API_KEY"];
+  const savedGemini = process.env["GEMINI_API_KEY"];
+  try {
+    delete process.env["GOOGLE_API_KEY"];
+    delete process.env["GEMINI_API_KEY"];
+    return await run();
+  } finally {
+    if (savedGoogle === undefined) delete process.env["GOOGLE_API_KEY"];
+    else process.env["GOOGLE_API_KEY"] = savedGoogle;
+    if (savedGemini === undefined) delete process.env["GEMINI_API_KEY"];
+    else process.env["GEMINI_API_KEY"] = savedGemini;
+  }
+};
+
 const generateContentWithApiKey = (
   apiKey: string,
   model: string,
@@ -79,17 +92,18 @@ const generateContentWithOAuth = (
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
   getAccessToken(tokens).chain((accessToken) =>
-    Future.attemptP(async () => {
-      const ai = new GoogleGenAI({
-        apiKey: OAUTH_API_KEY_PLACEHOLDER,
-        httpOptions: {
-          ...geminiHttpOptions,
-          headers: { Authorization: `Bearer ${accessToken}` }
-        }
-      });
-      const response = await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
-      return toGeneratedContent(response);
-    })
+    Future.attemptP(async () =>
+      withEnvWithoutGeminiApiKeys(async () => {
+        const ai = new GoogleGenAI({
+          httpOptions: {
+            ...geminiHttpOptions,
+            headers: { Authorization: `Bearer ${accessToken}` }
+          }
+        });
+        const response = await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
+        return toGeneratedContent(response);
+      })
+    )
       .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
       .chain((content) => extractResponse({ text: fromOptional(content.text) }).map((text) => ({ ...content, text })))
   );

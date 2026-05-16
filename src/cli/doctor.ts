@@ -10,6 +10,7 @@ import { Just, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
+import { name as packageName, version as packageVersion } from "@/package.json";
 
 import color from "picocolors";
 import Table from "cli-table3";
@@ -28,7 +29,12 @@ class Doctor {
     return this.checkOAuthCredentials().chain((oauthRow) =>
       this.checkConfig().chain((configRows) =>
         this.checkGitContext().map((gitRows) => {
-          const rows: CheckRow[] = [this.checkRuntime(), this.checkPlatform(), oauthRow, ...configRows, ...gitRows];
+          const rows: CheckRow[] = [
+            ["CLI Version", color.green(packageVersion), packageName],
+            this.checkRuntime(),
+            this.checkPlatform(),
+            oauthRow
+          ].concat(configRows, gitRows);
           this.renderTable(rows, performance.now() - start);
         })
       )

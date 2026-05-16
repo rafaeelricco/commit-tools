@@ -29,12 +29,7 @@ class Doctor {
     return this.checkOAuthCredentials().chain((oauthRow) =>
       this.checkConfig().chain((configRows) =>
         this.checkGitContext().map((gitRows) => {
-          const rows: CheckRow[] = [
-            ["CLI Version", color.green(packageVersion), packageName],
-            this.checkRuntime(),
-            this.checkPlatform(),
-            oauthRow
-          ];
+          const rows: CheckRow[] = [["CLI Version", color.green(packageVersion), packageName], this.checkRuntime(), this.checkPlatform(), oauthRow];
           this.renderTable(rows.concat(configRows, gitRows), performance.now() - start);
         })
       )

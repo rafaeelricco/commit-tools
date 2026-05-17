@@ -103,8 +103,7 @@ const SUCCESS_HTML = successHtml();
 
 const GOOGLE_OAUTH_NOTICE = `
     <div class="notice-badge" role="note">
-      <strong>Google OAuth:</strong> It can take 1-2 minutes after this page appears for the terminal to
-      continue. Keep the terminal open while it finishes.
+      <strong>Next step:</strong> You can close this tab — the terminal will continue automatically.
     </div>`;
 
 const GOOGLE_SUCCESS_HTML = successHtml(GOOGLE_OAUTH_NOTICE);

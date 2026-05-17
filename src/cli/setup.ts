@@ -5,12 +5,12 @@ import * as p from "@clack/prompts";
 import { Future } from "@/libs/future";
 import { type Option } from "@clack/prompts";
 import { saveConfig } from "@/infra/storage/config";
-import { CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
-import { performOAuthFlow, validateOAuthTokens } from "@/infra/auth/google";
+import { CommitConvention, type Config, type Model, type ProviderConfig } from "@/domain/config/config";
+import { performOAuthFlow, type GoogleOAuthPhase } from "@/infra/auth/google";
 import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/infra/auth/openai";
 import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/infra/auth/anthropic";
 import { Just, Nothing } from "@/libs/maybe";
-import { loading } from "@/infra/ui/spinner";
+import { bracketStatus, loading } from "@/infra/ui/spinner";
 import { fetchModels } from "@/domain/commit/models";
 import { selectModelInteractively } from "@/infra/ui/model-picker";
 import { selectEffortForProvider, seedProviderConfig } from "@/domain/llm/effort";
@@ -104,16 +104,29 @@ class Setup {
   }
 
   private setupOAuth(): Future<Error, void> {
-    p.log.info("Opening browser for Google sign-in...");
+    return bracketStatus("Opening browser for Google sign-in...", "Models fetched!", (status) => {
+      const onPhase = (phase: GoogleOAuthPhase, detail?: string) => {
+        switch (phase) {
+          case "opening_browser":
+            status.message("Opening browser for Google sign-in...");
+            break;
+          case "waiting_browser":
+            status.message("Waiting for you to complete sign-in in the browser");
+            break;
+          case "exchanging_code":
+            status.message("Exchanging authorization code...");
+            break;
+          case "signed_in":
+            status.message(detail ? `Signed in as ${detail}` : "Signed in");
+            break;
+        }
+      };
 
-    return performOAuthFlow()
-      .chain((tokens) =>
-        loading("Validating OAuth tokens...", "OAuth tokens validated!", validateOAuthTokens(tokens)).map(() => ({
-          type: "google_oauth" as const,
-          content: tokens
-        }))
-      )
-      .chain((authMethod) => this.finalizeSetup(authMethod));
+      return performOAuthFlow({ onPhase }).chain((tokens) => {
+        const authMethod = { type: "google_oauth" as const, content: tokens };
+        return fetchModels(this.preferences.provider, authMethod).map((models) => ({ authMethod, models }));
+      });
+    }).chain(({ authMethod, models }) => this.finalizeAfterModels(authMethod, models));
   }
 
   private setupOpenAIOAuth(): Future<Error, void> {
@@ -152,8 +165,13 @@ class Setup {
   }
 
   private finalizeSetup(authMethod: ProviderConfig["auth_method"]): Future<Error, void> {
-    return loading("Fetching available models...", "Models fetched!", fetchModels(this.preferences.provider, authMethod))
-      .chain((models) => selectModelInteractively(models))
+    return loading("Fetching available models...", "Models fetched!", fetchModels(this.preferences.provider, authMethod)).chain((models) =>
+      this.finalizeAfterModels(authMethod, models)
+    );
+  }
+
+  private finalizeAfterModels(authMethod: ProviderConfig["auth_method"], models: Model[]): Future<Error, void> {
+    return selectModelInteractively(models)
       .chain((modelId) => selectEffortForProvider(seedProviderConfig(this.preferences.provider, modelId, authMethod)))
       .chain((ai) => saveConfig(this.buildConfig(ai)))
       .map(() => {

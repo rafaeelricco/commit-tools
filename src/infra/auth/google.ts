@@ -20,6 +20,12 @@ const PORT_RANGE_END = 8410;
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+export type GoogleOAuthPhase = "opening_browser" | "waiting_browser" | "exchanging_code" | "signed_in";
+
+export type GoogleOAuthFlowHooks = {
+  readonly onPhase?: (phase: GoogleOAuthPhase, detail?: string) => void;
+};
+
 type CallbackServer = {
   readonly server: Server;
   readonly port: number;
@@ -148,7 +154,13 @@ const exchangeCodeForTokens = (client: OAuth2Client, code: string, codeVerifier:
     };
   }).mapRej((e) => new Error(`Token exchange failed: ${e}`));
 
-const performOAuthFlow = (): Future<Error, OAuthTokens> =>
+const getUserEmailFromTokenInfo = (client: OAuth2Client, accessToken: string): Future<Error, string | undefined> =>
+  Future.attemptP(async (): Promise<string | undefined> => {
+    const info = await client.getTokenInfo(accessToken);
+    return info.email;
+  }).chainRej(() => Future.resolve<Error, string | undefined>(undefined));
+
+const performOAuthFlow = (hooks?: GoogleOAuthFlowHooks): Future<Error, OAuthTokens> =>
   findAvailablePort().chain((port) => {
     const redirectUri = `http://127.0.0.1:${port}/callback`;
     const codeVerifier = generateCodeVerifier();
@@ -163,7 +175,6 @@ const performOAuthFlow = (): Future<Error, OAuthTokens> =>
 
     const authUrl = client.generateAuthUrl({
       access_type: "offline",
-      prompt: "consent",
       scope: SCOPES,
       code_challenge: codeChallenge,
       code_challenge_method: CodeChallengeMethod.S256,
@@ -171,13 +182,30 @@ const performOAuthFlow = (): Future<Error, OAuthTokens> =>
     });
 
     return Future.bracket<Error, CallbackServer, OAuthTokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
-      const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() => Future.attemptP(() => cs.codePromise));
+      hooks?.onPhase?.("opening_browser");
 
-      const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-        return () => clearTimeout(setTimeout(() => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")), OAUTH_TIMEOUT_MS));
+      const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() => {
+        hooks?.onPhase?.("waiting_browser");
+        return Future.attemptP(async () => {
+          const code = await cs.codePromise;
+          hooks?.onPhase?.("exchanging_code");
+          return code;
+        });
       });
 
-      return Future.race(waitForCode, timeout).chain((code) => exchangeCodeForTokens(client, code, codeVerifier, redirectUri));
+      const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
+        const timer = setTimeout(() => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")), OAUTH_TIMEOUT_MS);
+        return () => clearTimeout(timer);
+      });
+
+      return Future.race(waitForCode, timeout)
+        .chain((code) => exchangeCodeForTokens(client, code, codeVerifier, redirectUri))
+        .chain((tokens) =>
+          getUserEmailFromTokenInfo(client, tokens.access_token).map((email) => {
+            hooks?.onPhase?.("signed_in", email);
+            return tokens;
+          })
+        );
     });
   });
 

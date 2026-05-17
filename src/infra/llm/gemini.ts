@@ -1,6 +1,6 @@
 export { type GeminiAuthCredentials, generateContentWithGemini, getAuthCredentials };
 
-import { GoogleGenAI, ThinkingLevel, type Content, type GenerateContentConfig, type GenerateContentResponse, type GenerationConfig } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, type GenerateContentConfig, type GenerateContentResponse } from "@google/genai";
 
 import { type Config, type OAuthTokens, type GeminiEffort } from "@/domain/config/config";
 import { type GenerateContentParams, type ProviderGeneratedContent, type TokenUsage } from "@/domain/llm/router";
@@ -13,12 +13,6 @@ import { absurd } from "@/libs/types";
 
 type GeminiConfig = Extract<Config["ai"], { provider: "gemini" }>;
 type GeminiAuthCredentials = { readonly method: "api_key"; readonly apiKey: string } | { readonly method: "google_oauth"; readonly tokens: OAuthTokens };
-
-type OAuthRequestBody = {
-  contents: Content[];
-  systemInstruction?: Content;
-  generationConfig?: GenerationConfig;
-};
 
 const toTokenUsage = (usage: GenerateContentResponse["usageMetadata"]): Maybe<TokenUsage> =>
   fromOptional(usage).map((u) => ({
@@ -53,23 +47,25 @@ const buildSDKConfig = (effort: Maybe<GeminiEffort>, params: GenerateContentPara
   return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: s }));
 };
 
-const buildOAuthBody = (effort: Maybe<GeminiEffort>, params: GenerateContentParams): OAuthRequestBody => {
-  const core: OAuthRequestBody = {
-    contents: [{ parts: [{ text: params.prompt }] }],
-    generationConfig: { thinkingConfig: { thinkingLevel: effort.withDefault(ThinkingLevel.MEDIUM) } }
-  };
-  return fromOptional(params.systemInstruction).maybe(core, (s) => ({ ...core, systemInstruction: { parts: [{ text: s }] } }));
-};
+const geminiHttpOptions = {
+  timeout: 120_000,
+  retryOptions: { attempts: 3 }
+} as const;
 
-const parseOAuthResponse = async (response: Response): Promise<ProviderGeneratedContent> => {
-  if (!response.ok) throw new Error(`Gemini API error (${response.status}): ${await response.text()}`);
-
-  // The REST OAuth path receives the same JSON wire shape that @google/genai maps
-  // to GenerateContentResponse for API-key calls. Response.json() cannot prove that
-  // shape to TypeScript, so this cast keeps both auth paths on one metadata mapper.
-  // If this breaks, compare the REST payload with the fields used below:
-  // response.text, candidates[].content.parts[].text, and usageMetadata token counts.
-  return toGeneratedContent((await response.json()) as GenerateContentResponse);
+/** Gemini OAuth must not send `x-goog-api-key`; `GoogleGenAI` reads `GEMINI_API_KEY` / `GOOGLE_API_KEY` from the environment as `apiKey`, which would add that header after `Authorization`. */
+const withEnvWithoutGeminiApiKeys = async <T>(run: () => Promise<T>): Promise<T> => {
+  const savedGoogle = process.env["GOOGLE_API_KEY"];
+  const savedGemini = process.env["GEMINI_API_KEY"];
+  try {
+    delete process.env["GOOGLE_API_KEY"];
+    delete process.env["GEMINI_API_KEY"];
+    return await run();
+  } finally {
+    if (savedGoogle === undefined) delete process.env["GOOGLE_API_KEY"];
+    else process.env["GOOGLE_API_KEY"] = savedGoogle;
+    if (savedGemini === undefined) delete process.env["GEMINI_API_KEY"];
+    else process.env["GEMINI_API_KEY"] = savedGemini;
+  }
 };
 
 const generateContentWithApiKey = (
@@ -81,7 +77,7 @@ const generateContentWithApiKey = (
   Future.attemptP(async () => {
     const ai = new GoogleGenAI({
       apiKey,
-      httpOptions: { timeout: 120_000, retryOptions: { attempts: 3 } }
+      httpOptions: geminiHttpOptions
     });
     const response = await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
     return toGeneratedContent(response);
@@ -96,15 +92,18 @@ const generateContentWithOAuth = (
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
   getAccessToken(tokens).chain((accessToken) =>
-    Future.attemptP(async () => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(buildOAuthBody(effort, params))
-      });
-      return await parseOAuthResponse(response);
-    })
+    Future.attemptP(async () =>
+      withEnvWithoutGeminiApiKeys(async () => {
+        const ai = new GoogleGenAI({
+          httpOptions: {
+            ...geminiHttpOptions,
+            headers: { Authorization: `Bearer ${accessToken}` }
+          }
+        });
+        const response = await ai.models.generateContent({ model, contents: params.prompt, config: buildSDKConfig(effort, params) });
+        return toGeneratedContent(response);
+      })
+    )
       .mapRej((error) => new Error(`Failed to create Gemini content: ${error instanceof Error ? error.message : String(error)}`))
       .chain((content) => extractResponse({ text: fromOptional(content.text) }).map((text) => ({ ...content, text })))
   );

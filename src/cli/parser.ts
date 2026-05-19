@@ -16,7 +16,7 @@ type CliCommand =
   | { type: "help" };
 
 const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) => {
-  const cmd = args[0] || "-h";
+  const cmd = args[0] || "generate";
 
   switch (cmd) {
     case "generate":

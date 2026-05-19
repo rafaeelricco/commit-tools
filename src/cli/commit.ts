@@ -15,14 +15,10 @@ import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
+import { isNonFastForwardError } from "@/cli/commit-errors";
 
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
-
-const isNonFastForwardError = (error: Error): boolean => {
-  const msg = error.message.toLowerCase();
-  return msg.includes("non-fast-forward") || msg.includes("updates were rejected");
-};
 
 class Commit {
   private constructor(

@@ -9,7 +9,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Config, resolveAuthMethod, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
 import { absurd } from "@/libs/types";
 
-const CONFIG_DIR = resolve(homedir(), ".commit-tools");
+const CONFIG_DIR = process.env["COMMIT_TOOLS_HOME"] ? resolve(process.env["COMMIT_TOOLS_HOME"]) : resolve(homedir(), ".commit-tools");
 const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
 
 const loadConfig = (): Future<Error, Config> =>

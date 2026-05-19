@@ -1,4 +1,4 @@
-export { Update, checkUpdate };
+export { Update, checkUpdate, detectPackageManager };
 
 import * as p from "@clack/prompts";
 

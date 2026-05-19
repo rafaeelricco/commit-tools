@@ -1,4 +1,4 @@
-export { resolveProvider };
+export { resolveProvider, tokensChanged };
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";

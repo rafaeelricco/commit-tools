@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const BIN = resolve(import.meta.dirname, "../dist/index.js");
+const BIN = resolve(import.meta.dirname, "../../dist/index.js");
 
 const runCli = (args: string[]) =>
   spawnSync(process.execPath, [BIN, ...args], {

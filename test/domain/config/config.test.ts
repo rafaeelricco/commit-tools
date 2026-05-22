@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
 import { Just, Nothing } from "@/libs/maybe";
+import { Success } from "@/libs/result";
 
 type ConfigValue = s.Infer<typeof Config>;
 
@@ -21,10 +22,10 @@ describe("Config schema", () => {
     const encoded = s.encode(Config, sampleConfig());
     const decoded = s.decode(Config, encoded);
     expect(decoded.isSuccess()).toBe(true);
-    if (!decoded.isSuccess()) return;
+    if (!(decoded instanceof Success)) return;
     const again = s.decode(Config, s.encode(Config, decoded.value));
     expect(again.isSuccess()).toBe(true);
-    if (again.isSuccess()) {
+    if (again instanceof Success) {
       expect(again.value.ai.provider).toBe("openai");
       expect(again.value.custom_template).toBeInstanceOf(Nothing);
     }
@@ -37,11 +38,11 @@ describe("Config schema", () => {
 
   it("accepts custom convention with template", () => {
     const json = {
-      ...s.encode(Config, { ...sampleConfig(), commit_convention: "custom", custom_template: Just("Summarize:\n{diff}") }),
+      ...(s.encode(Config, { ...sampleConfig(), commit_convention: "custom", custom_template: Just("Summarize:\n{diff}") }) as Record<string, unknown>),
       commit_convention: "custom"
     };
     const result = s.decode(Config, json);
     expect(result.isSuccess()).toBe(true);
-    if (result.isSuccess()) expect(result.value.custom_template).toBeInstanceOf(Just);
+    if (result instanceof Success) expect(result.value.custom_template).toBeInstanceOf(Just);
   });
 });

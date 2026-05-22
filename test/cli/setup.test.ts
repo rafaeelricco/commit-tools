@@ -14,7 +14,7 @@ vi.mock("@/infra/auth/openai", () => ({
 import { Setup } from "@/cli/setup";
 import { Future } from "@/libs/future";
 import { Just } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 
 vi.mock("@clack/prompts", () => ({
   intro: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock("@/infra/ui/spinner", () => ({
   bracketStatus: vi.fn((_a: string, _b: string, f: (s: unknown) => Future<Error, unknown>) => f({}))
 }));
 vi.mock("@/infra/storage/config", () => ({
-  saveConfig: vi.fn(() => Future.resolve())
+  saveConfig: vi.fn(() => Future.resolve(undefined))
 }));
 vi.mock("@/infra/auth/anthropic", () => ({
   validateAnthropicApiKey: vi.fn(),

@@ -2,15 +2,16 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
 import { Nothing } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 import type { ProviderConfig } from "@/domain/config/config";
 
-const mockProvider = (provider: ProviderConfig["provider"]): ProviderConfig => ({
-  provider,
-  model: "test-model",
-  effort: Nothing(),
-  auth_method: { type: "api_key", content: "sk-test" }
-});
+const mockProvider = (provider: ProviderConfig["provider"]): ProviderConfig =>
+  ({
+    provider,
+    model: "test-model",
+    effort: Nothing(),
+    auth_method: { type: "api_key", content: "sk-test" }
+  }) as ProviderConfig;
 
 vi.mock("@/infra/llm/gemini", () => ({
   generateContentWithGemini: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing() }))

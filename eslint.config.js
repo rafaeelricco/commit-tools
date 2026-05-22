@@ -4,7 +4,7 @@ import sonarjs from "eslint-plugin-sonarjs";
 export default tseslint.config(
   { ignores: ["dist/**", "node_modules/**", "**/*.d.ts"] },
   {
-    files: ["index.ts", "src/**/*.{ts,tsx}"],
+    files: ["index.ts", "src/**/*.{ts,tsx}", "test/**/*.ts"],
     languageOptions: { parser: tseslint.parser },
     plugins: { sonarjs },
     rules: {

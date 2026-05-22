@@ -7,7 +7,7 @@ vi.mock("@/infra/env", () => ({
 import { Commit } from "@/cli/commit";
 import { Future } from "@/libs/future";
 import { Nothing, Just } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
 

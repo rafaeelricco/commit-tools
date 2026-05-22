@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { getOpenPullRequest } from "@/infra/github/pr";
 import { Future } from "@/libs/future";
 import { Success, Failure } from "@/libs/result";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 
 vi.mock("@/infra/git/repo", () => ({
   getTrackingRemoteUrl: vi.fn(() => Future.resolve("https://github.com/o/r.git")),

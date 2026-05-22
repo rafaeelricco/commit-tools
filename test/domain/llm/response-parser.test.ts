@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { Just, Nothing } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 
 describe("extractResponse", () => {
   it("trims and returns non-empty text", async () => {

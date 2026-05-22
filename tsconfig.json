@@ -25,9 +25,10 @@
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
     "paths": {
-      "@/*": ["./src/*", "./*"]
+      "@/*": ["./src/*", "./*"],
+      "@test/*": ["./test/*"]
     }
   },
-  "include": ["index.ts", "src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "test"]
+  "include": ["index.ts", "src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

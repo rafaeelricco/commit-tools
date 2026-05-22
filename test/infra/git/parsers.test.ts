@@ -42,7 +42,7 @@ describe("splitCommitFields", () => {
     const line = ["abc", "abc", "subject", "me", "me@x.com", "2024-01-01T00:00:00+00:00"].join("\0");
     const result = splitCommitFields(`${line}\n`);
     expect(result.isSuccess()).toBe(true);
-    if (result.isSuccess()) expect(result.value["subject"]).toBe("subject");
+    if (result instanceof Success) expect(result.value["subject"]).toBe("subject");
   });
 });
 

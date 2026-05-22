@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ModelCommand } from "@/cli/model";
 import { Future } from "@/libs/future";
 import { Nothing, Just } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
 
@@ -16,7 +16,7 @@ const config = (): ConfigValue => ({
 
 vi.mock("@/infra/storage/config", () => ({
   loadConfig: vi.fn(),
-  saveConfig: vi.fn(() => Future.resolve())
+  saveConfig: vi.fn(() => Future.resolve(undefined))
 }));
 vi.mock("@/domain/llm/auth-resolver", () => ({
   resolveProvider: vi.fn((c: ConfigValue) => Future.resolve(c.ai))

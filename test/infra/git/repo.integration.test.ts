@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
-import { runFuture } from "../../../test/helpers/run-future";
-import { createTempGitRepo } from "../../../test/helpers/temp-git-repo";
+import { runFuture } from "@test/helpers/run-future";
+import { createTempGitRepo } from "@test/helpers/temp-git-repo";
 import * as repo from "@/infra/git/repo";
 
 describe("git repo integration", () => {

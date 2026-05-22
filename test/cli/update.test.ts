@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { detectPackageManager } from "@/cli/update";
 import { Future } from "@/libs/future";
 import { Success } from "@/libs/result";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 
 vi.mock("@/infra/shell", () => ({
   execBin: vi.fn()

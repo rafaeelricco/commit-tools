@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { readFile } from "node:fs/promises";
 import { loadConfig, saveConfig, configFile } from "@/infra/storage/config";
 import { Nothing } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
 

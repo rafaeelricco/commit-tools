@@ -7,12 +7,13 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "@/package.json", replacement: resolve(root, "package.json") },
+      { find: /^@test\/(.+)$/, replacement: resolve(root, "test/$1") },
       { find: /^@\/(.+)$/, replacement: resolve(root, "src/$1") }
     ]
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "test/**/*.test.ts"],
+    include: ["test/**/*.test.ts"],
     setupFiles: ["./test/setup.ts"],
     coverage: {
       provider: "v8",

@@ -7,7 +7,7 @@ vi.mock("@/infra/env", () => ({
 import { Doctor } from "@/cli/doctor";
 import { Future } from "@/libs/future";
 import { Just } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 
 vi.mock("@/infra/storage/config", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/infra/storage/config")>();

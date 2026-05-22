@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Future } from "@/libs/future";
 import { resolveProvider, tokensChanged } from "@/domain/llm/auth-resolver";
 import { Just, Nothing } from "@/libs/maybe";
-import { runFuture } from "../../../test/helpers/run-future";
+import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config as ConfigSchema } from "@/domain/config/config";
 
@@ -11,8 +11,8 @@ vi.mock("@/infra/auth/google", () => ({
 }));
 vi.mock("@/infra/auth/openai", () => ({ ensureFreshOpenAITokens: vi.fn() }));
 vi.mock("@/infra/storage/config", () => ({
-  updateGoogleTokens: vi.fn(() => Future.resolve()),
-  updateOpenAITokens: vi.fn(() => Future.resolve())
+  updateGoogleTokens: vi.fn(() => Future.resolve(undefined)),
+  updateOpenAITokens: vi.fn(() => Future.resolve(undefined))
 }));
 
 type ConfigValue = s.Infer<typeof ConfigSchema>;

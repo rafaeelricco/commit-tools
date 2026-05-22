@@ -4,12 +4,21 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   checks:
-    name: Typecheck, format, and build
+    name: Validate (typecheck, format, build, test)
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      NO_UPDATE_NOTIFIER: "true"
+      CI: "true"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -28,21 +37,14 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: Unit tests
-        env:
-          GOOGLE_CLIENT_ID: test-client-id
-          GOOGLE_CLIENT_SECRET: test-client-secret
-          NO_UPDATE_NOTIFIER: "true"
-        run: pnpm test
-
       - name: Check formatting
         run: pnpm exec prettier . --check
 
       - name: Build project
-        env:
-          GOOGLE_CLIENT_ID: pr-validation-not-a-real-client-id
-          GOOGLE_CLIENT_SECRET: pr-validation-not-a-real-secret
         run: pnpm run build
+
+      - name: Test
+        run: pnpm test
 
   lint:
     name: Cognitive complexity

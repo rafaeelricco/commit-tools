@@ -31,11 +31,13 @@ describe("config storage", () => {
     expect(JSON.parse(raw).ai.provider).toBe("openai");
   });
 
-  it("rejects invalid config on load", async () => {
+  it("rejects invalid JSON on load with a clear error", async () => {
     const { writeFile, mkdir } = await import("node:fs/promises");
     const { dirname } = await import("node:path");
     await mkdir(dirname(CONFIG_FILE), { recursive: true });
     await writeFile(CONFIG_FILE, "{ invalid", "utf-8");
-    await expect(runFuture(loadConfig())).rejects.toThrow();
+    await expect(runFuture(loadConfig())).rejects.toThrow(/not valid JSON/);
+    await expect(runFuture(loadConfig())).rejects.toThrow(CONFIG_FILE);
+    await expect(runFuture(loadConfig())).rejects.toThrow(/commit setup/);
   });
 });

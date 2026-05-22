@@ -32,7 +32,7 @@ describe("CLI smoke (built dist)", () => {
     expect(stdout).toContain("generate");
   });
 
-  it.skipIf(!distExists() || !process.env["CI"])("doctor exits 0", () => {
+  it.skipIf(!distExists())("doctor exits 0", () => {
     const { status } = runCli(["doctor"]);
     expect(status).toBe(0);
   });

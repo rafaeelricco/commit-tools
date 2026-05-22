@@ -3,10 +3,10 @@ export { checkForUpdate, compareVersions };
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { CONFIG_DIR } from "@/infra/storage/config";
+import { configDir } from "@/infra/storage/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
-const CACHE_FILE = resolve(CONFIG_DIR, "version-check.json");
+const cacheFile = (): string => resolve(configDir(), "version-check.json");
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REGISTRY_URL = "https://registry.npmjs.org/@rafaeelricco/commit-tools/latest";
 
@@ -14,7 +14,7 @@ type CachedCheck = { checkedAt: number; latestVersion: string };
 
 const loadCache = (): Maybe<CachedCheck> => {
   try {
-    const raw = readFileSync(CACHE_FILE, "utf-8");
+    const raw = readFileSync(cacheFile(), "utf-8");
     const parsed = JSON.parse(raw);
     if (typeof parsed?.checkedAt === "number" && typeof parsed?.latestVersion === "string") {
       return Just({ checkedAt: parsed.checkedAt, latestVersion: parsed.latestVersion });
@@ -43,8 +43,8 @@ const refreshCacheInBackground = (): void => {
     `fetch(${JSON.stringify(REGISTRY_URL)})`,
     `.then(r => r.ok ? r.json() : Promise.reject())`,
     `.then(j => { const fs = require("fs");`,
-    `fs.mkdirSync(${JSON.stringify(CONFIG_DIR)}, { recursive: true });`,
-    `fs.writeFileSync(${JSON.stringify(CACHE_FILE)},`,
+    `fs.mkdirSync(${JSON.stringify(configDir())}, { recursive: true });`,
+    `fs.writeFileSync(${JSON.stringify(cacheFile())},`,
     `JSON.stringify({ checkedAt: Date.now(), latestVersion: j.version })); })`,
     `.catch(() => {});`
   ].join("");

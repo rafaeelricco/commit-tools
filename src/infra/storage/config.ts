@@ -1,4 +1,4 @@
-export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, CONFIG_DIR, CONFIG_FILE };
+export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, configDir, configFile };
 
 import * as s from "@/libs/json/schema";
 
@@ -10,8 +10,8 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Config, resolveAuthMethod, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
 import { absurd } from "@/libs/types";
 
-const CONFIG_DIR = process.env["COMMIT_TOOLS_HOME"] ? resolve(process.env["COMMIT_TOOLS_HOME"]) : resolve(homedir(), ".commit-tools");
-const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
+const configDir = (): string => (process.env["COMMIT_TOOLS_HOME"] ? resolve(process.env["COMMIT_TOOLS_HOME"]) : resolve(homedir(), ".commit-tools"));
+const configFile = (): string => resolve(configDir(), "config.json");
 
 const parseConfigJson = (raw: string, path: string): Result<Error, unknown> => {
   try {
@@ -23,10 +23,10 @@ const parseConfigJson = (raw: string, path: string): Result<Error, unknown> => {
 };
 
 const loadConfig = (): Future<Error, Config> =>
-  Future.attemptP(() => readFile(CONFIG_FILE, "utf-8"))
+  Future.attemptP(() => readFile(configFile(), "utf-8"))
     .mapRej((err) => new Error(`Failed to read config file: ${err}`))
     .chain((raw) => {
-      const parsed = parseConfigJson(raw, CONFIG_FILE);
+      const parsed = parseConfigJson(raw, configFile());
       return parsed.either(
         (err) => Future.reject(err),
         (json) => {
@@ -41,8 +41,8 @@ const loadConfig = (): Future<Error, Config> =>
 
 const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
-    await mkdir(CONFIG_DIR, { recursive: true });
-    await writeFile(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
+    await mkdir(configDir(), { recursive: true });
+    await writeFile(configFile(), JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
   });
 
 const updateGoogleTokens = (tokens: OAuthTokens): Future<Error, void> =>

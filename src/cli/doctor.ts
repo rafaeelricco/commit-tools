@@ -4,7 +4,7 @@ import * as pr from "@/infra/github/pr";
 import * as repo from "@/infra/git/repo";
 
 import { Future } from "@/libs/future";
-import { CONFIG_FILE, loadConfig } from "@/infra/storage/config";
+import { configFile, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
 import { Just, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
@@ -57,14 +57,14 @@ class Doctor {
 
   private checkConfig(): Future<Error, CheckRow[]> {
     return Future.attemptP(() =>
-      access(CONFIG_FILE)
+      access(configFile())
         .then(() => true)
         .catch(() => false)
     ).chain((configExists) => {
       const row: CheckRow = [
         "Configuration",
         configExists ? color.green("Found") : color.yellow("Missing"),
-        configExists ? CONFIG_FILE : "Run 'commit-tools setup' to create"
+        configExists ? configFile() : "Run 'commit-tools setup' to create"
       ];
 
       if (!configExists) {

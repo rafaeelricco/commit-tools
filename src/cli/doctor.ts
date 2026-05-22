@@ -57,14 +57,14 @@ class Doctor {
 
   private checkConfig(): Future<Error, CheckRow[]> {
     return Future.attemptP(() =>
-      access(CONFIG_FILE)
+      access(CONFIG_FILE())
         .then(() => true)
         .catch(() => false)
     ).chain((configExists) => {
       const row: CheckRow = [
         "Configuration",
         configExists ? color.green("Found") : color.yellow("Missing"),
-        configExists ? CONFIG_FILE : "Run 'commit-tools setup' to create"
+        configExists ? CONFIG_FILE() : "Run 'commit-tools setup' to create"
       ];
 
       if (!configExists) {

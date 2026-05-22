@@ -21,13 +21,22 @@ export {
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type Result, Success, Failure } from "@/libs/result";
+import { type Result, Failure } from "@/libs/result";
 import { absurd } from "@/libs/types";
-import { execBin, type CommandFailure } from "@/infra/shell";
+import { type BaseLookupError } from "@/infra/git/parsers";
+import { execBin } from "@/infra/shell";
 import * as Decoder from "@/libs/json/decoder";
 import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  parsePushRange,
+  formatCommitOutput,
+  parseBaseFromReflog,
+  parseRemoteFromUpstream,
+  splitCommitFields,
+  commandFailureMessage
+} from "@/infra/git/parsers";
 
 type CommitMetadata = {
   hash: string;
@@ -45,13 +54,6 @@ type PushResult = {
   range: Maybe<PushRange>;
 };
 
-type BaseLookupError = { type: "reflog-empty" } | { type: "reflog-not-creation"; subject: string } | { type: "reflog-cmd-failed"; message: string };
-
-const CREATED_FROM_RE = /^branch: Created from (\S+)$/;
-
-const commandFailureMessage = (failure: CommandFailure, fallbackMsg: string): string =>
-  failure.output.stderr.trim() || failure.output.stdout.trim() || `${failure.error.message}: ${fallbackMsg}`;
-
 const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, string> =>
   execBin("git", args).chain((result) =>
     result.either(
@@ -59,22 +61,6 @@ const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, stri
       ({ stdout }) => Future.resolve<Error, string>(stdout)
     )
   );
-
-const formatCommitOutput = (stdout: string): string =>
-  "\n" +
-  stdout
-    .split("\n")
-    .filter((line) => !line.startsWith("["))
-    .join("\n")
-    .trim() +
-  "\n";
-
-const parsePushRange = (output: string): Maybe<PushRange> => {
-  const m = output.match(/([0-9a-f]{7,40})\.\.([0-9a-f]{7,40})/);
-  if (!m) return Nothing();
-  const [, before, after] = m;
-  return before && after ? Just({ before, after }) : Nothing();
-};
 
 const checkIsGitRepo = (): Future<Error, void> => execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
 
@@ -136,21 +122,6 @@ const getUpstream = (): Future<Error, Maybe<string>> =>
     )
   );
 
-const oldestReflogSubject = (stdout: string): Result<BaseLookupError, string> => {
-  const oldest = stdout.split("\n").filter(Boolean).at(-1);
-  return oldest ? Success(oldest) : Failure({ type: "reflog-empty" });
-};
-
-const parseCreatedFrom = (subject: string): Result<BaseLookupError, string> => {
-  const source = subject.match(CREATED_FROM_RE)?.[1];
-  return source && source !== "HEAD" ? Success(source) : Failure({ type: "reflog-not-creation", subject });
-};
-
-const normalizeBranchRef = (ref: string): string => ref.replace(/^refs\/heads\//, "").replace(/^refs\/remotes\/[^/]+\//, "");
-
-const parseBaseFromReflog = (stdout: string): Result<BaseLookupError, string> =>
-  oldestReflogSubject(stdout).chain(parseCreatedFrom).map(normalizeBranchRef);
-
 const getBaseFromReflog = (branch: string): Future<Error, Result<BaseLookupError, string>> =>
   execBin("git", ["log", "-g", "--format=%gs", branch]).map((result) =>
     result.either(
@@ -196,11 +167,6 @@ const findBaseBranch = (): Future<Error, Maybe<string>> => getBaseBranch().chain
 const getRemoteUrl = (remote: string = "origin"): Future<Error, string> =>
   execGitChecked(["remote", "get-url", remote], `Failed to read remote '${remote}' url`).map((s) => s.trim());
 
-const parseRemoteFromUpstream = (upstream: string): Maybe<string> => {
-  const idx = upstream.indexOf("/");
-  return idx > 0 ? Just(upstream.slice(0, idx)) : Nothing();
-};
-
 const getTrackingRemoteUrl = (): Future<Error, string> =>
   getUpstream().chain((maybeRef) => {
     const remote = maybeRef instanceof Just ? parseRemoteFromUpstream(maybeRef.value) : Nothing<string>();
@@ -240,14 +206,6 @@ const COMMIT_FIELDS = [
 ] as const;
 
 const COMMIT_FORMAT = COMMIT_FIELDS.map(([, p]) => p).join("%x00");
-const COMMIT_KEYS = COMMIT_FIELDS.map(([n]) => n);
-
-const splitCommitFields = (stdout: string): Result<string, Record<string, unknown>> => {
-  const parts = stdout.replace(/\n$/, "").split("\x00");
-  return parts.length === COMMIT_KEYS.length ?
-      Success(Object.fromEntries(COMMIT_KEYS.map((k, i) => [k, parts[i]])))
-    : Failure(`expected ${COMMIT_KEYS.length} fields, got ${parts.length}`);
-};
 
 const getCommitMetadata = (ref: string = "HEAD"): Future<Error, CommitMetadata> =>
   execGitChecked(["log", "-1", `--format=${COMMIT_FORMAT}`, ref], "Failed to read commit metadata").chain((stdout) =>

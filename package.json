@@ -15,7 +15,9 @@
     "format": "npx prettier . --write",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "lint:ci": "eslint ."
+    "lint:ci": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "repository": {
     "type": "git",
@@ -33,6 +35,7 @@
     "@types/luxon": "^3.7.1",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
+    "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^9.39.4",
     "eslint-plugin-sonarjs": "^4.0.3",
     "prettier": "^3.8.1",
@@ -40,7 +43,8 @@
     "react-devtools-core": "^7.0.1",
     "tsup": "^8",
     "tsx": "^4",
-    "typescript-eslint": "^8.59.0"
+    "typescript-eslint": "^8.59.0",
+    "vitest": "^4.1.6"
   },
   "peerDependencies": {
     "typescript": "^5"

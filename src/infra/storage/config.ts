@@ -1,33 +1,48 @@
-export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, CONFIG_DIR, CONFIG_FILE };
+export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, configDir, configFile };
 
 import * as s from "@/libs/json/schema";
 
 import { Future } from "@/libs/future";
+import { Success, Failure, type Result } from "@/libs/result";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Config, resolveAuthMethod, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
 import { absurd } from "@/libs/types";
 
-const CONFIG_DIR = resolve(homedir(), ".commit-tools");
-const CONFIG_FILE = resolve(CONFIG_DIR, "config.json");
+const configDir = (): string => (process.env["COMMIT_TOOLS_HOME"] ? resolve(process.env["COMMIT_TOOLS_HOME"]) : resolve(homedir(), ".commit-tools"));
+const configFile = (): string => resolve(configDir(), "config.json");
+
+const parseConfigJson = (raw: string, path: string): Result<Error, unknown> => {
+  try {
+    return Success(JSON.parse(raw));
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return Failure(new Error(`Config file is not valid JSON (${path}): ${detail}. Fix the file or run 'commit setup' to recreate it.`));
+  }
+};
 
 const loadConfig = (): Future<Error, Config> =>
-  Future.attemptP(() => readFile(CONFIG_FILE, "utf-8"))
+  Future.attemptP(() => readFile(configFile(), "utf-8"))
     .mapRej((err) => new Error(`Failed to read config file: ${err}`))
-    .map((value) => JSON.parse(value))
-    .chain((json) => {
-      const result = s.decode(Config, json);
-      return result.either(
-        (err) => Future.reject(new Error(`Invalid config: ${err}`)),
-        (ok) => Future.resolve(ok)
+    .chain((raw) => {
+      const parsed = parseConfigJson(raw, configFile());
+      return parsed.either(
+        (err) => Future.reject(err),
+        (json) => {
+          const result = s.decode(Config, json);
+          return result.either(
+            (err) => Future.reject(new Error(`Invalid config: ${err}`)),
+            (ok) => Future.resolve(ok)
+          );
+        }
       );
     });
 
 const saveConfig = (config: Config): Future<Error, void> =>
   Future.attemptP(async () => {
-    await mkdir(CONFIG_DIR, { recursive: true });
-    await writeFile(CONFIG_FILE, JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
+    await mkdir(configDir(), { recursive: true });
+    await writeFile(configFile(), JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
   });
 
 const updateGoogleTokens = (tokens: OAuthTokens): Future<Error, void> =>

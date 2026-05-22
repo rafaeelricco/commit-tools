@@ -192,3 +192,26 @@ Contributions and feedback are welcome!
 ## Contributing
 
 We welcome contributions! Feel free to report bugs, suggest features, or submit pull requests.
+
+### Pull request checks
+
+Every pull request runs the **PR Validate** workflow (`.github/workflows/pr-validate.yml`):
+
+- **Validate (typecheck, format, build, test)** — typecheck, Prettier, production build, then the full Vitest suite (unit, integration, and CLI smoke tests against `dist/`)
+- **Cognitive complexity** — ESLint SonarJS rules
+- **Publish preview** — semver / npm publish preview (informational)
+
+Run locally before opening a PR:
+
+```bash
+pnpm typecheck
+pnpm exec prettier . --check
+pnpm build   # requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the environment
+pnpm test
+pnpm lint
+```
+
+To block merges when checks fail, enable branch protection on `main` and require these status checks:
+
+- `Validate (typecheck, format, build, test)`
+- `Cognitive complexity`

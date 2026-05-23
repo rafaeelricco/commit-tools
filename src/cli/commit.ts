@@ -13,6 +13,8 @@ import { generateCommitMessage, refineCommitMessage, type GeneratedContent, type
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
+import type { GenerateRunMode } from "@/cli/generate-flags";
+import { CliError, cliError, buildGenerateSuccess, writeGenerateSuccess, writeCliFailure } from "@/cli/json-io";
 
 import color from "picocolors";
 import { isNonFastForwardError } from "@/cli/commit-errors";
@@ -20,44 +22,206 @@ import { isNonFastForwardError } from "@/cli/commit-errors";
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
 
+type JsonRunMode = Extract<GenerateRunMode, { type: "json" }>;
+
 class Commit {
   private constructor(
     private readonly config: Config,
     private readonly providerConfig: ProviderConfig
   ) {}
 
-  static create(): Future<Error, Commit> {
+  static create(mode: GenerateRunMode): Future<Error, Commit> {
+    const setupOnMissing = mode.type === "interactive";
+
     return loadConfig()
       .chainRej((): Future<Error, Config> => {
+        if (!setupOnMissing) {
+          return Future.reject(cliError("NO_CONFIG", "No configuration found. Run 'commit setup' first."));
+        }
         p.log.warn(color.yellow("No configuration found. Let's set you up first."));
         return Setup.create()
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) => resolveProvider(config).map((ai) => new Commit(config, ai)));
+      .chain((config) =>
+        resolveProvider(config)
+          .mapRej((e) => cliError("AUTH_FAILED", e.message))
+          .map((ai) => new Commit(config, ai))
+      );
   }
 
-  run(): Future<Error, void> {
+  run(mode: GenerateRunMode): Future<Error, void> {
+    switch (mode.type) {
+      case "interactive":
+        return this.runInteractive();
+      case "json":
+        return this.runJson(mode);
+      default: {
+        const _exhaustive: never = mode;
+        return Future.reject(new Error(`Unknown run mode: ${JSON.stringify(_exhaustive)}`));
+      }
+    }
+  }
+
+  private runInteractive(): Future<Error, void> {
     return repo
       .checkIsGitRepo()
       .chain(() => this.diff())
-      .chain((diff) => this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message)))
+      .chain((diff) =>
+        this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message))
+      )
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;
       });
   }
 
+  private runJson(mode: JsonRunMode): Future<Error, void> {
+    return repo
+      .checkIsGitRepo()
+      .chain(() => this.diff())
+      .chain((diff) => this.generateContentForJson(mode, diff))
+      .chain((content) => this.applyJsonGitActions(mode, content))
+      .map((payload) => writeGenerateSuccess(payload))
+      .mapRej((e) => this.failJson(e));
+  }
+
+  private generateContentForJson(mode: JsonRunMode, diff: string): Future<Error, GeneratedContent> {
+    const silent = { silent: true };
+    return this.generate(diff, this.config.commit_convention, this.config.custom_template, silent).chain((content) =>
+      mode.adjust instanceof Just ? this.refine(content.text, mode.adjust.value, diff, silent) : Future.resolve(content)
+    );
+  }
+
+  private applyJsonGitActions(mode: JsonRunMode, content: GeneratedContent): Future<Error, ReturnType<typeof buildGenerateSuccess>> {
+    const adjusted = mode.adjust instanceof Just;
+    const dryRun = mode.dryRun;
+
+    if (dryRun) {
+      return Future.resolve(
+        buildGenerateSuccess({
+          message: content.text,
+          metadata: content.metadata,
+          adjusted,
+          committed: false,
+          pushed: false,
+          dryRun: true,
+          commit: Nothing()
+        })
+      );
+    }
+
+    switch (mode.git.type) {
+      case "none":
+        return Future.resolve(
+          buildGenerateSuccess({
+            message: content.text,
+            metadata: content.metadata,
+            adjusted,
+            committed: false,
+            pushed: false,
+            dryRun: false,
+            commit: Nothing()
+          })
+        );
+      case "commit":
+        return this.commit(content.text).chain(() =>
+          repo.findCommitMetadata().map((commit) =>
+            buildGenerateSuccess({
+              message: content.text,
+              metadata: content.metadata,
+              adjusted,
+              committed: true,
+              pushed: false,
+              dryRun: false,
+              commit
+            })
+          )
+        );
+      case "commit_push": {
+        const yes = mode.git.yes;
+        return this.commit(content.text)
+          .chain(() => this.pushJson(Just(content.metadata), yes))
+          .chain(() =>
+            repo.findCommitMetadata().map((commit) =>
+              buildGenerateSuccess({
+                message: content.text,
+                metadata: content.metadata,
+                adjusted,
+                committed: true,
+                pushed: true,
+                dryRun: false,
+                commit
+              })
+            )
+          );
+      }
+      default: {
+        const _exhaustive: never = mode.git;
+        return Future.reject(new Error(`Unknown git mode: ${JSON.stringify(_exhaustive)}`));
+      }
+    }
+  }
+
+  private pushJson(request: Maybe<LlmRequestMetadata>, yes: boolean): Future<Error, void> {
+    return repo.hasUpstream().chain((exists) => {
+      if (exists) {
+        return this.pushSilent(request).chainRej((err) =>
+          isNonFastForwardError(err) && yes ?
+            this.pushSilent(request, undefined, false, true)
+          : isNonFastForwardError(err) ?
+            Future.reject(cliError("PUSH_REJECTED", err.message))
+          : Future.reject(err)
+        );
+      }
+      if (!yes) {
+        return Future.reject(
+          cliError("PUSH_NO_UPSTREAM", "Branch has no upstream. Use --yes to publish, or run git push -u origin <branch>.")
+        );
+      }
+      return repo.getCurrentBranch().chain((branch) => this.pushSilent(request, branch, true));
+    });
+  }
+
+  private pushSilent(
+    _request: Maybe<LlmRequestMetadata>,
+    branch?: string,
+    publish = false,
+    forceWithLease = false
+  ): Future<Error, void> {
+    return loading("Pushing...", "Pushed.", repo.performPush(branch, publish, forceWithLease), { silent: true }).map(() => undefined);
+  }
+
+  private failJson(err: Error): Error {
+    const cli =
+      err instanceof CliError ? err
+      : err.message.includes("Not a git repository") ? cliError("NOT_GIT_REPO", err.message)
+      : err.message.includes("No staged changes") ? cliError("NO_STAGED_CHANGES", err.message)
+      : cliError("LLM_ERROR", err.message);
+    writeCliFailure(cli.code, cli.message);
+    return cli;
+  }
+
   diff(): Future<Error, string> {
     return repo.getStagedDiff();
   }
 
-  generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, GeneratedContent> {
-    return loading("Generating commit message...", "Message generated!", generateCommitMessage(this.providerConfig, diff, convention, template));
+  generate(
+    diff: string,
+    convention: CommitConvention,
+    template: Maybe<string> = Nothing(),
+    options: { silent?: boolean } = {}
+  ): Future<Error, GeneratedContent> {
+    return loading(
+      "Generating commit message...",
+      "Message generated!",
+      generateCommitMessage(this.providerConfig, diff, convention, template),
+      options
+    );
   }
 
-  refine(message: string, adjustment: string, diff: string): Future<Error, GeneratedContent> {
-    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
+  refine(message: string, adjustment: string, diff: string, options: { silent?: boolean } = {}): Future<Error, GeneratedContent> {
+    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff), options);
   }
 
   commit(message: string): Future<Error, string> {

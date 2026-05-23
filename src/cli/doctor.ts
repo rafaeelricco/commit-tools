@@ -11,11 +11,23 @@ import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
 import { name as packageName, version as packageVersion } from "@/package.json";
+import { writeDoctorSuccess, type DoctorSuccess } from "@/cli/json-io";
 
 import color from "picocolors";
 import Table from "cli-table3";
 
-type CheckRow = [string, string, string];
+type CheckLevel = "ok" | "warn" | "error" | "skip";
+
+type Check = {
+  readonly name: string;
+  readonly status: string;
+  readonly level: CheckLevel;
+  readonly info: string;
+};
+
+type DoctorRunOptions = {
+  readonly json: boolean;
+};
 
 class Doctor {
   private constructor() {}
@@ -24,144 +36,218 @@ class Doctor {
     return new Doctor();
   }
 
-  run(): Future<Error, void> {
+  run(options: DoctorRunOptions): Future<Error, void> {
     const start = performance.now();
-    return this.checkOAuthCredentials().chain((oauthRow) =>
-      this.checkConfig().chain((configRows) =>
-        this.checkGitContext().map((gitRows) => {
-          const rows: CheckRow[] = [["CLI Version", color.green(packageVersion), packageName], this.checkRuntime(), this.checkPlatform(), oauthRow];
-          this.renderTable(rows.concat(configRows, gitRows), performance.now() - start);
+    return this.checkOAuthCredentials().chain((oauthCheck) =>
+      this.checkConfig().chain((configChecks) =>
+        this.checkGitContext().map((gitChecks) => {
+          const checks: Check[] = [
+            { name: "CLI Version", status: "ok", level: "ok", info: `${packageName} ${packageVersion}` },
+            this.checkRuntime(),
+            this.checkPlatform(),
+            oauthCheck,
+            ...configChecks,
+            ...gitChecks
+          ];
+          const elapsedMs = performance.now() - start;
+
+          if (options.json) {
+            writeDoctorSuccess(toDoctorSuccess(checks, elapsedMs));
+            return;
+          }
+
+          this.renderTable(checks, elapsedMs);
         })
       )
     );
   }
 
-  private checkRuntime(): CheckRow {
-    return ["Runtime", color.green("Node.js"), process.version];
+  private checkRuntime(): Check {
+    return { name: "Runtime", status: "ok", level: "ok", info: `Node.js ${process.version}` };
   }
 
-  private checkPlatform(): CheckRow {
+  private checkPlatform(): Check {
     const label =
       process.platform === "darwin" ? "macOS"
       : process.platform === "win32" ? "Windows"
       : process.platform === "linux" ? "Linux"
       : process.platform;
-    return ["Platform", color.green(label), process.platform];
+    return { name: "Platform", status: "ok", level: "ok", info: label };
   }
 
-  private checkOAuthCredentials(): Future<Error, CheckRow> {
+  private checkOAuthCredentials(): Future<Error, Check> {
     const clientId = environment.GOOGLE_CLIENT_ID;
-    const row: CheckRow = ["OAuth Credentials", color.green("Configured"), `Client ID: ${clientId.slice(0, 12)}...`];
-    return Future.resolve(row);
+    return Future.resolve({
+      name: "OAuth Credentials",
+      status: "ok",
+      level: "ok",
+      info: `Client ID: ${clientId.slice(0, 12)}...`
+    });
   }
 
-  private checkConfig(): Future<Error, CheckRow[]> {
+  private checkConfig(): Future<Error, Check[]> {
     return Future.attemptP(() =>
       access(configFile())
         .then(() => true)
         .catch(() => false)
     ).chain((configExists) => {
-      const row: CheckRow = [
-        "Configuration",
-        configExists ? color.green("Found") : color.yellow("Missing"),
-        configExists ? configFile() : "Run 'commit-tools setup' to create"
-      ];
+      const missingCheck: Check = {
+        name: "Configuration",
+        status: "missing",
+        level: "warn",
+        info: "Run 'commit setup' to create"
+      };
 
       if (!configExists) {
-        return Future.resolve<Error, CheckRow[]>([row]);
+        return Future.resolve<Error, Check[]>([missingCheck]);
       }
+
+      const foundCheck: Check = {
+        name: "Configuration",
+        status: "found",
+        level: "ok",
+        info: configFile()
+      };
 
       return loadConfig()
         .map((config) => {
-          const rows: CheckRow[] = [row];
+          const rows: Check[] = [foundCheck];
           const ai = config.ai;
 
-          rows.push(["Provider", color.green(ai.provider), renderModelInfo(ai)]);
+          rows.push({
+            name: "Provider",
+            status: "ok",
+            level: "ok",
+            info: renderModelInfo(ai)
+          });
 
-          const authMethod = ai.auth_method.type;
-
-          rows.push(["Auth Method", color.green(authMethodLabel(authMethod)), authMethodDescription(ai)]);
+          rows.push({
+            name: "Auth Method",
+            status: "ok",
+            level: "ok",
+            info: `${authMethodLabel(ai.auth_method.type)} — ${authMethodDescription(ai)}`
+          });
 
           if (ai.auth_method.type === "google_oauth" || ai.auth_method.type === "openai_oauth") {
             const now = Date.now();
-            const expiryDate = ai.auth_method.content.expiry_date; // For API Key we don't have this, that's why we have this `if (...) {}` block
+            const expiryDate = ai.auth_method.content.expiry_date;
             const isExpired = expiryDate <= now;
-            const expiryStr = new Date(expiryDate).toLocaleString();
-
-            rows.push([
-              "Token Status",
-              isExpired ? color.yellow("Expired") : color.green("Valid"),
-              isExpired ? `Expired at ${expiryStr} (will auto-refresh)` : `Expires at ${expiryStr}`
-            ]);
+            rows.push({
+              name: "Token Status",
+              status: isExpired ? "expired" : "valid",
+              level: isExpired ? "warn" : "ok",
+              info:
+                isExpired ?
+                  `Expired at ${new Date(expiryDate).toISOString()}`
+                : `Expires at ${new Date(expiryDate).toISOString()}`
+            });
           }
 
           return rows;
         })
-        .chainRej((): Future<Error, CheckRow[]> => Future.resolve([row]));
+        .chainRej((): Future<Error, Check[]> => Future.resolve([foundCheck]));
     });
   }
 
-  private checkGitContext(): Future<Error, CheckRow[]> {
+  private checkGitContext(): Future<Error, Check[]> {
     return repo
       .checkIsGitRepo()
-      .chain((): Future<Error, CheckRow[]> => this.collectGitRows())
-      .chainRej((): Future<Error, CheckRow[]> => Future.resolve([["Git Repository", color.yellow("Outside"), "Not a git repository"]]));
+      .chain((): Future<Error, Check[]> => this.collectGitChecks())
+      .chainRej((): Future<Error, Check[]> =>
+        Future.resolve([
+          {
+            name: "Git Repository",
+            status: "outside",
+            level: "warn",
+            info: "Not a git repository"
+          }
+        ])
+      );
   }
 
-  private collectGitRows(): Future<Error, CheckRow[]> {
+  private collectGitChecks(): Future<Error, Check[]> {
     return Future.concurrently<Error, { branch: Maybe<string>; base: Maybe<string>; pr: pr.PrLookup }>({
       branch: repo.findCurrentBranch(),
       base: repo.findBaseBranch(),
       pr: pr.getOpenPullRequest()
-    }).map(({ branch, base, pr: prLookup }): CheckRow[] => [renderBranchRow(branch), renderBaseRow(base), renderPrRow(prLookup)]);
+    }).map(({ branch, base, pr: prLookup }): Check[] => [renderBranchCheck(branch), renderBaseCheck(base), renderPrCheck(prLookup)]);
   }
 
-  private renderTable(rows: CheckRow[], elapsedMs: number): void {
+  private renderTable(checks: Check[], elapsedMs: number): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
       colWidths: [20, 15, 40]
     });
 
-    for (const row of rows) {
-      table.push(row);
+    for (const check of checks) {
+      table.push([check.name, colorizeStatus(check), check.info]);
     }
 
     process.stdout.write("\n" + table.toString() + "\n\n");
 
-    const hasConfig = rows.some(([check, status]) => check === "Configuration" && status.includes("Found"));
-    if (!hasConfig) {
-      process.stdout.write(color.yellow("! Please run 'commit-tools setup' to configure your API key.\n\n"));
+    const ready = checks.some((c) => c.name === "Configuration" && c.status === "found");
+    if (!ready) {
+      process.stdout.write(color.yellow("! Please run 'commit setup' to configure your API key.\n\n"));
     } else {
       process.stdout.write(color.green(`System is ready to generate commits! Done in ${(elapsedMs / 1000).toFixed(2)}s`));
     }
   }
 }
 
-function renderBranchRow(branch: Maybe<string>): CheckRow {
-  return branch instanceof Just ? ["Branch", color.green("Current"), branch.value] : ["Branch", color.yellow("Unknown"), "Could not read current branch"];
+const toDoctorSuccess = (checks: Check[], elapsedMs: number): DoctorSuccess => ({
+  ok: true,
+  command: "doctor",
+  checks: checks.map((c) => ({ name: c.name, status: c.status, level: c.level, info: c.info })),
+  ready: checks.some((c) => c.name === "Configuration" && c.status === "found"),
+  elapsedMs
+});
+
+const colorizeStatus = (check: Check): string => {
+  switch (check.level) {
+    case "ok":
+      return color.green(check.status);
+    case "warn":
+      return color.yellow(check.status);
+    case "error":
+      return color.red(check.status);
+    case "skip":
+      return color.gray(check.status);
+    default: {
+      const _exhaustive: never = check.level;
+      return _exhaustive;
+    }
+  }
+};
+
+function renderBranchCheck(branch: Maybe<string>): Check {
+  return branch instanceof Just ?
+      { name: "Branch", status: "current", level: "ok", info: branch.value }
+    : { name: "Branch", status: "unknown", level: "warn", info: "Could not read current branch" };
 }
 
-function renderBaseRow(base: Maybe<string>): CheckRow {
-  return base instanceof Just ? ["Base", color.green("Detected"), base.value] : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
+function renderBaseCheck(base: Maybe<string>): Check {
+  return base instanceof Just ?
+      { name: "Base", status: "detected", level: "ok", info: base.value }
+    : { name: "Base", status: "unknown", level: "warn", info: "Could not resolve base branch" };
 }
 
-function renderPrRow(lookup: pr.PrLookup): CheckRow {
+function renderPrCheck(lookup: pr.PrLookup): Check {
   switch (lookup.type) {
     case "found":
-      return ["Pull Request", color.green("Open"), `#${lookup.pr.number} ${lookup.pr.url}`];
+      return { name: "Pull Request", status: "open", level: "ok", info: `#${lookup.pr.number} ${lookup.pr.url}` };
     case "not-found":
-      return ["Pull Request", color.yellow("None"), "No open PR for this branch"];
+      return { name: "Pull Request", status: "none", level: "warn", info: "No open PR for this branch" };
     case "unauthenticated":
-      return ["Pull Request", color.yellow("Auth"), "Run 'gh auth login' to enable PR lookup"];
+      return { name: "Pull Request", status: "auth", level: "warn", info: "Run 'gh auth login' to enable PR lookup" };
     case "unavailable":
-      return ["Pull Request", color.gray("Skipped"), "gh not installed or remote is not GitHub"];
+      return { name: "Pull Request", status: "skipped", level: "skip", info: "gh not installed or remote is not GitHub" };
     default:
       return absurd(lookup, "PrLookup");
   }
 }
 
 function renderModelInfo(ai: ProviderConfig): string {
-  const base = `${ai.model}`;
+  const base = `${ai.provider} / ${ai.model}`;
   return ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
 }
 
@@ -175,7 +261,7 @@ function authMethodLabel(authMethod: AuthMethod): string {
     case "api_key":
       return "API Key";
     default:
-      return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
+      return "Unknown";
   }
 }
 
@@ -197,6 +283,6 @@ function authMethodDescription(ai: ProviderConfig): string {
           return "Google AI Studio API Key";
       }
     default:
-      return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
+      return "Unknown";
   }
 }

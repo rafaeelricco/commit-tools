@@ -160,6 +160,19 @@ NO_UPDATE_NOTIFIER=true
 
 The banner is also suppressed automatically in non-interactive shells and when `CI=true`.
 
+## Agent / CI usage
+
+For LLM agents and scripts, use `--json` for structured output on stdout:
+
+```bash
+commit generate --json | jq -r '.message'
+commit generate --json --commit
+commit generate --json --commit --push
+commit doctor --json | jq '.ready'
+```
+
+Automation flags (`--commit`, `--push`, `--adjust`, `--dry-run`, `--yes`) require `--json`. See [AGENTS.md](AGENTS.md) for the full contract.
+
 ## Commands
 
 To see all available commands at any time, run:

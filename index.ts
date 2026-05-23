@@ -26,11 +26,11 @@ const main = () => {
 
       switch (command.type) {
         case "generate":
-          return Commit.create().chain((c) => c.run());
+          return Commit.create(command.mode).chain((c) => c.run(command.mode));
         case "setup":
           return Setup.create().chain((s) => s.run());
         case "doctor":
-          return Doctor.create().run();
+          return Doctor.create().run({ json: command.json });
         case "model":
           return ModelCommand.create().chain((m) => m.run());
         case "effort":

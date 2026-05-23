@@ -69,7 +69,8 @@ describe("Commit.run", () => {
   });
 
   it("commits when user selects commit", async () => {
-    await runFuture(Commit.create().chain((c) => c.run()));
+    const mode = { type: "interactive" as const };
+    await runFuture(Commit.create(mode).chain((c) => c.run(mode)));
     const repo = await import("@/infra/git/repo");
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
   });

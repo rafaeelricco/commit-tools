@@ -29,6 +29,6 @@ describe("Doctor.run", () => {
   });
 
   it("completes when config file is missing", async () => {
-    await expect(runFuture(Doctor.create().run())).resolves.toBeUndefined();
+    await expect(runFuture(Doctor.create().run({ json: false }))).resolves.toBeUndefined();
   });
 });

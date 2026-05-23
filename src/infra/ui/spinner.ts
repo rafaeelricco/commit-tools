@@ -1,4 +1,4 @@
-export { loading, bracketStatus, type StatusMessageSink, type BracketStatus };
+export { loading, bracketStatus, type StatusMessageSink, type BracketStatus, type LoadingOptions };
 
 import * as p from "@clack/prompts";
 
@@ -8,9 +8,17 @@ type StatusMessageSink = {
   readonly message: (msg: string) => void;
 };
 
+type LoadingOptions = {
+  readonly silent?: boolean;
+};
+
 type BracketStatus = <T>(startLabel: string, stopLabel: string, body: (status: StatusMessageSink) => Future<Error, T>) => Future<Error, T>;
 
-const loading = <T>(label: string, stopLabel: string, f: Future<Error, T>): Future<Error, T> => {
+const loading = <T>(label: string, stopLabel: string, f: Future<Error, T>, options: LoadingOptions = {}): Future<Error, T> => {
+  if (options.silent) {
+    return f;
+  }
+
   const s = p.spinner();
   s.start(label);
   return f

@@ -169,6 +169,24 @@ describe("Branch.run", () => {
     expect(repo.createAndSwitchBranch).toHaveBeenCalledWith("auth-wiring");
   });
 
+  it("exits gracefully when the branch picker is cancelled", async () => {
+    const repo = await import("@/infra/git/repo");
+    const pushNote = await import("@/infra/ui/push-note");
+    const prompts = await import("@clack/prompts");
+    const cancelled = Symbol("cancel");
+
+    vi.mocked(prompts.select).mockResolvedValueOnce(cancelled as unknown as string);
+    vi.mocked(prompts.isCancel).mockImplementation((v) => v === cancelled);
+
+    await runFuture(Branch.create().chain((b) => b.run()));
+
+    expect(repo.createAndSwitchBranch).not.toHaveBeenCalled();
+    expect(pushNote.renderBranchNote).not.toHaveBeenCalled();
+    expect(prompts.confirm).not.toHaveBeenCalled();
+    expect(prompts.log.error).not.toHaveBeenCalled();
+    expect(prompts.outro).toHaveBeenCalledWith("Operation cancelled.");
+  });
+
   it("shows informational outro when there are no local changes", async () => {
     const repo = await import("@/infra/git/repo");
     const prompts = await import("@clack/prompts");

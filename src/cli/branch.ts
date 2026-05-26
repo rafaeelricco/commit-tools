@@ -11,7 +11,7 @@ import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateBranchNameSuggestions, type BranchSuggestion } from "@/domain/llm/router";
 import { renderBranchNote } from "@/infra/ui/push-note";
 import { loading } from "@/infra/ui/spinner";
-import { Just, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
 import color from "picocolors";
 
@@ -45,14 +45,19 @@ class Branch {
         (ctx): Future<Error, void> =>
           loading("Suggesting branch names...", "Suggestions ready!", generateBranchNameSuggestions(this.providerConfig, ctx))
             .chain((s) =>
-              this.promptPick(s.names).chain((picked) =>
-                this.confirmForkFromBase().chain((proceed) => {
-                  if (!proceed) {
-                    p.outro("Operation cancelled.");
-                    return Future.resolve(undefined);
-                  }
-                  return repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }));
-                })
+              this.promptPick(s.names).chain(
+                (maybePicked): Future<Error, { picked: string; metadata: typeof s.metadata } | undefined> =>
+                  maybePicked.maybe<Future<Error, { picked: string; metadata: typeof s.metadata } | undefined>>(
+                    Future.resolve(undefined),
+                    (picked) =>
+                      this.confirmForkFromBase().chain((proceed) => {
+                        if (!proceed) {
+                          p.outro("Operation cancelled.");
+                          return Future.resolve(undefined);
+                        }
+                        return repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }));
+                      })
+                  )
               )
             )
             .chain((result) => {
@@ -92,7 +97,7 @@ class Branch {
     );
   }
 
-  private promptPick(suggestions: readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]): Future<Error, string> {
+  private promptPick(suggestions: readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]): Future<Error, Maybe<string>> {
     return Future.attemptP(async () => {
       const choice = await p.select({
         message: "Create branch",
@@ -101,10 +106,10 @@ class Branch {
 
       if (p.isCancel(choice)) {
         p.outro("Operation cancelled.");
-        throw new Error("Operation cancelled.");
+        return Nothing<string>();
       }
 
-      return choice;
+      return Just(choice);
     });
   }
 }

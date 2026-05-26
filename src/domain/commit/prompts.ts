@@ -1,4 +1,4 @@
-export { getPrompt, getRefinePrompt };
+export { getPrompt, getRefinePrompt, getBranchNamePrompt };
 
 import { CommitConvention } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
@@ -273,6 +273,100 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
       template satisfies never;
       return promptImperative(gitDiff);
   }
+}
+
+function getBranchNamePrompt(context: string): string {
+  return `
+      <work_snapshot>
+        ${context}
+      </work_snapshot>
+
+      <role>
+        You are a senior engineer reading the work snapshot above.
+        Propose three distinct branch names for this work.
+      </role>
+
+      <output_shape>
+        Return ONE JSON object, no markdown, no prose.
+        First character "{", last character "}". Schema:
+        {"suggestions":[
+          {"name":"<slug>","rationale":"<one short clause>"},
+          {"name":"<slug>","rationale":"<one short clause>"},
+          {"name":"<slug>","rationale":"<one short clause>"}
+        ]}
+      </output_shape>
+
+      <slug_rules>
+        - Pattern: ^[a-z0-9]+(-[a-z0-9]+)*$  (lowercase, single hyphens, no slashes)
+        - Length: roughly 15-50 characters, never over 60.
+        - Grounded in tokens from file paths, symbols, or domain nouns in the snapshot.
+        - Forbidden as the FIRST token: change-type labels (feat, fix, chore, docs,
+          refactor, test, perf, build, ci, feature, bugfix, hotfix, release) AND vague
+          verbs (add, update, change, improve, tweak, misc, wip, tmp).
+        - ALLOWED as the LAST token: a change-kind word (refactor, cleanup, rewrite,
+          hardening, migration, feature) when it sharpens the framing.
+          Example: "frontend-list-ui-refactor" is valid because "refactor" is the suffix.
+        - Forbidden anywhere: tooling/instruction words — suggestion(s), prompt,
+          llm, model, cli, tool(s), command(s), workflow, meta, kebab-case, snapshot,
+          context, branch-name, name-picker.
+        - Never trunk names: main, master, develop, head.
+        - Area prefix: if every changed file shares one top-level area visible in
+          the paths (a monorepo package, a top-level src/<area> subtree, or a
+          clearly named layer like "frontend"/"backend"/"api"/"web"), at least one
+          slug SHOULD start with that area as its leading token (e.g. "frontend-...",
+          "api-...", "web-..."). Do not invent areas that aren't in the file paths.
+        - Preferred shape for the broader-theme suggestion: <area>-<theme>-<kind>
+          where <kind> is a change-kind suffix from the allowed list (e.g.
+          "frontend-list-ui-refactor", "api-auth-hardening"). Use this shape when
+          the diff spans multiple files under one area; skip it for narrow diffs.
+      </slug_rules>
+
+      <rationale_rules>
+        - One short clause, no more than 80 characters, lowercase start, no trailing period.
+        - Explains WHY this framing — what facet of the change it emphasizes.
+        - Do not repeat the slug verbatim. Do not just restate file names.
+      </rationale_rules>
+
+      <diversity_axes>
+        The three suggestions MUST cover three different axes. Pick three from:
+        - component/module focus (names the specific code being extracted or built)
+        - broader feature/theme framing (names the overall shape of the work)
+        - user-visible change framing (names what a product user would notice)
+        - refactor/architecture framing (names the structural shift)
+        - shared/reusable focus (names what becomes reusable across pages)
+      </diversity_axes>
+
+      <synthesis_protocol>
+        Before answering, internally (you do NOT output these steps):
+        1. List every file in the snapshot and the one-phrase intent of each hunk.
+        2. Group the hunks into 1-3 themes that span multiple files.
+        3. Pick the three diversity axes that best describe this diff.
+        4. Draft a slug for each axis, then verify each slug:
+           (a) matches the pattern, (b) is grounded in snapshot tokens,
+           (c) is not just a subset of another slug,
+           (d) frames a different axis than the other two.
+        5. If two slugs frame the same axis, replace one before emitting.
+      </synthesis_protocol>
+
+      <examples>
+        <example>
+          <work_snapshot_summary>Diff refactors ops/campaigns + org/campaigns + ops/events + ops/products under app/frontend/ to use shared EmptyState, FilterPill, CampaignCard; adds pagination counts ("Showing X-Y of N") with restyled Pagination component.</work_snapshot_summary>
+          <output>{"suggestions":[{"name":"frontend-list-ui-refactor","rationale":"broader framing of the cross-page list restructure"},{"name":"frontend-shared-list-components","rationale":"emphasizes the extracted EmptyState, FilterPill, and CampaignCard"},{"name":"frontend-pagination-with-counts","rationale":"leads with the most user-visible change"}]}</output>
+        </example>
+        <example>
+          <work_snapshot_summary>Adds null-guard to src/parser/parser.ts and a regression test in src/parser/parser.test.ts.</work_snapshot_summary>
+          <output>{"suggestions":[{"name":"parser-null-guard","rationale":"names the specific code path being hardened"},{"name":"parser-hardening","rationale":"broader framing across guard and regression test"},{"name":"crash-on-empty-input","rationale":"user-visible bug being prevented"}]}</output>
+        </example>
+        <example>
+          <work_snapshot_summary>Adds /api/users/:id/sessions endpoint with handler in api/handlers/sessions.ts, DB query in api/db/sessions.ts, OpenAPI schema in api/openapi.yaml.</work_snapshot_summary>
+          <output>{"suggestions":[{"name":"api-user-sessions-endpoint","rationale":"component focus on the new sessions handler"},{"name":"api-sessions-feature","rationale":"broader framing across handler, query, and schema"},{"name":"list-active-sessions","rationale":"user-visible capability the endpoint exposes"}]}</output>
+        </example>
+      </examples>
+
+      <output_instructions>
+        Emit ONLY the JSON object. No prose, no markdown fences, no commentary.
+      </output_instructions>
+  `;
 }
 
 function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {

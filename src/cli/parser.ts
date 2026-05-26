@@ -11,6 +11,7 @@ type CliCommand =
   | { type: "doctor" }
   | { type: "model" }
   | { type: "effort" }
+  | { type: "branch" }
   | { type: "update" }
   | { type: "version" }
   | { type: "help" };
@@ -30,6 +31,9 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
       return D.succeed({ type: "model" });
     case "effort":
       return D.succeed({ type: "effort" });
+    case "branch":
+    case "new-branch":
+      return D.succeed({ type: "branch" });
     case "update":
       return D.succeed({ type: "update" });
     case "--version":
@@ -51,6 +55,8 @@ Usage: commit-tools [command]
 
 Commands:
   generate (default)  Generate a commit message
+  branch              Suggest branch names from local changes and create one
+  new-branch          Alias for branch
   setup               Configure authentication and conventions
   login               Alias for setup (re-authenticate)
   doctor              Check installation and environment

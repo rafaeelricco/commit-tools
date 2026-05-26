@@ -1,4 +1,4 @@
-export { renderCommitNote, renderPushNote, type CommitNoteMetadata, type PushMetadata };
+export { renderBranchNote, renderCommitNote, renderPushNote, type BranchNoteMetadata, type CommitNoteMetadata, type PushMetadata };
 
 import * as p from "@clack/prompts";
 
@@ -22,6 +22,12 @@ type PushMetadata = {
   remoteUrl: Maybe<string>;
   range: Maybe<PushRange>;
   pr: PrLookup;
+  request: RequestMetadata;
+};
+
+type BranchNoteMetadata = {
+  branch: string;
+  baseBranch: Maybe<string>;
   request: RequestMetadata;
 };
 
@@ -92,4 +98,14 @@ const renderPushNote = (m: PushMetadata): void => {
   if (!body) return;
 
   p.note(body, "Pushed");
+};
+
+const renderBranchNote = (m: BranchNoteMetadata): void => {
+  const baseLine = m.baseBranch.maybe<string[]>([], (base) => [`base     ${base}`]);
+
+  const body = [`branch   ${m.branch}`, ...baseLine, ...renderRequestLines(m.request)].join("\n");
+
+  if (!body) return;
+
+  p.note(body, "Branched");
 };

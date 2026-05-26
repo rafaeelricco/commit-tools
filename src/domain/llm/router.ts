@@ -5,16 +5,22 @@ export {
   type ModelRequestMetadata,
   type ProviderGeneratedContent,
   type TokenUsage,
+  type BranchNameSuggestions,
+  type BranchSuggestion,
   generateCommitMessage,
-  refineCommitMessage
+  refineCommitMessage,
+  generateBranchNameSuggestions
 };
 
 import { Future } from "@/libs/future";
+import { type Result } from "@/libs/result";
 import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
 import { generateContentWithGemini } from "@/infra/llm/gemini";
 import { generateContentWithOpenAI } from "@/infra/llm/openai";
 import { generateContentWithAnthropic } from "@/infra/llm/anthropic";
-import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
+import { getPrompt, getRefinePrompt, getBranchNamePrompt } from "@/domain/commit/prompts";
+import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
+import { withTransientRetry } from "@/domain/llm/retry";
 import { Maybe, Nothing } from "@/libs/maybe";
 
 type GenerateContentParams = {
@@ -42,6 +48,11 @@ type LlmRequestMetadata = {
 
 type GeneratedContent = {
   readonly text: string;
+  readonly metadata: LlmRequestMetadata;
+};
+
+type BranchNameSuggestions = {
+  readonly names: readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion];
   readonly metadata: LlmRequestMetadata;
 };
 
@@ -88,7 +99,23 @@ const generateCommitMessage = (
   diff: string,
   convention: CommitConvention,
   customTemplate: Maybe<string> = Nothing()
-): Future<Error, GeneratedContent> => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) });
+): Future<Error, GeneratedContent> => withTransientRetry(() => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) }));
 
 const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
-  generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment }));
+  withTransientRetry(() => generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment })));
+
+const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
+  r.either(
+    (err) => Future.reject(err),
+    (value) => Future.resolve(value)
+  );
+
+const generateBranchNameSuggestions = (config: ProviderConfig, context: string): Future<Error, BranchNameSuggestions> =>
+  withTransientRetry(() =>
+    generateContent(config, { prompt: getBranchNamePrompt(context) }).chain((gc) =>
+      resultToFuture(parseAndValidateBranchSuggestions(gc.text)).map((names) => ({
+        names,
+        metadata: gc.metadata
+      }))
+    )
+  );

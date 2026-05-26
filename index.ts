@@ -1,4 +1,5 @@
 import { Commit } from "@/cli/commit";
+import { Branch } from "@/cli/branch";
 import { Setup } from "@/cli/setup";
 import { Doctor } from "@/cli/doctor";
 import { ModelCommand } from "@/cli/model";
@@ -11,7 +12,7 @@ import { checkUpdate } from "@/cli/update";
 
 import color from "picocolors";
 
-const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort"]);
+const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort", "branch"]);
 
 const main = () => {
   const args = process.argv.slice(2);
@@ -35,6 +36,8 @@ const main = () => {
           return ModelCommand.create().chain((m) => m.run());
         case "effort":
           return EffortCommand.create().chain((e) => e.run());
+        case "branch":
+          return Branch.create().chain((b) => b.run());
         case "update":
           return Update.create().run();
         case "version":

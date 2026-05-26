@@ -5,6 +5,8 @@ import { Failure, Success } from "@/libs/result";
 describe("parseArgs", () => {
   it.each([
     [["generate"], "generate"],
+    [["branch"], "branch"],
+    [["new-branch"], "branch"],
     [["setup"], "setup"],
     [["login"], "setup"],
     [["doctor"], "doctor"],

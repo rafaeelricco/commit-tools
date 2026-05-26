@@ -1,6 +1,8 @@
 export {
   checkIsGitRepo,
   getStagedDiff,
+  getLocalChangeContext,
+  createAndSwitchBranch,
   performCommit,
   performPush,
   getCurrentBranch,
@@ -68,6 +70,21 @@ const getStagedDiff = (): Future<Error, string> =>
   execGitChecked(["diff", "--staged"], "Failed to get staged changes").chain((stdout) =>
     stdout.trim() ? Future.resolve<Error, string>(stdout) : Future.reject<Error, string>(new Error("No staged changes found"))
   );
+
+const getLocalChangeContext = (): Future<Error, string> =>
+  execGitChecked(["diff", "HEAD"], "Failed to read local diff").chain((diffStdout) =>
+    execGitChecked(["status", "--porcelain"], "Failed to read git status").chain((statusStdout) => {
+      const diffPart = diffStdout.trim();
+      const statusPart = statusStdout.trim();
+      if (diffPart.length === 0 && statusPart.length === 0) {
+        return Future.reject<Error, string>(new Error("No local changes to infer a branch name from"));
+      }
+      return Future.resolve<Error, string>(`${diffPart}\n\n--- git status --porcelain ---\n${statusPart}${statusPart.length > 0 ? "\n" : ""}`);
+    })
+  );
+
+const createAndSwitchBranch = (name: string): Future<Error, void> =>
+  execGitChecked(["switch", "-c", name], `Failed to create branch '${name}'`).map(() => {});
 
 const performCommit = (message: string): Future<Error, string> => {
   const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);

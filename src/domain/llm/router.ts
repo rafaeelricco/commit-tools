@@ -5,16 +5,20 @@ export {
   type ModelRequestMetadata,
   type ProviderGeneratedContent,
   type TokenUsage,
+  type BranchNameSuggestions,
   generateCommitMessage,
-  refineCommitMessage
+  refineCommitMessage,
+  generateBranchNameSuggestions
 };
 
 import { Future } from "@/libs/future";
+import { type Result } from "@/libs/result";
 import { type ProviderConfig, type CommitConvention } from "@/domain/config/config";
 import { generateContentWithGemini } from "@/infra/llm/gemini";
 import { generateContentWithOpenAI } from "@/infra/llm/openai";
 import { generateContentWithAnthropic } from "@/infra/llm/anthropic";
-import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
+import { getPrompt, getRefinePrompt, getBranchNamePrompt } from "@/domain/commit/prompts";
+import { parseAndValidateBranchSuggestions } from "@/domain/branch/suggestions";
 import { Maybe, Nothing } from "@/libs/maybe";
 
 type GenerateContentParams = {
@@ -42,6 +46,11 @@ type LlmRequestMetadata = {
 
 type GeneratedContent = {
   readonly text: string;
+  readonly metadata: LlmRequestMetadata;
+};
+
+type BranchNameSuggestions = {
+  readonly names: readonly [string, string, string];
   readonly metadata: LlmRequestMetadata;
 };
 
@@ -92,3 +101,26 @@ const generateCommitMessage = (
 
 const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
   generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment }));
+
+const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
+  r.either(
+    (err) => Future.reject(err),
+    (value) => Future.resolve(value)
+  );
+
+const assertThreeStringNames = (names: readonly [string, string, string]): Future<Error, readonly [string, string, string]> => {
+  if (!Array.isArray(names) || names.length !== 3 || !names.every((x) => typeof x === "string")) {
+    return Future.reject(new Error("Branch suggestions: expected three string names"));
+  }
+  return Future.resolve(names);
+};
+
+const generateBranchNameSuggestions = (config: ProviderConfig, context: string): Future<Error, BranchNameSuggestions> =>
+  generateContent(config, { prompt: getBranchNamePrompt(context) }).chain((gc) =>
+    resultToFuture(parseAndValidateBranchSuggestions(gc.text)).chain((names) =>
+      assertThreeStringNames(names).map((tuple) => ({
+        names: tuple,
+        metadata: gc.metadata
+      }))
+    )
+  );

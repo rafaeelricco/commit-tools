@@ -279,7 +279,7 @@ function getBranchNamePrompt(context: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
-        Read the work snapshot below (git diff, status lines, and any new file bodies)
+        Read the work snapshot below (git diff and status lines)
         and propose three short branch names that describe that work.
         Reply with one JSON object only.
       </system>
@@ -296,7 +296,7 @@ function getBranchNamePrompt(context: string): string {
         1. Use only the work snapshot below. Do not guess about work not shown.
         2. Output exactly three distinct slugs, ordered from most to least specific.
         3. Ground every slug in the snapshot: file paths, symbols, components, or domain nouns
-           that appear in the diff, status lines, or untracked file sections.
+           that appear in the diff or status lines.
            Prefer tokens copied or condensed from those paths and identifiers.
         4. One flat slug per suggestion. No slashes, no username or team prefix.
            Do not start with change-type labels (feat, fix, chore, docs, refactor, test, perf,

@@ -279,72 +279,62 @@ function getBranchNamePrompt(context: string): string {
   return `
       <system>
         You are an expert software engineer and version control specialist.
-        Your job is to read local git change context (diff plus status) and propose
-        three short branch names that describe the work in plain language.
-        Your entire reply must be one JSON object and nothing else.
+        Read the work snapshot below (git diff, status lines, and any new file bodies)
+        and propose three short branch names that describe that work.
+        Reply with one JSON object only.
       </system>
 
-      <machine_contract>
-        After stripping leading and trailing whitespace on your reply, the first character must be "{" and the last character must be "}".
-        Do not print markdown code fences, do not print bullet lists, do not print explanations before or after the JSON.
-        Use this exact key name: "suggestions" (array of exactly three strings).
-        Target shape (replace placeholders only): {"suggestions":["<slug>","<slug>","<slug>"]}
-        Each slug must match this regular expression alone: ^[a-z0-9]+(-[a-z0-9]+)*$
-      </machine_contract>
+      <output_format>
+        First non-whitespace character must be "{". Last non-whitespace character must be "}".
+        No markdown fences, no bullet lists, no text before or after the JSON.
+        Required shape: {"suggestions":["<slug>","<slug>","<slug>"]}
+        Each slug: lowercase ASCII, digits, single hyphens between words, no slashes.
+        Pattern each slug must satisfy: ^[a-z0-9]+(-[a-z0-9]+)*$
+      </output_format>
 
       <rules>
-        1. Analyze only the provided change context. Do not guess about work not shown.
-        2. Output exactly three distinct suggestions, ordered from most to least specific.
-        3. Grounding: each slug must be clearly derivable from the change context (for example
-           file path segments, symbol or component names, or domain nouns that appear in the diff or status).
-           If you cannot tie a slug to the context, pick a shorter slug that still reflects visible paths or identifiers.
-        4. Each suggestion is a single path segment: one flat kebab-case slug only.
-           No slashes. No username, owner, team, or machine namespace prefix.
-           Do not start the slug with a conventional change-type label (for example
-           feat, fix, chore, docs, refactor, test, perf, build, ci, feature, bugfix,
-           hotfix, release) as its own first word before a hyphen or as the entire name.
-           Describe the work itself (nouns / actions in neutral wording), not the category of change.
-        5. Use lowercase ASCII letters, digits, and single hyphens between word groups.
-           No underscores, no spaces, no uppercase, no dots, no slashes.
-        6. Do not use consecutive hyphens (--) or leading/trailing hyphens.
-        7. Keep each name concise (aim under roughly 50 characters). Avoid vague words like "update",
-           "changes", "wip", "tmp", or the literal substring "branch".
-        8. Forbidden vocabulary in any slug (substring match, case-insensitive): suggestion, suggestions,
-           prompt, llm, model, cli, tool, tools, command, commands, workflow, meta, git-switch, branch-name.
-           Do not name branches after this assistant, prompts, models, CLIs, or git mechanics.
-        9. Do not include ticket or issue IDs unless they appear explicitly in the provided context.
-        10. Never suggest trunk-style branch names: main, master, develop, HEAD.
-        11. Self-check before you answer: each slug matches ^[a-z0-9]+(-[a-z0-9]+)*$, contains none of the forbidden
-            substrings above, and is grounded in the change context. If any check fails, revise internally until it passes,
-            then output only the final JSON object.
+        1. Use only the work snapshot below. Do not guess about work not shown.
+        2. Output exactly three distinct slugs, ordered from most to least specific.
+        3. Ground every slug in the snapshot: file paths, symbols, components, or domain nouns
+           that appear in the diff, status lines, or untracked file sections.
+           Prefer tokens copied or condensed from those paths and identifiers.
+        4. One flat slug per suggestion. No slashes, no username or team prefix.
+           Do not start with change-type labels (feat, fix, chore, docs, refactor, test, perf,
+           build, ci, feature, bugfix, hotfix, release) as the first word or as the whole slug.
+        5. No underscores, spaces, uppercase, dots, or consecutive hyphens.
+        6. Keep each slug under roughly 50 characters. Avoid vague words: update, changes, wip, tmp, branch.
+        7. Never reuse wording from these instructions in a slug. Forbidden substrings (anywhere in a slug):
+           suggestion, suggestions, prompt, llm, model, cli, tool, tools, command, commands, workflow, meta,
+           git-switch, branch-name, local-change, name-picker, kebab-case, machine-contract, snapshot, context.
+        8. Do not include ticket or issue IDs unless they appear in the snapshot.
+        9. Never suggest trunk names: main, master, develop, HEAD.
+        10. Before answering, verify each slug matches the output_format pattern, avoids forbidden substrings,
+            and is grounded in the snapshot. Revise internally if needed, then output only the JSON object.
       </rules>
 
       <examples>
         <example>
-          <context>diff shows new login form component and tests</context>
-          <json>{"suggestions":["login-form-component","login-flow-ui","auth-form-tests"]}</json>
+          <work_snapshot>diff shows new login form component and tests under src/auth/</work_snapshot>
+          <json>{"suggestions":["login-form-component","auth-login-flow","auth-form-tests"]}</json>
         </example>
         <example>
-          <context>diff shows fix for null dereference in parser</context>
+          <work_snapshot>diff shows null guard in parser module</work_snapshot>
           <json>{"suggestions":["parser-null-guard","null-deref-parser","parser-hardening"]}</json>
         </example>
         <example type="invalid_do_not_emit">
-          <context>same as above</context>
-          <bad_json>{"suggestions":["name-suggestion-cli","local-change-name-suggestions","git-switch-name-suggestions"]}</bad_json>
-          <reason>These slugs describe tooling or meta work, not the code change. Never emit this pattern.</reason>
+          <work_snapshot>same as above</work_snapshot>
+          <bad_json>{"suggestions":["name-suggestion-cli","local-change-name-picker","kebab-case-validation"]}</bad_json>
+          <reason>These slugs echo tooling or instruction words, not the code change. Never emit this pattern.</reason>
         </example>
       </examples>
 
-      <input>
-        <change_context>
-          ${context}
-        </change_context>
-      </input>
+      <work_snapshot>
+        ${context}
+      </work_snapshot>
 
       <output_instructions>
-        1. Output ONLY a single JSON object. First non-whitespace character "{", last non-whitespace character "}".
-        2. No markdown fences, no commentary, no keys other than "suggestions".
-        3. Schema: {"suggestions":["<slug>","<slug>","<slug>"]} with exactly three strings; each slug must satisfy the machine_contract regex and all rules.
+        Output ONLY {"suggestions":["<slug>","<slug>","<slug>"]} with exactly three strings.
+        Each slug must follow output_format and rules above.
       </output_instructions>
   `;
 }

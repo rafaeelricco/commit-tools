@@ -23,7 +23,24 @@ describe("git repo integration", () => {
     const prev = cwd();
     chdir(dir);
     try {
-      await expect(runFuture(repo.getLocalChangeContext())).rejects.toThrow(/No local changes/);
+      await expect(runFuture(repo.getLocalChangeContext())).rejects.toThrow(repo.NO_LOCAL_CHANGES_MESSAGE);
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getLocalChangeContext includes untracked file body", async () => {
+    const token = "unique-untracked-token-xyz";
+    const { dir } = createTempGitRepo({
+      untrackedFile: { path: "new-feature.ts", contents: `export const marker = "${token}";\n` }
+    });
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const ctx = await runFuture(repo.getLocalChangeContext());
+      expect(ctx).toContain("?? new-feature.ts");
+      expect(ctx).toContain("--- untracked file: new-feature.ts ---");
+      expect(ctx).toContain(token);
     } finally {
       chdir(prev);
     }

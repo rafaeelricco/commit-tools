@@ -9,7 +9,9 @@ import { Setup } from "@/cli/setup";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateBranchNameSuggestions } from "@/domain/llm/router";
+import { renderBranchNote } from "@/infra/ui/push-note";
 import { loading } from "@/infra/ui/spinner";
+import { Just } from "@/libs/maybe";
 
 import color from "picocolors";
 
@@ -31,11 +33,29 @@ class Branch {
     return repo
       .checkIsGitRepo()
       .chain(() => repo.getLocalChangeContext())
-      .chain((ctx) => loading("Suggesting branch names...", "Suggestions ready!", generateBranchNameSuggestions(this.providerConfig, ctx)))
-      .chain((s) => this.promptPick(s.names).chain((picked) => repo.createAndSwitchBranch(picked)))
-      .map(() => {
-        p.outro(color.green("Switched to new branch."));
-      })
+      .bichain(
+        (e): Future<Error, void> => {
+          if (repo.isNoLocalChangesError(e)) {
+            p.log.warn(color.yellow(repo.NO_LOCAL_CHANGES_MESSAGE));
+            p.outro("No local changes — nothing to suggest a branch for.");
+            return Future.resolve(undefined);
+          }
+          return Future.reject(e);
+        },
+        (ctx): Future<Error, void> =>
+          loading("Suggesting branch names...", "Suggestions ready!", generateBranchNameSuggestions(this.providerConfig, ctx))
+            .chain((s) => this.promptPick(s.names).chain((picked) => repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }))))
+            .chain(({ picked, metadata }) =>
+              repo.findBaseBranch().map((baseBranch) => {
+                renderBranchNote({
+                  branch: picked,
+                  baseBranch,
+                  request: Just(metadata)
+                });
+                p.outro(color.green("Switched to new branch."));
+              })
+            )
+      )
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;

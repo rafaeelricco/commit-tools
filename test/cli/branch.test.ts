@@ -39,7 +39,11 @@ vi.mock("@/infra/git/repo", async (importOriginal) => {
 vi.mock("@/domain/llm/router", () => ({
   generateBranchNameSuggestions: vi.fn(() =>
     Future.resolve({
-      names: ["login-form-ui", "auth-wiring", "signup-flow"] as const,
+      names: [
+        { name: "login-form-ui", rationale: "component focus" },
+        { name: "auth-wiring", rationale: "broader framing" },
+        { name: "signup-flow", rationale: "user-visible change" }
+      ] as const,
       metadata: branchMetadata
     })
   )
@@ -83,6 +87,14 @@ describe("Branch.run", () => {
 
     expect(prompts.confirm).not.toHaveBeenCalled();
     expect(repo.createAndSwitchBranch).toHaveBeenCalledWith("auth-wiring");
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: "Create branch",
+      options: [
+        { value: "login-form-ui", label: "login-form-ui — component focus" },
+        { value: "auth-wiring", label: "auth-wiring — broader framing" },
+        { value: "signup-flow", label: "signup-flow — user-visible change" }
+      ]
+    });
     expect(pushNote.renderBranchNote).toHaveBeenCalledWith({
       branch: "auth-wiring",
       baseBranch: Just("main"),

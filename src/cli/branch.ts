@@ -8,7 +8,7 @@ import { loadConfig } from "@/infra/storage/config";
 import { Setup } from "@/cli/setup";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
-import { generateBranchNameSuggestions } from "@/domain/llm/router";
+import { generateBranchNameSuggestions, type BranchSuggestion } from "@/domain/llm/router";
 import { renderBranchNote } from "@/infra/ui/push-note";
 import { loading } from "@/infra/ui/spinner";
 import { Just, type Maybe } from "@/libs/maybe";
@@ -92,11 +92,11 @@ class Branch {
     );
   }
 
-  private promptPick(names: readonly [string, string, string]): Future<Error, string> {
+  private promptPick(suggestions: readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]): Future<Error, string> {
     return Future.attemptP(async () => {
       const choice = await p.select({
         message: "Create branch",
-        options: names.map((value) => ({ value, label: value }))
+        options: suggestions.map((s) => ({ value: s.name, label: `${s.name} — ${s.rationale}` }))
       });
 
       if (p.isCancel(choice)) {

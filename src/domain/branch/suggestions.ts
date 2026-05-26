@@ -1,9 +1,10 @@
-export { stripOptionalJsonFence, parseBranchSuggestions, validateGitBranchName, parseAndValidateBranchSuggestions };
+export { stripOptionalJsonFence, parseBranchSuggestions, validateGitBranchName, parseAndValidateBranchSuggestions, type BranchSuggestion };
 
 import * as D from "@/libs/json/decoder";
 import { Failure, Success, type Result } from "@/libs/result";
 
 const MAX_BRANCH_NAME_LENGTH = 64;
+const MAX_RATIONALE_LENGTH = 120;
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -24,28 +25,47 @@ const FORBIDDEN_FIRST_SEGMENTS = new Set([
   "feature",
   "bugfix",
   "hotfix",
-  "release"
+  "release",
+  "add",
+  "update",
+  "change",
+  "improve",
+  "tweak",
+  "misc",
+  "wip",
+  "tmp"
 ]);
 
-const threeNonEmptySuggestions: D.Decoder<readonly [string, string, string]> = D.array(D.string).chain((xs) => {
-  if (xs.length !== 3) {
-    return D.fail("expected exactly 3 strings in suggestions");
-  }
-  const trimmed = xs.map((s) => s.trim());
-  if (!trimmed.every((s) => s.length > 0)) {
-    return D.fail("expected 3 non-empty strings");
-  }
-  const a = trimmed[0];
-  const b = trimmed[1];
-  const c = trimmed[2];
-  if (a === undefined || b === undefined || c === undefined) {
-    return D.fail("expected 3 strings");
-  }
+type BranchSuggestion = { readonly name: string; readonly rationale: string };
+
+const nonEmptyString = (label: string): D.Decoder<string> =>
+  D.string.chain((s) => {
+    const t = s.trim();
+    return t.length === 0 ? D.fail(`${label} must be non-empty`) : D.succeed(t);
+  });
+
+const boundedNonEmptyString = (label: string, max: number): D.Decoder<string> =>
+  D.string.chain((s) => {
+    const t = s.trim();
+    if (t.length === 0) return D.fail(`${label} must be non-empty`);
+    if (t.length > max) return D.fail(`${label} exceeds ${max} chars`);
+    return D.succeed(t);
+  });
+
+const branchSuggestionDecoder: D.Decoder<BranchSuggestion> = D.object({
+  name: nonEmptyString("name"),
+  rationale: boundedNonEmptyString("rationale", MAX_RATIONALE_LENGTH)
+});
+
+const threeSuggestions: D.Decoder<readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]> = D.array(branchSuggestionDecoder).chain((xs) => {
+  if (xs.length !== 3) return D.fail("expected exactly 3 suggestions");
+  const [a, b, c] = xs;
+  if (a === undefined || b === undefined || c === undefined) return D.fail("expected 3 suggestions");
   return D.succeed([a, b, c] as const);
 });
 
 const suggestionsPayloadDecoder = D.object({
-  suggestions: threeNonEmptySuggestions
+  suggestions: threeSuggestions
 });
 
 const stripOptionalJsonFence = (s: string): string => {
@@ -62,7 +82,7 @@ const stripOptionalJsonFence = (s: string): string => {
   return body.slice(0, close).trim();
 };
 
-const parseBranchSuggestions = (raw: string): Result<Error, readonly [string, string, string]> => {
+const parseBranchSuggestions = (raw: string): Result<Error, readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]> => {
   const trimmed = stripOptionalJsonFence(raw.trim());
   let json: unknown;
   try {
@@ -92,7 +112,9 @@ const validateGitBranchName = (name: string): Result<Error, string> => {
   return Success(name);
 };
 
-const parseAndValidateBranchSuggestions = (raw: string): Result<Error, readonly [string, string, string]> =>
+const validateSuggestion = (s: BranchSuggestion): Result<Error, BranchSuggestion> => validateGitBranchName(s.name).map(() => s);
+
+const parseAndValidateBranchSuggestions = (raw: string): Result<Error, readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion]> =>
   parseBranchSuggestions(raw).chain(([a, b, c]) =>
-    validateGitBranchName(a).chain((va) => validateGitBranchName(b).chain((vb) => validateGitBranchName(c).map((vc) => [va, vb, vc] as const)))
+    validateSuggestion(a).chain((va) => validateSuggestion(b).chain((vb) => validateSuggestion(c).map((vc) => [va, vb, vc] as const)))
   );

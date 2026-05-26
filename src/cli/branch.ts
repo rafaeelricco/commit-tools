@@ -47,16 +47,14 @@ class Branch {
             .chain((s) =>
               this.promptPick(s.names).chain(
                 (maybePicked): Future<Error, { picked: string; metadata: typeof s.metadata } | undefined> =>
-                  maybePicked.maybe<Future<Error, { picked: string; metadata: typeof s.metadata } | undefined>>(
-                    Future.resolve(undefined),
-                    (picked) =>
-                      this.confirmForkFromBase().chain((proceed) => {
-                        if (!proceed) {
-                          p.outro("Operation cancelled.");
-                          return Future.resolve(undefined);
-                        }
-                        return repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }));
-                      })
+                  maybePicked.maybe<Future<Error, { picked: string; metadata: typeof s.metadata } | undefined>>(Future.resolve(undefined), (picked) =>
+                    this.confirmForkFromBase().chain((proceed) => {
+                      if (!proceed) {
+                        p.outro("Operation cancelled.");
+                        return Future.resolve(undefined);
+                      }
+                      return repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }));
+                    })
                   )
               )
             )

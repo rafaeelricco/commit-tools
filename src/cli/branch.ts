@@ -11,7 +11,7 @@ import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateBranchNameSuggestions } from "@/domain/llm/router";
 import { renderBranchNote } from "@/infra/ui/push-note";
 import { loading } from "@/infra/ui/spinner";
-import { Just } from "@/libs/maybe";
+import { Just, type Maybe } from "@/libs/maybe";
 
 import color from "picocolors";
 
@@ -44,22 +44,52 @@ class Branch {
         },
         (ctx): Future<Error, void> =>
           loading("Suggesting branch names...", "Suggestions ready!", generateBranchNameSuggestions(this.providerConfig, ctx))
-            .chain((s) => this.promptPick(s.names).chain((picked) => repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }))))
-            .chain(({ picked, metadata }) =>
-              repo.findBaseBranch().map((baseBranch) => {
+            .chain((s) =>
+              this.promptPick(s.names).chain((picked) =>
+                this.confirmForkFromBase().chain((proceed) => {
+                  if (!proceed) {
+                    p.outro("Operation cancelled.");
+                    return Future.resolve(undefined);
+                  }
+                  return repo.createAndSwitchBranch(picked).map(() => ({ picked, metadata: s.metadata }));
+                })
+              )
+            )
+            .chain((result) => {
+              if (!result) return Future.resolve(undefined);
+              return repo.findBaseBranch().map((baseBranch) => {
                 renderBranchNote({
-                  branch: picked,
+                  branch: result.picked,
                   baseBranch,
-                  request: Just(metadata)
+                  request: Just(result.metadata)
                 });
                 p.outro(color.green("Switched to new branch."));
-              })
-            )
+              });
+            })
       )
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;
       });
+  }
+
+  private confirmForkFromBase(): Future<Error, boolean> {
+    return Future.concurrently<Error, { current: Maybe<string>; base: Maybe<string> }>({
+      current: repo.findCurrentBranch(),
+      base: repo.findBaseBranch()
+    }).chain(({ current, base }) =>
+      current.maybe(Future.resolve(true), (curr) =>
+        base.maybe(Future.resolve(true), (b) =>
+          curr === b ?
+            Future.resolve(true)
+          : Future.attemptP(async () => {
+              p.log.warn(color.yellow(`You're on '${curr}', not the base branch '${b}'. The new branch will fork from '${curr}'.`));
+              const ok = await p.confirm({ message: `Create branch off '${curr}' anyway?` });
+              return !(p.isCancel(ok) || !ok);
+            })
+        )
+      )
+    );
   }
 
   private promptPick(names: readonly [string, string, string]): Future<Error, string> {

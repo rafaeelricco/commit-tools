@@ -30,9 +30,9 @@ import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
 import { execBin } from "@/infra/shell";
 import * as Decoder from "@/libs/json/decoder";
-import { unlink, writeFile, readFile, stat } from "node:fs/promises";
+import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import {
   parsePushRange,
   formatCommitOutput,
@@ -75,72 +75,18 @@ const getStagedDiff = (): Future<Error, string> =>
 
 const NO_LOCAL_CHANGES_MESSAGE = "No local changes to infer a branch name from";
 
-const MAX_UNTRACKED_FILE_BYTES = 32_768;
-const MAX_UNTRACKED_TOTAL_BYTES = 256_768;
-
 const isNoLocalChangesError = (err: unknown): err is Error => err instanceof Error && err.message === NO_LOCAL_CHANGES_MESSAGE;
-
-const parseUntrackedPaths = (porcelain: string): string[] => {
-  const paths: string[] = [];
-  for (const line of porcelain.split("\n")) {
-    if (line.length < 4) {
-      continue;
-    }
-    const xy = line.slice(0, 2);
-    const path = line.slice(3).trim();
-    if (xy === "??" && path.length > 0) {
-      paths.push(path);
-    }
-  }
-  return paths;
-};
-
-const readBoundedUntrackedSections = async (relativePaths: string[]): Promise<string> => {
-  let totalBytes = 0;
-  const sections: string[] = [];
-
-  for (const rel of relativePaths) {
-    if (totalBytes >= MAX_UNTRACKED_TOTAL_BYTES) {
-      sections.push("--- untracked files truncated (size budget) ---");
-      break;
-    }
-
-    const abs = resolve(rel);
-    try {
-      const fileStat = await stat(abs);
-      if (!fileStat.isFile()) {
-        continue;
-      }
-
-      const buf = await readFile(abs);
-      const perFileCap = Math.min(MAX_UNTRACKED_FILE_BYTES, MAX_UNTRACKED_TOTAL_BYTES - totalBytes);
-      const slice = buf.subarray(0, Math.min(buf.length, perFileCap));
-      totalBytes += slice.length;
-
-      const truncated = buf.length > slice.length;
-      const text = slice.toString("utf-8");
-      sections.push(`--- untracked file: ${rel} ---\n${text}${truncated ? "\n... (truncated)" : ""}`);
-    } catch {
-      continue;
-    }
-  }
-
-  return sections.length > 0 ? `\n\n${sections.join("\n\n")}` : "";
-};
 
 const getLocalChangeContext = (): Future<Error, string> =>
   execGitChecked(["diff", "HEAD"], "Failed to read local diff").chain((diffStdout) =>
-    execGitChecked(["status", "--porcelain"], "Failed to read git status").chain((statusStdout) =>
+    execGitChecked(["status", "--porcelain", "--untracked-files=all"], "Failed to read git status").chain((statusStdout) =>
       Future.attemptP(async () => {
         const diffPart = diffStdout.trim();
         const statusPart = statusStdout.trim();
         if (diffPart.length === 0 && statusPart.length === 0) {
           throw new Error(NO_LOCAL_CHANGES_MESSAGE);
         }
-
-        const untrackedSections = await readBoundedUntrackedSections(parseUntrackedPaths(statusPart));
-        const base = `${diffPart}\n\n--- git status --porcelain ---\n${statusPart}${statusPart.length > 0 ? "\n" : ""}`;
-        return `${base}${untrackedSections}`;
+        return statusPart.length > 0 ? `${diffPart}\n\n--- git status --porcelain ---\n${statusPart}\n` : diffPart;
       })
     )
   );

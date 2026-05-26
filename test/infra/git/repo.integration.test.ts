@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { runFuture } from "@test/helpers/run-future";
 import { createTempGitRepo } from "@test/helpers/temp-git-repo";
 import * as repo from "@/infra/git/repo";
@@ -29,18 +31,32 @@ describe("git repo integration", () => {
     }
   });
 
-  it("getLocalChangeContext includes untracked file body", async () => {
-    const token = "unique-untracked-token-xyz";
+  it("getLocalChangeContext lists untracked file path without exposing its body", async () => {
+    const secret = "DO-NOT-EXFILTRATE-secret-token";
     const { dir } = createTempGitRepo({
-      untrackedFile: { path: "new-feature.ts", contents: `export const marker = "${token}";\n` }
+      untrackedFile: { path: "new-feature.ts", contents: `export const marker = "${secret}";\n` }
     });
     const prev = cwd();
     chdir(dir);
     try {
       const ctx = await runFuture(repo.getLocalChangeContext());
       expect(ctx).toContain("?? new-feature.ts");
-      expect(ctx).toContain("--- untracked file: new-feature.ts ---");
-      expect(ctx).toContain(token);
+      expect(ctx).not.toContain(secret);
+      expect(ctx).not.toContain("--- untracked file:");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getLocalChangeContext enumerates files inside new untracked directories", async () => {
+    const { dir } = createTempGitRepo({ staged: false });
+    mkdirSync(join(dir, "newdir"));
+    writeFileSync(join(dir, "newdir", "inner.ts"), "export const x = 1;\n");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const ctx = await runFuture(repo.getLocalChangeContext());
+      expect(ctx).toContain("?? newdir/inner.ts");
     } finally {
       chdir(prev);
     }

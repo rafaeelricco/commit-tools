@@ -15,7 +15,6 @@ import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
-import { isNonFastForwardError } from "@/cli/commit-errors";
 
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
@@ -112,6 +111,11 @@ class Commit {
     });
   }
 
+  static isNonFastForwardError(error: Error): boolean {
+    const msg = error.message.toLowerCase();
+    return msg.includes("non-fast-forward") || msg.includes("updates were rejected");
+  }
+
   private promptAction(message: string): Future<Error, UserAction> {
     return Future.attemptP(async () => {
       p.note(message, "Proposed Commit Message");
@@ -162,7 +166,7 @@ class Commit {
       .hasUpstream()
       .chain((exists) =>
         exists ?
-          this.push(request).chainRej((err) => (isNonFastForwardError(err) ? this.promptForceWithLease(request) : Future.reject(err)))
+          this.push(request).chainRej((err) => (Commit.isNonFastForwardError(err) ? this.promptForceWithLease(request) : Future.reject(err)))
         : this.promptPublishBranch(request)
       );
   }

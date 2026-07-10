@@ -1,9 +1,10 @@
 export { fetchModels };
 
 import { Future } from "@/libs/future";
-import { Model, type ProviderConfig } from "@/domain/config/config";
+import { OPENAI_EFFORTS, type Model, type OpenAIEffort, type OpenAIModelEffort, type ProviderConfig } from "@/domain/config/config";
 import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { anthropicOAuthHeaders } from "@/infra/auth/anthropic";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
 import OpenAI from "openai";
 
@@ -11,6 +12,19 @@ type CodexModel = {
   readonly slug: string;
   readonly display_name: string;
   readonly description: string;
+  readonly default_reasoning_level?: string;
+  readonly supported_reasoning_levels?: readonly { readonly effort: string }[];
+};
+
+const isOpenAIEffort = (value: string): value is OpenAIEffort => OPENAI_EFFORTS.some((effort) => effort === value);
+
+const openAIEffortFor = (model: CodexModel): Maybe<OpenAIModelEffort> => {
+  const [first, ...rest] = (model.supported_reasoning_levels ?? []).map(({ effort }) => effort).filter(isOpenAIEffort);
+  if (first === undefined) return Nothing();
+
+  const options: [OpenAIEffort, ...OpenAIEffort[]] = [first, ...rest];
+  const defaultValue = options.find((effort) => effort === model.default_reasoning_level) ?? options.find((effort) => effort === "medium") ?? first;
+  return Just({ options, defaultValue });
 };
 
 const fetchOpenAIModelsWithApiKey = (apiKey: string): Future<Error, Model[]> =>
@@ -24,7 +38,7 @@ const fetchOpenAIModelsWithApiKey = (apiKey: string): Future<Error, Model[]> =>
     return models
       .filter((m) => m.id.startsWith("gpt-") || m.id.startsWith("o"))
       .sort((a, b) => a.id.localeCompare(b.id))
-      .map((m) => ({ id: m.id, description: "" }));
+      .map((m) => ({ id: m.id, description: "", openaiEffort: Nothing<OpenAIModelEffort>() }));
   });
 
 const fetchOpenAIModelsWithOAuth = (tokens: ProviderConfig["auth_method"]["content"]): Future<Error, Model[]> =>
@@ -41,7 +55,9 @@ const fetchOpenAIModelsWithOAuth = (tokens: ProviderConfig["auth_method"]["conte
       }
 
       const data = (await response.json()) as { models: CodexModel[] };
-      return data.models.sort((a, b) => a.slug.localeCompare(b.slug)).map((m) => ({ id: m.slug, description: m.description }));
+      return data.models
+        .sort((a, b) => a.slug.localeCompare(b.slug))
+        .map((m) => ({ id: m.slug, description: m.description, openaiEffort: openAIEffortFor(m) }));
     })
   );
 
@@ -76,7 +92,8 @@ const fetchGeminiModels = (authMethod: ProviderConfig["auth_method"]): Future<Er
     const data = (await response.json()) as { models?: { readonly name: string; readonly description?: string }[] };
     return (data.models || []).map((m) => ({
       id: m.name.replace("models/", ""),
-      description: m.description || ""
+      description: m.description || "",
+      openaiEffort: Nothing<OpenAIModelEffort>()
     }));
   });
 
@@ -110,7 +127,9 @@ const fetchAnthropicModels = (authMethod: ProviderConfig["auth_method"]): Future
       data?: Array<{ id: string; display_name?: string }>;
     };
 
-    return (data.data ?? []).sort((a, b) => a.id.localeCompare(b.id)).map((m) => ({ id: m.id, description: m.display_name ?? "" }));
+    return (data.data ?? [])
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((m) => ({ id: m.id, description: m.display_name ?? "", openaiEffort: Nothing<OpenAIModelEffort>() }));
   });
 
 const fetchModels = (provider: ProviderConfig["provider"], authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> => {

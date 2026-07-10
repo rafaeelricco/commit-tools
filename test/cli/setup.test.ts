@@ -27,10 +27,24 @@ vi.mock("@clack/prompts", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 }));
 vi.mock("@/domain/commit/models", () => ({
-  fetchModels: vi.fn(() => Future.resolve([{ id: "gpt-4.1-mini", description: "fast" }]))
+  fetchModels: vi.fn(() =>
+    Future.resolve([
+      {
+        id: "gpt-4.1-mini",
+        description: "fast",
+        openaiEffort: Just({ options: ["low", "medium", "high", "xhigh"] as const, defaultValue: "medium" as const })
+      }
+    ])
+  )
 }));
 vi.mock("@/infra/ui/model-picker", () => ({
-  selectModelInteractively: vi.fn(() => Future.resolve("gpt-4.1-mini"))
+  selectModelInteractively: vi.fn(() =>
+    Future.resolve({
+      id: "gpt-4.1-mini",
+      description: "fast",
+      openaiEffort: Just({ options: ["low", "medium", "high", "xhigh"] as const, defaultValue: "medium" as const })
+    })
+  )
 }));
 vi.mock("@/infra/ui/effort-picker", () => ({
   selectOpenAIEffort: vi.fn(() => Future.resolve(Just("medium" as const)))

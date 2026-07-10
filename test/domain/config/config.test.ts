@@ -45,4 +45,15 @@ describe("Config schema", () => {
     expect(result.isSuccess()).toBe(true);
     if (result instanceof Success) expect(result.value.custom_template).toBeInstanceOf(Just);
   });
+
+  it("continues decoding legacy OpenAI configs containing minimal effort", () => {
+    const config = sampleConfig();
+    if (config.ai.provider !== "openai") throw new Error("Expected OpenAI config");
+    const encoded = s.encode(Config, {
+      ...config,
+      ai: { ...config.ai, effort: Just("minimal" as const) }
+    });
+
+    expect(s.decode(Config, encoded).isSuccess()).toBe(true);
+  });
 });

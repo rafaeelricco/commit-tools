@@ -26,7 +26,8 @@ const extractGeminiText = (response: GenerateContentResponse): string =>
 
 const toGeneratedContent = (response: GenerateContentResponse): ProviderGeneratedContent => ({
   text: extractGeminiText(response),
-  tokens: toTokenUsage(response.usageMetadata)
+  tokens: toTokenUsage(response.usageMetadata),
+  effectiveEffort: Nothing()
 });
 
 const getAuthCredentials = (config: Config): Maybe<GeminiAuthCredentials> => {

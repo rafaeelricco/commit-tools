@@ -59,25 +59,34 @@ type BranchNameSuggestions = {
 type ProviderGeneratedContent = {
   readonly text: string;
   readonly tokens: Maybe<TokenUsage>;
+  readonly effectiveEffort: Maybe<string>;
 };
 
-const modelRequestMetadata = (config: ProviderConfig): ModelRequestMetadata => {
+const modelRequestMetadata = (config: ProviderConfig, effectiveEffort: Maybe<string>): ModelRequestMetadata => {
   switch (config.provider) {
     case "openai":
-      return { provider: config.provider, model: config.model, effort: config.effort.maybe<string>("provider default", (effort) => effort) };
+      return {
+        provider: config.provider,
+        model: config.model,
+        effort: effectiveEffort.withDefault(config.effort.maybe<string>("provider default", (effort) => effort))
+      };
     case "gemini":
     case "anthropic":
-      return { provider: config.provider, model: config.model, effort: config.effort.maybe<string>("medium", (effort) => effort) };
+      return {
+        provider: config.provider,
+        model: config.model,
+        effort: effectiveEffort.withDefault(config.effort.maybe<string>("medium", (effort) => effort))
+      };
   }
 };
 
 const withRequestMetadata = (config: ProviderConfig, f: Future<Error, ProviderGeneratedContent>): Future<Error, GeneratedContent> => {
   const startedAt = Date.now();
-  return f.map(({ text, tokens }) => ({
+  return f.map(({ text, tokens, effectiveEffort }) => ({
     text,
     metadata: {
       durationMs: Date.now() - startedAt,
-      model: modelRequestMetadata(config),
+      model: modelRequestMetadata(config, effectiveEffort),
       tokens
     }
   }));

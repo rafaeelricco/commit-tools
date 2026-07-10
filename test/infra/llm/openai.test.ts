@@ -70,6 +70,22 @@ describe("generateContentWithOpenAI", () => {
     expect(result.effectiveEffort.expect("Expected effective effort")).toBe("provider default");
   });
 
+  it("retries a message-only unsupported value with backtick quotes", async () => {
+    const error = new OpenAI.BadRequestError(
+      400,
+      undefined,
+      "Unsupported value: `minimal` is not supported with the `gpt-5.6-sol` model. Supported values are: `none`, `low`, `medium`, `high`, and `xhigh`.",
+      new Headers()
+    );
+    stream.mockReturnValueOnce({ on: vi.fn(), finalResponse: vi.fn().mockRejectedValue(error) }).mockReturnValueOnce(successfulStream());
+
+    const result = await runFuture(generateContentWithOpenAI(configWith("minimal"), { prompt: "diff" }));
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(stream.mock.calls[1]?.[0]).not.toHaveProperty("reasoning");
+    expect(result.effectiveEffort.expect("Expected effective effort")).toBe("provider default");
+  });
+
   it("does not retry unrelated bad requests", async () => {
     const error = new OpenAI.BadRequestError(400, { code: "invalid_parameter", param: "input", message: "Invalid input." }, undefined, new Headers());
     stream.mockReturnValue({ on: vi.fn(), finalResponse: vi.fn().mockRejectedValue(error) });

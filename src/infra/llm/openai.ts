@@ -52,7 +52,10 @@ const isUnsupportedEffort = (error: unknown, effort: OpenAIEffort): boolean => {
   if (!(error instanceof OpenAI.BadRequestError)) return false;
 
   const typedError = error.param === "reasoning.effort" && error.code === "unsupported_value";
-  const codexError = error.message.includes(`Unsupported value: '${effort}' is not supported`) && error.message.includes("Supported values are:");
+  const quotedEfforts = [`'${effort}'`, `"${effort}"`, `\`${effort}\``];
+  const codexError =
+    quotedEfforts.some((quotedEffort) => error.message.includes(`Unsupported value: ${quotedEffort} is not supported`)) &&
+    error.message.includes("Supported values are:");
   return typedError || codexError;
 };
 

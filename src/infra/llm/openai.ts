@@ -16,7 +16,7 @@ type StreamBundle = {
   response: OpenAI.Responses.Response;
   doneEventText: string;
   deltaSnapshotText: string;
-  effectiveEffort: string;
+  attemptedEffort: Maybe<OpenAIEffort>;
 };
 
 const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
@@ -78,7 +78,7 @@ const readOpenAIStream = async (client: OpenAI, model: string, effort: Maybe<Ope
     response,
     doneEventText,
     deltaSnapshotText,
-    effectiveEffort: effort.maybe("provider default", (value) => value)
+    attemptedEffort: effort
   };
 };
 
@@ -102,7 +102,7 @@ const callOpenAIStream = (
       extractResponse({ text: extractStreamText(bundle) }).map((text) => ({
         text,
         tokens: fromOptional(bundle.response.usage).map(toTokenUsage),
-        effectiveEffort: Just(bundle.effectiveEffort)
+        effectiveEffort: Just(bundle.attemptedEffort.maybe<string>("provider default", (value) => value))
       }))
     );
 

@@ -4,6 +4,7 @@ import { Setup } from "@/cli/setup";
 import { Doctor } from "@/cli/doctor";
 import { ModelCommand } from "@/cli/model";
 import { EffortCommand } from "@/cli/effort";
+import { AliasCommand } from "@/cli/alias";
 import { Update } from "@/cli/update";
 import { type CliCommand, parseArgs, showHelp, showVersion } from "@/cli/parser";
 import { Future } from "@/libs/future";
@@ -12,7 +13,7 @@ import { checkUpdate } from "@/cli/update";
 
 import color from "picocolors";
 
-const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort", "branch"]);
+const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort", "branch", "alias"]);
 
 const main = () => {
   const args = process.argv.slice(2);
@@ -38,6 +39,8 @@ const main = () => {
           return EffortCommand.create().chain((e) => e.run());
         case "branch":
           return Branch.create().chain((b) => b.run());
+        case "alias":
+          return AliasCommand.create(command.action).chain((a) => a.run());
         case "update":
           return Update.create().run();
         case "version":

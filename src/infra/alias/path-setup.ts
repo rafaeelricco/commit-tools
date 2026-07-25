@@ -3,9 +3,9 @@ export { detectProfile, ensureBinDirOnPath, isBinDirOnPath, pathExportLine, type
 import { Future } from "@/libs/future";
 import { fromOptional, type Maybe } from "@/libs/maybe";
 import { aliasBinDir } from "@/infra/alias/shims";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { delimiter, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 
 type Shell = "zsh" | "bash" | "fish";
 type ShellProfile = { readonly shell: Shell; readonly file: string };
@@ -50,6 +50,7 @@ const ensureBinDirOnPath = (profile: ShellProfile): Future<Error, PathSetupOutco
     const current = await readProfile(profile.file);
     if (current.includes(MARKER_START)) return "already-present" as const;
 
+    await mkdir(dirname(profile.file), { recursive: true });
     await writeFile(profile.file, current + managedBlock(profile.shell), "utf-8");
     return "added" as const;
   });

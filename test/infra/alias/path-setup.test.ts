@@ -87,4 +87,15 @@ describe("ensureBinDirOnPath", () => {
     expect(await runFuture(ensureBinDirOnPath(target))).toBe("already-present");
     expect(await readFile(target.file, "utf-8")).toBe(afterFirst);
   });
+
+  it("creates missing parent directories for nested profiles (fish)", async () => {
+    const target: ShellProfile = {
+      shell: "fish",
+      file: join(fakeHome.path, ".config", "fish", "config.fish")
+    };
+    expect(await runFuture(ensureBinDirOnPath(target))).toBe("added");
+    const contents = await readFile(target.file, "utf-8");
+    expect(contents).toContain("fish_add_path");
+    expect(contents).toContain("# >>> commit-tools >>>");
+  });
 });

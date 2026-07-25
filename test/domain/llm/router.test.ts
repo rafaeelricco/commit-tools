@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
-import { Nothing } from "@/libs/maybe";
+import { Just, Nothing } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
 import type { ProviderConfig } from "@/domain/config/config";
 
@@ -14,13 +14,13 @@ const mockProvider = (provider: ProviderConfig["provider"]): ProviderConfig =>
   }) as ProviderConfig;
 
 vi.mock("@/infra/llm/gemini", () => ({
-  generateContentWithGemini: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing() }))
+  generateContentWithGemini: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Nothing() }))
 }));
 vi.mock("@/infra/llm/openai", () => ({
-  generateContentWithOpenAI: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing() }))
+  generateContentWithOpenAI: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Nothing() }))
 }));
 vi.mock("@/infra/llm/anthropic", () => ({
-  generateContentWithAnthropic: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing() }))
+  generateContentWithAnthropic: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Nothing() }))
 }));
 
 describe("generateCommitMessage", () => {
@@ -39,5 +39,15 @@ describe("refineCommitMessage", () => {
     const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
     await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
     expect(generateContentWithOpenAI).toHaveBeenCalled();
+  });
+
+  it("reports the effort used by the provider", async () => {
+    const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(
+      Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Just("provider default") })
+    );
+
+    const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
+    expect(result.metadata.model.effort).toBe("provider default");
   });
 });

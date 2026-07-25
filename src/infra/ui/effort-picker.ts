@@ -4,15 +4,26 @@ import { ThinkingLevel } from "@google/genai";
 
 import { Future } from "@/libs/future";
 import { Just, type Maybe } from "@/libs/maybe";
-import { OPENAI_EFFORTS, ANTHROPIC_EFFORTS, GEMINI_EFFORTS, type OpenAIEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
+import {
+  OPENAI_EFFORTS,
+  ANTHROPIC_EFFORTS,
+  GEMINI_EFFORTS,
+  type OpenAIEffort,
+  type OpenAIModelEffort,
+  type AnthropicEffort,
+  type GeminiEffort
+} from "@/domain/config/config";
 
 type EffortSliderModule = typeof import("@/infra/ui/effort-slider");
 
-const selectEffort = <V extends string>(options: readonly V[], modelId: string, currentEffort: Maybe<V>, defaultValue: V): Future<Error, Maybe<V>> => {
-  const initialIndex = currentEffort.maybe<number>(Math.max(0, options.indexOf(defaultValue)), (v) => {
-    const idx = options.indexOf(v);
-    return idx >= 0 ? idx : Math.max(0, options.indexOf(defaultValue));
-  });
+const selectEffort = <V extends string>(
+  options: readonly [V, ...V[]],
+  modelId: string,
+  currentEffort: Maybe<V>,
+  defaultValue: V
+): Future<Error, Maybe<V>> => {
+  const normalizedCurrent = currentEffort.map((value) => (options.includes(value) ? value : defaultValue));
+  const initialIndex = normalizedCurrent.maybe(options.indexOf(defaultValue), (value) => options.indexOf(value));
 
   return Future.attemptP(async () => {
     // Lazy-load Ink/React so non-interactive CLI paths don't pay their startup cost.
@@ -39,7 +50,7 @@ const selectEffort = <V extends string>(options: readonly V[], modelId: string, 
           },
           onCancel: () => {
             unmount();
-            resolve(currentEffort);
+            resolve(normalizedCurrent);
           }
         })
       );
@@ -48,8 +59,10 @@ const selectEffort = <V extends string>(options: readonly V[], modelId: string, 
   );
 };
 
-const selectOpenAIEffort = (modelId: string, current: Maybe<OpenAIEffort>): Future<Error, Maybe<OpenAIEffort>> =>
-  selectEffort<OpenAIEffort>(OPENAI_EFFORTS, modelId, current, "medium");
+const selectOpenAIEffort = (modelId: string, current: Maybe<OpenAIEffort>, modelEffort: Maybe<OpenAIModelEffort>): Future<Error, Maybe<OpenAIEffort>> => {
+  const { options, defaultValue } = modelEffort.withDefault({ options: OPENAI_EFFORTS, defaultValue: "medium" });
+  return selectEffort(options, modelId, current, defaultValue);
+};
 
 const selectAnthropicEffort = (modelId: string, current: Maybe<AnthropicEffort>): Future<Error, Maybe<AnthropicEffort>> =>
   selectEffort<AnthropicEffort>(ANTHROPIC_EFFORTS, modelId, current, "medium");

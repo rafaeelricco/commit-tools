@@ -172,7 +172,7 @@ class Setup {
 
   private finalizeAfterModels(authMethod: ProviderConfig["auth_method"], models: Model[]): Future<Error, void> {
     return selectModelInteractively(models)
-      .chain((modelId) => selectEffortForProvider(seedProviderConfig(this.preferences.provider, modelId, authMethod)))
+      .chain((model) => selectEffortForProvider(seedProviderConfig(this.preferences.provider, model.id, authMethod), model.openaiEffort))
       .chain((ai) => saveConfig(this.buildConfig(ai)))
       .map(() => {
         p.outro(color.green("Setup complete!"));

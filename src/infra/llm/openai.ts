@@ -9,13 +9,14 @@ import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { absurd } from "@/libs/types";
-import { Just, fromOptional, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, fromOptional, type Maybe } from "@/libs/maybe";
 
 type OpenAIConfig = Extract<Config["ai"], { provider: "openai" }>;
 type StreamBundle = {
   response: OpenAI.Responses.Response;
   doneEventText: string;
   deltaSnapshotText: string;
+  attemptedEffort: Maybe<OpenAIEffort>;
 };
 
 const extractStreamText = (bundle: StreamBundle): Maybe<string> => {
@@ -47,6 +48,40 @@ const buildStreamParams = (model: string, effort: Maybe<OpenAIEffort>, params: G
   return openaiReasoning(effort).maybe(core, (r) => ({ ...core, reasoning: r }));
 };
 
+const isUnsupportedEffort = (error: unknown, effort: OpenAIEffort): boolean => {
+  if (!(error instanceof OpenAI.BadRequestError)) return false;
+
+  const typedError = error.param === "reasoning.effort" && error.code === "unsupported_value";
+  const quotedEfforts = [`'${effort}'`, `"${effort}"`, `\`${effort}\``];
+  const codexError =
+    quotedEfforts.some((quotedEffort) => error.message.includes(`Unsupported value: ${quotedEffort} is not supported`)) &&
+    error.message.includes("Supported values are:");
+  return typedError || codexError;
+};
+
+const readOpenAIStream = async (client: OpenAI, model: string, effort: Maybe<OpenAIEffort>, params: GenerateContentParams): Promise<StreamBundle> => {
+  const stream = client.responses.stream(buildStreamParams(model, effort, params));
+
+  let deltaSnapshotText = "";
+  let doneEventText = "";
+
+  stream.on("response.output_text.delta", (event) => {
+    deltaSnapshotText = event.snapshot;
+  });
+
+  stream.on("response.output_text.done", (event) => {
+    doneEventText = event.text;
+  });
+
+  const response = await stream.finalResponse();
+  return {
+    response,
+    doneEventText,
+    deltaSnapshotText,
+    attemptedEffort: effort
+  };
+};
+
 const callOpenAIStream = (
   client: OpenAI,
   model: string,
@@ -54,27 +89,20 @@ const callOpenAIStream = (
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
   Future.attemptP(async () => {
-    const stream = client.responses.stream(buildStreamParams(model, effort, params));
-
-    let deltaSnapshotText = "";
-    let doneEventText = "";
-
-    stream.on("response.output_text.delta", (event) => {
-      deltaSnapshotText = event.snapshot;
-    });
-
-    stream.on("response.output_text.done", (event) => {
-      doneEventText = event.text;
-    });
-
-    const response = await stream.finalResponse();
-    return { response, doneEventText, deltaSnapshotText };
+    try {
+      return await readOpenAIStream(client, model, effort, params);
+    } catch (error) {
+      const selectedEffort = effort.asNullable();
+      if (selectedEffort === null || !isUnsupportedEffort(error, selectedEffort)) throw error;
+      return await readOpenAIStream(client, model, Nothing<OpenAIEffort>(), params);
+    }
   })
     .mapRej((error) => new Error(`Failed to create OpenAI response: ${error instanceof Error ? error.message : String(error)}`))
     .chain((bundle) =>
       extractResponse({ text: extractStreamText(bundle) }).map((text) => ({
         text,
-        tokens: fromOptional(bundle.response.usage).map(toTokenUsage)
+        tokens: fromOptional(bundle.response.usage).map(toTokenUsage),
+        effectiveEffort: Just(bundle.attemptedEffort.maybe<string>("provider default", (value) => value))
       }))
     );
 

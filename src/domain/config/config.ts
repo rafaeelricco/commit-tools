@@ -6,6 +6,7 @@ export {
   type AuthMethod,
   type ProviderConfig,
   type OpenAIEffort,
+  type OpenAIModelEffort,
   type AnthropicEffort,
   type GeminiEffort,
   type Model,
@@ -25,6 +26,7 @@ export {
 import * as s from "@/libs/json/schema";
 
 import { absurd } from "@/libs/types";
+import { type Maybe } from "@/libs/maybe";
 import { ThinkingLevel } from "@google/genai";
 
 import type OpenAIPkg from "openai";
@@ -78,6 +80,10 @@ const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const sat
 const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
 
 type OpenAIEffort = (typeof OPENAI_EFFORTS)[number];
+type OpenAIModelEffort = {
+  readonly options: readonly [OpenAIEffort, ...OpenAIEffort[]];
+  readonly defaultValue: OpenAIEffort;
+};
 type AnthropicEffort = (typeof ANTHROPIC_EFFORTS)[number];
 type GeminiEffort = (typeof GEMINI_EFFORTS)[number];
 
@@ -123,8 +129,8 @@ const Config = s.object({
 });
 type Config = s.Infer<typeof Config>;
 
-const Model = s.object({
-  id: s.string,
-  description: s.string
-});
-type Model = s.Infer<typeof Model>;
+type Model = {
+  readonly id: string;
+  readonly description: string;
+  readonly openaiEffort: Maybe<OpenAIModelEffort>;
+};

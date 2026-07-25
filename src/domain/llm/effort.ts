@@ -1,8 +1,8 @@
 export { seedProviderConfig, withModel, selectEffortForProvider };
 
 import { type Future } from "@/libs/future";
-import { type ProviderConfig, type OpenAIEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
-import { Nothing } from "@/libs/maybe";
+import { type ProviderConfig, type OpenAIEffort, type OpenAIModelEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
+import { Nothing, type Maybe } from "@/libs/maybe";
 import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort } from "@/infra/ui/effort-picker";
 import { absurd } from "@/libs/types";
 
@@ -32,10 +32,10 @@ const withModel = (ai: ProviderConfig, model: string): ProviderConfig => {
   }
 };
 
-const selectEffortForProvider = (current: ProviderConfig): Future<Error, ProviderConfig> => {
+const selectEffortForProvider = (current: ProviderConfig, modelEffort: Maybe<OpenAIModelEffort> = Nothing()): Future<Error, ProviderConfig> => {
   switch (current.provider) {
     case "openai":
-      return selectOpenAIEffort(current.model, current.effort).map(
+      return selectOpenAIEffort(current.model, current.effort, modelEffort).map(
         (effort): ProviderConfig => ({
           provider: "openai",
           model: current.model,

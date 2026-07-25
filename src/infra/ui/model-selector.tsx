@@ -2,20 +2,17 @@ export { ModelSelector, type Model, type ModelSelectorProps };
 
 import * as React from "react";
 
+import type { Model } from "@/domain/config/config";
+
 import { Box, Text, useInput, useApp, type Key } from "ink";
 
 import chalk from "chalk";
 
 import { search } from "@/libs/fuzzy";
 
-type Model = {
-  id: string;
-  description: string;
-};
-
 type ModelSelectorProps = {
   models: Model[];
-  onSelect: (modelId: string) => void;
+  onSelect: (model: Model) => void;
   onCancel: () => void;
 };
 
@@ -57,7 +54,7 @@ const ModelSelector = ({ models, onSelect, onCancel }: ModelSelectorProps) => {
     if (key.return) {
       const selectedModel = filteredModels[selectedIndex];
       if (selectedModel) {
-        onSelect(selectedModel.id);
+        onSelect(selectedModel);
       } else {
         onCancel();
       }

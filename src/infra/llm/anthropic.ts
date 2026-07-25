@@ -9,7 +9,7 @@ import { anthropicOAuthHeaders, CLAUDE_CODE_SYSTEM_PROMPT } from "@/infra/auth/a
 import { absurd } from "@/libs/types";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
-import { Just, fromOptional, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
 type SystemParam = NonNullable<Anthropic.MessageStreamParams["system"]>;
@@ -66,7 +66,8 @@ const callAnthropicWithApiKey = (
     .chain((message) =>
       extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
         text,
-        tokens: Just(toTokenUsage(message.usage))
+        tokens: Just(toTokenUsage(message.usage)),
+        effectiveEffort: Nothing()
       }))
     );
 
@@ -92,7 +93,8 @@ const callAnthropicWithSetupToken = (
     .chain((message) =>
       extractResponse({ text: Just(extractAnthropicText(message.content)) }).map((text) => ({
         text,
-        tokens: Just(toTokenUsage(message.usage))
+        tokens: Just(toTokenUsage(message.usage)),
+        effectiveEffort: Nothing()
       }))
     );
 

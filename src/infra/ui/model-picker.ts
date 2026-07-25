@@ -1,9 +1,9 @@
 export { selectModelInteractively };
 
 import { Future } from "@/libs/future";
-import { Model } from "@/domain/config/config";
+import { type Model } from "@/domain/config/config";
 
-const selectModelInteractively = (models: Model[]): Future<Error, string> =>
+const selectModelInteractively = (models: Model[]): Future<Error, Model> =>
   Future.attemptP(async () => {
     // Lazy-load Ink/React so non-interactive CLI paths don't pay their startup cost.
     // Ink pulls in React, Yoga layout, and a render loop — non-trivial to initialize
@@ -17,13 +17,13 @@ const selectModelInteractively = (models: Model[]): Future<Error, string> =>
     const { ModelSelector } = await import("@/infra/ui/model-selector");
     return { render, React, ModelSelector };
   }).chain(({ render, React, ModelSelector }) =>
-    Future.create<Error, string>((reject, resolve) => {
+    Future.create<Error, Model>((reject, resolve) => {
       const { unmount } = render(
         React.createElement(ModelSelector, {
           models,
-          onSelect: (modelId: string) => {
+          onSelect: (model: Model) => {
             unmount();
-            resolve(modelId);
+            resolve(model);
           },
           onCancel: () => {
             unmount();

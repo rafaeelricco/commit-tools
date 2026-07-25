@@ -30,7 +30,7 @@ class ModelCommand {
 
     return loading("Fetching available models...", "Models fetched!", fetchModels(this.providerConfig.provider, this.providerConfig.auth_method))
       .chain((models) => selectModelInteractively(models))
-      .chain((modelId) => selectEffortForProvider(withModel(this.config.ai, modelId)))
+      .chain((model) => selectEffortForProvider(withModel(this.providerConfig, model.id), model.openaiEffort))
       .chain((ai) => saveConfig({ ...this.config, ai }))
       .map(() => p.outro(color.green("Model updated successfully!")))
       .mapRej((e) => {

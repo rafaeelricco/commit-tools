@@ -74,14 +74,24 @@ describe("alias add", () => {
   it("writes the shim and persists the registry", async () => {
     await run({ type: "add", name: "cb", target: "branch" });
 
+    expect(reconcileShims).toHaveBeenCalledWith([]);
     expect(vi.mocked(writeShim).mock.calls[0]?.[0]).toMatchObject({ target: "branch" });
     expect(vi.mocked(saveAliases).mock.calls[0]?.[0]).toHaveLength(1);
+  });
+
+  it("reconciles existing shims before writing the new one", async () => {
+    withRegistry([alias("cm", "generate")]);
+    await run({ type: "add", name: "cb", target: "branch" });
+
+    expect(reconcileShims).toHaveBeenCalledWith([expect.objectContaining({ target: "generate" })]);
+    expect(vi.mocked(writeShim).mock.calls[0]?.[0]).toMatchObject({ target: "branch" });
   });
 
   it("rejects a duplicate without touching the filesystem", async () => {
     withRegistry([alias("cb", "branch")]);
     await expect(run({ type: "add", name: "cb", target: "setup" })).rejects.toThrow(/already exists/);
 
+    expect(reconcileShims).toHaveBeenCalledWith([expect.objectContaining({ target: "branch" })]);
     expect(writeShim).not.toHaveBeenCalled();
     expect(saveAliases).not.toHaveBeenCalled();
   });

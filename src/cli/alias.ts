@@ -59,7 +59,8 @@ class AliasCommand {
       case "list":
         return Future.resolve(this.renderTable(this.initial));
       case "add":
-        return parseName(action.name)
+        return reconcileShims(this.initial)
+          .chain(() => parseName(action.name))
           .chain((name) => this.createAlias(this.initial, name, action.target))
           .map(() => undefined);
       case "remove":

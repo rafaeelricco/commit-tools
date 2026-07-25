@@ -136,7 +136,7 @@ commit alias list
 commit alias remove cb
 ```
 
-Aliases are small shell scripts in `~/.commit-tools/bin`, so uninstalling or reinstalling the npm package never touches them. The first time you create one, the tool offers to add that directory to your `PATH` in your shell profile (`.zshrc`, `.bashrc`, or `config.fish`) inside a clearly marked block — you can also add it yourself:
+Aliases are small shell scripts in `~/.commit-tools/bin`, so uninstalling or reinstalling the npm package never touches them. The first time you create one, the tool offers to add that directory to your `PATH` in your shell profile (`.zshrc`, `.bashrc` plus a bash login file such as `.bash_profile`, or `config.fish`) inside a clearly marked block — you can also add it yourself:
 
 ```bash
 export PATH="$HOME/.commit-tools/bin:$PATH"

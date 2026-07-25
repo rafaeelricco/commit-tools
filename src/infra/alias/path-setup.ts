@@ -3,7 +3,7 @@ export { detectProfile, ensureBinDirOnPath, isBinDirOnPath, pathExportLine, type
 import { Future } from "@/libs/future";
 import { fromOptional, type Maybe } from "@/libs/maybe";
 import { aliasBinDir } from "@/infra/alias/shims";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { delimiter, dirname, resolve } from "node:path";
 
@@ -44,13 +44,41 @@ const readProfile = async (file: string): Promise<string> =>
     throw err;
   });
 
+const fileExists = async (file: string): Promise<boolean> =>
+  access(file).then(
+    () => true,
+    () => false
+  );
+
+/** Prefer an existing login file; otherwise create `.bash_profile` on first setup. */
+const bashLoginFile = async (): Promise<string> => {
+  for (const name of [".bash_profile", ".bash_login", ".profile"] as const) {
+    const path = resolve(homedir(), name);
+    if (await fileExists(path)) return path;
+  }
+  return resolve(homedir(), ".bash_profile");
+};
+
+/** Bash login shells skip `.bashrc` unless sourced — dual-write interactive + login. */
+const filesFor = async (profile: ShellProfile): Promise<readonly string[]> => {
+  if (profile.shell !== "bash") return [profile.file];
+  const login = await bashLoginFile();
+  return login === profile.file ? [profile.file] : [profile.file, login];
+};
+
+const ensureManagedBlock = async (file: string, shell: Shell): Promise<PathSetupOutcome> => {
+  const current = await readProfile(file);
+  if (current.includes(MARKER_START)) return "already-present";
+
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, current + managedBlock(shell), "utf-8");
+  return "added";
+};
+
 /** Idempotent: an existing managed block is left untouched. Only ever called after an explicit confirmation. */
 const ensureBinDirOnPath = (profile: ShellProfile): Future<Error, PathSetupOutcome> =>
   Future.attemptP(async () => {
-    const current = await readProfile(profile.file);
-    if (current.includes(MARKER_START)) return "already-present" as const;
-
-    await mkdir(dirname(profile.file), { recursive: true });
-    await writeFile(profile.file, current + managedBlock(profile.shell), "utf-8");
-    return "added" as const;
+    const files = await filesFor(profile);
+    const outcomes = await Promise.all(files.map((file) => ensureManagedBlock(file, profile.shell)));
+    return outcomes.some((o) => o === "added") ? ("added" as const) : ("already-present" as const);
   });

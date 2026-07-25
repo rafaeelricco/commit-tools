@@ -98,4 +98,38 @@ describe("ensureBinDirOnPath", () => {
     expect(contents).toContain("fish_add_path");
     expect(contents).toContain("# >>> commit-tools >>>");
   });
+
+  it("dual-writes bash managed block to .bashrc and .bash_profile when no login file exists", async () => {
+    const target: ShellProfile = { shell: "bash", file: join(fakeHome.path, ".bashrc") };
+    expect(await runFuture(ensureBinDirOnPath(target))).toBe("added");
+
+    const bashrc = await readFile(join(fakeHome.path, ".bashrc"), "utf-8");
+    const bashProfile = await readFile(join(fakeHome.path, ".bash_profile"), "utf-8");
+    for (const contents of [bashrc, bashProfile]) {
+      expect(contents).toContain("# >>> commit-tools >>>");
+      expect(contents).toContain(pathExportLine("bash"));
+    }
+  });
+
+  it("prefers an existing .bash_profile over creating a new login file", async () => {
+    const target: ShellProfile = { shell: "bash", file: join(fakeHome.path, ".bashrc") };
+    await writeFile(join(fakeHome.path, ".bash_profile"), "export EXISTING=1\n", "utf-8");
+
+    await runFuture(ensureBinDirOnPath(target));
+
+    expect(await readFile(join(fakeHome.path, ".bash_profile"), "utf-8")).toContain("export EXISTING=1");
+    expect(await readFile(join(fakeHome.path, ".bash_profile"), "utf-8")).toContain("# >>> commit-tools >>>");
+    expect(await readFile(join(fakeHome.path, ".bashrc"), "utf-8")).toContain("# >>> commit-tools >>>");
+  });
+
+  it("is idempotent across both bash files", async () => {
+    const target: ShellProfile = { shell: "bash", file: join(fakeHome.path, ".bashrc") };
+    await runFuture(ensureBinDirOnPath(target));
+    const bashrc = await readFile(join(fakeHome.path, ".bashrc"), "utf-8");
+    const bashProfile = await readFile(join(fakeHome.path, ".bash_profile"), "utf-8");
+
+    expect(await runFuture(ensureBinDirOnPath(target))).toBe("already-present");
+    expect(await readFile(join(fakeHome.path, ".bashrc"), "utf-8")).toBe(bashrc);
+    expect(await readFile(join(fakeHome.path, ".bash_profile"), "utf-8")).toBe(bashProfile);
+  });
 });

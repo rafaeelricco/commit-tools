@@ -12,12 +12,25 @@ const name = (raw: string): AliasName => {
 const alias = (raw: string, target: Alias["target"] = "generate"): Alias => ({ name: name(raw), target });
 
 describe("AliasName.parse", () => {
-  it.each([["cb"], ["c"], ["gen-msg"], ["my_alias"], ["A1"], ["a".repeat(32)]])("accepts %s", (raw) => {
-    expect(AliasName.parse(raw).isSuccess()).toBe(true);
+  it.each([
+    ["cb", "cb"],
+    ["c", "c"],
+    ["gen-msg", "gen-msg"],
+    ["my_alias", "my_alias"],
+    ["A1", "a1"],
+    ["a".repeat(32), "a".repeat(32)]
+  ])("accepts %s as %s", (raw, expected) => {
+    const parsed = AliasName.parse(raw);
+    expect(parsed instanceof Success && parsed.value.value).toBe(expected);
   });
 
   it("trims surrounding whitespace", () => {
     const parsed = AliasName.parse("  cb  ");
+    expect(parsed instanceof Success && parsed.value.value).toBe("cb");
+  });
+
+  it("normalizes names to lowercase", () => {
+    const parsed = AliasName.parse("CB");
     expect(parsed instanceof Success && parsed.value.value).toBe("cb");
   });
 
@@ -33,7 +46,7 @@ describe("AliasName.parse", () => {
     expect(AliasName.parse(raw).isFailure()).toBe(true);
   });
 
-  it.each([["commit"], ["commit-tools"]])("rejects reserved name %s", (raw) => {
+  it.each([["commit"], ["commit-tools"], ["Commit"], ["COMMIT-TOOLS"]])("rejects reserved name %s", (raw) => {
     const parsed = AliasName.parse(raw);
     expect(parsed instanceof Failure && parsed.error).toContain("reserved");
   });
@@ -50,6 +63,12 @@ describe("addAlias", () => {
     const result = addAlias(existing, alias("cb", "setup"));
     expect(result instanceof Failure && result.error).toContain("already exists");
     expect(existing[0]?.target).toBe("branch");
+  });
+
+  it("rejects a case-folded duplicate", () => {
+    const existing = [alias("cb", "branch")];
+    const result = addAlias(existing, alias("CB", "setup"));
+    expect(result instanceof Failure && result.error).toContain("already exists");
   });
 });
 

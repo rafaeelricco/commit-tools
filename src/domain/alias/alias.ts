@@ -26,9 +26,11 @@ class AliasName {
 
   static parse(raw: string): Result<string, AliasName> {
     const trimmed = raw.trim();
-    if (!NAME_PATTERN.test(trimmed)) return Failure("Use 1-32 characters: letters, digits, '-' or '_', starting with a letter.");
-    if (RESERVED.includes(trimmed)) return Failure(`'${trimmed}' is reserved by commit-tools.`);
-    return Success(new AliasName(trimmed));
+    // Lowercase so registry keys and shim paths share one identity on case-insensitive filesystems.
+    const normalized = trimmed.toLowerCase();
+    if (!NAME_PATTERN.test(normalized)) return Failure("Use 1-32 characters: letters, digits, '-' or '_', starting with a letter.");
+    if (RESERVED.includes(normalized)) return Failure(`'${normalized}' is reserved by commit-tools.`);
+    return Success(new AliasName(normalized));
   }
 }
 

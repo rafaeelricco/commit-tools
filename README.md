@@ -119,7 +119,32 @@ This flow also lets you adjust the reasoning effort for the chosen model. If the
 commit effort
 ```
 
-### 3. Generate a Commit
+### 3. Create Aliases (optional)
+
+`commit` is the built-in name, but you can add your own short names bound to any subcommand:
+
+```bash
+commit alias
+```
+
+This opens an interactive hub that lists your aliases and lets you create or delete them. Or do it directly:
+
+```bash
+commit alias add cb branch     # `cb` now runs `commit branch`
+commit alias add cm generate   # `cm` now runs `commit generate`
+commit alias list
+commit alias remove cb
+```
+
+Aliases are small shell scripts in `~/.commit-tools/bin`, so uninstalling or reinstalling the npm package never touches them. The first time you create one, the tool offers to add that directory to your `PATH` in your shell profile (`.zshrc`, `.bashrc` plus a bash login file such as `.bash_profile`, or `config.fish`) inside a clearly marked block — you can also add it yourself:
+
+```bash
+export PATH="$HOME/.commit-tools/bin:$PATH"
+```
+
+Extra arguments are forwarded, so `cb --help` behaves like `commit branch --help`. Aliases are POSIX-only for now; `commit alias` is not yet supported on Windows.
+
+### 4. Generate a Commit
 
 Stage your changes, then run:
 
@@ -177,6 +202,7 @@ commit --help
 | `commit doctor`          | Check installation and environment                |
 | `commit model`           | Select a different AI model                       |
 | `commit effort`          | Adjust the reasoning effort for the current model |
+| `commit alias`           | List, create, and delete extra CLI names          |
 | `commit update`          | Install the latest version from npm               |
 | `commit --version`, `-v` | Show version                                      |
 | `commit --help`, `-h`    | Show help                                         |

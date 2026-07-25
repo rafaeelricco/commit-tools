@@ -30,7 +30,13 @@ class AliasCommand {
 
   /** Unlike ModelCommand, this needs no config — aliases work before `commit setup` has ever run. */
   static create(action: AliasAction): Future<Error, AliasCommand> {
-    return loadAliases().map((aliases) => new AliasCommand(action, aliases));
+    // index.ts exits without printing create rejections, so load failures must log here.
+    return loadAliases()
+      .map((aliases) => new AliasCommand(action, aliases))
+      .mapRej((e) => {
+        p.log.error(color.red(e.message));
+        return e;
+      });
   }
 
   run(): Future<Error, void> {

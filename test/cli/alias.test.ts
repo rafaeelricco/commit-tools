@@ -34,6 +34,7 @@ vi.mock("@/infra/alias/path-setup", () => ({
   pathExportLine: vi.fn(() => "export PATH=...")
 }));
 
+import * as p from "@clack/prompts";
 import { AliasCommand } from "@/cli/alias";
 import { AliasName, type Alias } from "@/domain/alias/alias";
 import { Failure } from "@/libs/result";
@@ -115,5 +116,14 @@ describe("alias remove", () => {
   it("fails loudly when the registry is empty rather than reporting nothing to do", async () => {
     withRegistry([]);
     await expect(run({ type: "remove", name: "cb" })).rejects.toThrow(/No alias named 'cb'/);
+  });
+});
+
+describe("alias create load failures", () => {
+  it("logs the storage error when the registry cannot load", async () => {
+    vi.mocked(loadAliases).mockReturnValue(Future.reject(new Error("Aliases file is not valid JSON")));
+
+    await expect(run({ type: "list" })).rejects.toThrow(/not valid JSON/);
+    expect(p.log.error).toHaveBeenCalled();
   });
 });

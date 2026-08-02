@@ -82,6 +82,14 @@ describe("fetchModels", () => {
     expect(models.map((m) => m.id)).toEqual(["grok-3", "grok-4.5"]);
   });
 
+  it("filters non-chat xAI models out of the catalog", async () => {
+    list.mockResolvedValue(asyncPageOf(["grok-4.5", "grok-2-image-1212", "text-embedding-3-small"]));
+
+    const models = await runFuture(fetchModels("xai", { type: "api_key", content: "xai-test" }));
+
+    expect(models.map((m) => m.id)).toEqual(["grok-4.5"]);
+  });
+
   it("lists xAI models over subscription OAuth through the CLI proxy", async () => {
     list.mockResolvedValue(asyncPageOf(["grok-4.5"]));
 

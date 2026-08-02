@@ -142,7 +142,10 @@ const fetchXaiModelsWith = (options: ClientOptions): Future<Error, Model[]> =>
     for await (const model of list) {
       models.push(model);
     }
-    return models.sort((a, b) => a.id.localeCompare(b.id)).map((m) => ({ id: m.id, description: "", openaiEffort: Nothing<OpenAIModelEffort>() }));
+    return models
+      .filter((m) => m.id.startsWith("grok-") && !m.id.includes("-image"))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((m) => ({ id: m.id, description: "", openaiEffort: Nothing<OpenAIModelEffort>() }));
   }).mapRej((error) => new Error(`Failed to fetch xAI models: ${error instanceof Error ? error.message : String(error)}`));
 
 const fetchXaiModels = (authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> => {

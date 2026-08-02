@@ -31,6 +31,30 @@ describe("Config schema", () => {
     }
   });
 
+  it("round-trips xai api_key config with an effort", () => {
+    const config: ConfigValue = {
+      ...sampleConfig(),
+      ai: { provider: "xai", model: "grok-4.5", effort: Just("high" as const), auth_method: { type: "api_key", content: "xai-test" } }
+    };
+
+    const decoded = s.decode(Config, s.encode(Config, config));
+
+    expect(decoded.isSuccess()).toBe(true);
+    if (!(decoded instanceof Success)) return;
+    expect(decoded.value.ai.provider).toBe("xai");
+    expect(decoded.value.ai.effort).toBeInstanceOf(Just);
+  });
+
+  it("rejects an effort xAI does not support", () => {
+    const encoded = s.encode(Config, {
+      ...sampleConfig(),
+      ai: { provider: "xai", model: "grok-4.5", effort: Just("high" as const), auth_method: { type: "api_key", content: "xai-test" } }
+    }) as Record<string, unknown>;
+    const bad = { ...encoded, ai: { ...(encoded["ai"] as Record<string, unknown>), effort: "xhigh" } };
+
+    expect(s.decode(Config, bad).isFailure()).toBe(true);
+  });
+
   it("rejects invalid provider", () => {
     const bad = { ...sampleConfig(), ai: { provider: "unknown" } };
     expect(s.decode(Config, bad).isFailure()).toBe(true);

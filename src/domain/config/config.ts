@@ -1,24 +1,25 @@
 export {
   type CommitConvention,
   type OAuthTokens,
-  type OpenAITokens,
+  type BearerTokens,
   type RefreshTokens,
   type AuthMethod,
   type ProviderConfig,
   type OpenAIEffort,
   type OpenAIModelEffort,
+  type XaiEffort,
   type AnthropicEffort,
   type GeminiEffort,
   type Model,
   Config,
   schema_OAuthTokens,
-  schema_OpenAITokens,
+  schema_BearerTokens,
   schema_AuthMethod,
   schema_ProviderConfig,
   resolveAuthMethod,
-  AI_PROVIDERS,
   COMMIT_CONVENTIONS,
   OPENAI_EFFORTS,
+  XAI_EFFORTS,
   ANTHROPIC_EFFORTS,
   GEMINI_EFFORTS
 };
@@ -35,8 +36,6 @@ import type AnthropicPkg from "@anthropic-ai/sdk";
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
 
-const AI_PROVIDERS = ["gemini", "openai", "anthropic"] as const;
-
 const schema_OAuthTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
@@ -46,14 +45,14 @@ const schema_OAuthTokens = s.object({
 });
 type OAuthTokens = s.Infer<typeof schema_OAuthTokens>;
 
-const schema_OpenAITokens = s.object({
+const schema_BearerTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
   expiry_date: s.number
 });
-type OpenAITokens = s.Infer<typeof schema_OpenAITokens>;
+type BearerTokens = s.Infer<typeof schema_BearerTokens>;
 
-type RefreshTokens = OAuthTokens | OpenAITokens;
+type RefreshTokens = OAuthTokens | BearerTokens;
 
 const schema_AuthMethod = s.discriminatedUnion([
   s.variant({
@@ -66,16 +65,21 @@ const schema_AuthMethod = s.discriminatedUnion([
   }),
   s.variant({
     type: "openai_oauth",
-    content: schema_OpenAITokens
+    content: schema_BearerTokens
   }),
   s.variant({
     type: "anthropic_setup_token",
     content: s.string
+  }),
+  s.variant({
+    type: "xai_oauth",
+    content: schema_BearerTokens
   })
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 
 const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
+const XAI_EFFORTS = ["low", "high"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
 const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<AnthropicPkg.OutputConfig["effort"]>[];
 const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
 
@@ -84,6 +88,7 @@ type OpenAIModelEffort = {
   readonly options: readonly [OpenAIEffort, ...OpenAIEffort[]];
   readonly defaultValue: OpenAIEffort;
 };
+type XaiEffort = (typeof XAI_EFFORTS)[number];
 type AnthropicEffort = (typeof ANTHROPIC_EFFORTS)[number];
 type GeminiEffort = (typeof GEMINI_EFFORTS)[number];
 
@@ -105,6 +110,12 @@ const schema_ProviderConfig = s.discriminatedUnion([
     model: s.string,
     auth_method: schema_AuthMethod,
     effort: s.optionalMaybe(s.stringEnum([...ANTHROPIC_EFFORTS]))
+  }),
+  s.variant({
+    provider: "xai",
+    model: s.string,
+    auth_method: schema_AuthMethod,
+    effort: s.optionalMaybe(s.stringEnum([...XAI_EFFORTS]))
   })
 ]);
 type ProviderConfig = s.Infer<typeof schema_ProviderConfig>;
@@ -117,6 +128,8 @@ const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth
       return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
     case "gemini":
       return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
+    case "xai":
+      return { provider: "xai", model: ai.model, auth_method, effort: ai.effort };
     default:
       return absurd(ai, "ProviderConfig");
   }

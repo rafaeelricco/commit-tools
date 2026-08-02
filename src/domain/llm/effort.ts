@@ -1,9 +1,16 @@
 export { seedProviderConfig, withModel, selectEffortForProvider };
 
 import { type Future } from "@/libs/future";
-import { type ProviderConfig, type OpenAIEffort, type OpenAIModelEffort, type AnthropicEffort, type GeminiEffort } from "@/domain/config/config";
+import {
+  type ProviderConfig,
+  type OpenAIEffort,
+  type OpenAIModelEffort,
+  type XaiEffort,
+  type AnthropicEffort,
+  type GeminiEffort
+} from "@/domain/config/config";
 import { Nothing, type Maybe } from "@/libs/maybe";
-import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort } from "@/infra/ui/effort-picker";
+import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort, selectXaiEffort } from "@/infra/ui/effort-picker";
 import { absurd } from "@/libs/types";
 
 const seedProviderConfig = (provider: ProviderConfig["provider"], model: string, auth_method: ProviderConfig["auth_method"]): ProviderConfig => {
@@ -14,6 +21,8 @@ const seedProviderConfig = (provider: ProviderConfig["provider"], model: string,
       return { provider, model, auth_method, effort: Nothing<AnthropicEffort>() };
     case "gemini":
       return { provider, model, auth_method, effort: Nothing<GeminiEffort>() };
+    case "xai":
+      return { provider, model, auth_method, effort: Nothing<XaiEffort>() };
     default:
       return absurd(provider, "provider");
   }
@@ -27,6 +36,8 @@ const withModel = (ai: ProviderConfig, model: string): ProviderConfig => {
       return { provider: "anthropic", model, auth_method: ai.auth_method, effort: ai.effort };
     case "gemini":
       return { provider: "gemini", model, auth_method: ai.auth_method, effort: ai.effort };
+    case "xai":
+      return { provider: "xai", model, auth_method: ai.auth_method, effort: ai.effort };
     default:
       return absurd(ai, "ProviderConfig");
   }
@@ -56,6 +67,15 @@ const selectEffortForProvider = (current: ProviderConfig, modelEffort: Maybe<Ope
       return selectGeminiEffort(current.model, current.effort).map(
         (effort): ProviderConfig => ({
           provider: "gemini",
+          model: current.model,
+          auth_method: current.auth_method,
+          effort
+        })
+      );
+    case "xai":
+      return selectXaiEffort(current.model, current.effort).map(
+        (effort): ProviderConfig => ({
+          provider: "xai",
           model: current.model,
           auth_method: current.auth_method,
           effort

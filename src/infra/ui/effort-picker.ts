@@ -1,4 +1,4 @@
-export { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort };
+export { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort, selectXaiEffort };
 
 import { ThinkingLevel } from "@google/genai";
 
@@ -8,10 +8,12 @@ import {
   OPENAI_EFFORTS,
   ANTHROPIC_EFFORTS,
   GEMINI_EFFORTS,
+  XAI_EFFORTS,
   type OpenAIEffort,
   type OpenAIModelEffort,
   type AnthropicEffort,
-  type GeminiEffort
+  type GeminiEffort,
+  type XaiEffort
 } from "@/domain/config/config";
 
 type EffortSliderModule = typeof import("@/infra/ui/effort-slider");
@@ -69,3 +71,6 @@ const selectAnthropicEffort = (modelId: string, current: Maybe<AnthropicEffort>)
 
 const selectGeminiEffort = (modelId: string, current: Maybe<GeminiEffort>): Future<Error, Maybe<GeminiEffort>> =>
   selectEffort<GeminiEffort>(GEMINI_EFFORTS, modelId, current, ThinkingLevel.MEDIUM);
+
+const selectXaiEffort = (modelId: string, current: Maybe<XaiEffort>): Future<Error, Maybe<XaiEffort>> =>
+  selectEffort<XaiEffort>(XAI_EFFORTS, modelId, current, "low");

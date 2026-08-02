@@ -11,8 +11,7 @@ vi.mock("@/infra/auth/google", () => ({
 }));
 vi.mock("@/infra/auth/openai", () => ({ ensureFreshOpenAITokens: vi.fn() }));
 vi.mock("@/infra/storage/config", () => ({
-  updateGoogleTokens: vi.fn(() => Future.resolve(undefined)),
-  updateOpenAITokens: vi.fn(() => Future.resolve(undefined))
+  updateOAuthTokens: vi.fn(() => Future.resolve(undefined))
 }));
 
 type ConfigValue = s.Infer<typeof ConfigSchema>;
@@ -66,8 +65,11 @@ describe("resolveProvider", () => {
   });
 
   it("persists google tokens when refresh changes access_token", async () => {
-    const { updateGoogleTokens } = await import("@/infra/storage/config");
+    const { updateOAuthTokens } = await import("@/infra/storage/config");
     await runFuture(resolveProvider(googleConfig()));
-    expect(updateGoogleTokens).toHaveBeenCalledOnce();
+    expect(updateOAuthTokens).toHaveBeenCalledOnce();
+    expect(updateOAuthTokens).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "google_oauth", content: expect.objectContaining({ access_token: "new-access" }) })
+    );
   });
 });

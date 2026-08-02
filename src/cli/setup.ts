@@ -8,6 +8,7 @@ import { saveConfig } from "@/infra/storage/config";
 import { CommitConvention, type Config, type Model, type ProviderConfig } from "@/domain/config/config";
 import { performOAuthFlow, type GoogleOAuthPhase } from "@/infra/auth/google";
 import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/infra/auth/openai";
+import { performXaiOAuthFlow } from "@/infra/auth/xai";
 import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/infra/auth/anthropic";
 import { Just, Nothing } from "@/libs/maybe";
 import { bracketStatus, loading } from "@/infra/ui/spinner";
@@ -21,7 +22,7 @@ type SetupPreferences = {
   readonly convention: CommitConvention;
   readonly customTemplate: string | undefined;
   readonly provider: ProviderConfig["provider"];
-  readonly authMethod: "google_oauth" | "openai_oauth" | "api_key" | "anthropic_setup_token";
+  readonly authMethod: "google_oauth" | "openai_oauth" | "xai_oauth" | "api_key" | "anthropic_setup_token";
 };
 
 class Setup {
@@ -36,7 +37,8 @@ class Setup {
         options: [
           { value: "gemini", label: "Google" },
           { value: "openai", label: "OpenAI" },
-          { value: "anthropic", label: "Anthropic" }
+          { value: "anthropic", label: "Anthropic" },
+          { value: "xai", label: "xAI" }
         ],
         initialValue: "gemini" as const
       });
@@ -88,6 +90,8 @@ class Setup {
         return this.setupOAuth();
       case "openai_oauth":
         return this.setupOpenAIOAuth();
+      case "xai_oauth":
+        return this.setupXaiOAuth();
       case "anthropic_setup_token":
         return this.setupAnthropicSetupToken();
       case "api_key":
@@ -140,6 +144,12 @@ class Setup {
         }))
       )
       .chain((authMethod) => this.finalizeSetup(authMethod));
+  }
+
+  private setupXaiOAuth(): Future<Error, void> {
+    p.log.info("Opening browser for Grok sign-in...");
+
+    return performXaiOAuthFlow().chain((tokens) => this.finalizeSetup({ type: "xai_oauth" as const, content: tokens }));
   }
 
   private setupApiKey(): Future<Error, void> {
@@ -225,6 +235,19 @@ function getAuthMethodOptions(provider: ProviderConfig["provider"]): Option<Setu
           hint: "Paste an Anthropic API key (sk-ant-api...)"
         }
       ];
+    case "xai":
+      return [
+        {
+          value: "xai_oauth",
+          label: "Sign in with Grok (recommended)",
+          hint: "Uses your SuperGrok / X Premium subscription"
+        },
+        {
+          value: "api_key",
+          label: "API Key",
+          hint: "Paste an xAI API key (xai-...)"
+        }
+      ];
   }
 }
 
@@ -236,6 +259,8 @@ function getInitialValue(provider: ProviderConfig["provider"]): SetupPreferences
       return "google_oauth";
     case "anthropic":
       return "anthropic_setup_token";
+    case "xai":
+      return "xai_oauth";
   }
 }
 
@@ -254,5 +279,7 @@ function apiKeyPromptFor(provider: ProviderConfig["provider"]): ApiKeyPrompt {
       return { message: "Enter your GOOGLE_API_KEY:", validate: genericApiKeyValidator };
     case "anthropic":
       return { message: "Enter your ANTHROPIC_API_KEY (sk-ant-api...):", validate: validateAnthropicApiKey };
+    case "xai":
+      return { message: "Enter your XAI_API_KEY (xai-...):", validate: genericApiKeyValidator };
   }
 }

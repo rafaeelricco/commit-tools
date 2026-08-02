@@ -6,7 +6,7 @@ import * as repo from "@/infra/git/repo";
 import { Future } from "@/libs/future";
 import { configFile, loadConfig } from "@/infra/storage/config";
 import { type AuthMethod, type ProviderConfig } from "@/domain/config/config";
-import { Just, type Maybe } from "@/libs/maybe";
+import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
@@ -82,18 +82,19 @@ class Doctor {
 
           rows.push(["Auth Method", color.green(authMethodLabel(authMethod)), authMethodDescription(ai)]);
 
-          if (ai.auth_method.type === "google_oauth" || ai.auth_method.type === "openai_oauth") {
-            const now = Date.now();
-            const expiryDate = ai.auth_method.content.expiry_date; // For API Key we don't have this, that's why we have this `if (...) {}` block
-            const isExpired = expiryDate <= now;
-            const expiryStr = new Date(expiryDate).toLocaleString();
-
-            rows.push([
-              "Token Status",
-              isExpired ? color.yellow("Expired") : color.green("Valid"),
-              isExpired ? `Expired at ${expiryStr} (will auto-refresh)` : `Expires at ${expiryStr}`
-            ]);
-          }
+          rows.push(
+            ...tokenExpiry(ai.auth_method).maybe<CheckRow[]>([], (expiryDate) => {
+              const isExpired = expiryDate <= Date.now();
+              const expiryStr = new Date(expiryDate).toLocaleString();
+              return [
+                [
+                  "Token Status",
+                  isExpired ? color.yellow("Expired") : color.green("Valid"),
+                  isExpired ? `Expired at ${expiryStr} (will auto-refresh)` : `Expires at ${expiryStr}`
+                ]
+              ];
+            })
+          );
 
           return rows;
         })
@@ -165,17 +166,33 @@ function renderModelInfo(ai: ProviderConfig): string {
   return ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
 }
 
+/** `Nothing` for auth methods that carry no expiry, so a new variant is a compile error rather than a missing row. */
+function tokenExpiry(authMethod: ProviderConfig["auth_method"]): Maybe<number> {
+  switch (authMethod.type) {
+    case "google_oauth":
+    case "openai_oauth":
+    case "xai_oauth":
+      return Just(authMethod.content.expiry_date);
+    case "api_key":
+    case "anthropic_setup_token":
+      return Nothing();
+    default:
+      return absurd(authMethod, "AuthMethod");
+  }
+}
+
 function authMethodLabel(authMethod: AuthMethod): string {
   switch (authMethod) {
     case "google_oauth":
     case "openai_oauth":
+    case "xai_oauth":
       return "OAuth";
     case "anthropic_setup_token":
       return "Setup Token";
     case "api_key":
       return "API Key";
     default:
-      return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";
+      return absurd(authMethod, "AuthMethod");
   }
 }
 
@@ -185,6 +202,8 @@ function authMethodDescription(ai: ProviderConfig): string {
       return "Google OAuth 2.0";
     case "openai_oauth":
       return "OpenAI Codex OAuth";
+    case "xai_oauth":
+      return "Grok Subscription OAuth";
     case "anthropic_setup_token":
       return "Claude Setup-Token";
     case "api_key":
@@ -195,6 +214,8 @@ function authMethodDescription(ai: ProviderConfig): string {
           return "Anthropic API Key";
         case "gemini":
           return "Google AI Studio API Key";
+        case "xai":
+          return "xAI API Key";
       }
     default:
       return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";

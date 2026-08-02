@@ -18,6 +18,7 @@ import { type ProviderConfig, type CommitConvention } from "@/domain/config/conf
 import { generateContentWithGemini } from "@/infra/llm/gemini";
 import { generateContentWithOpenAI } from "@/infra/llm/openai";
 import { generateContentWithAnthropic } from "@/infra/llm/anthropic";
+import { generateContentWithXai } from "@/infra/llm/xai";
 import { getPrompt, getRefinePrompt, getBranchNamePrompt } from "@/domain/commit/prompts";
 import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
 import { withTransientRetry } from "@/domain/llm/retry";
@@ -65,6 +66,7 @@ type ProviderGeneratedContent = {
 const modelRequestMetadata = (config: ProviderConfig, effectiveEffort: Maybe<string>): ModelRequestMetadata => {
   switch (config.provider) {
     case "openai":
+    case "xai":
       return {
         provider: config.provider,
         model: config.model,
@@ -100,6 +102,8 @@ const generateContent = (config: ProviderConfig, params: GenerateContentParams):
       return withRequestMetadata(config, generateContentWithOpenAI(config, params));
     case "anthropic":
       return withRequestMetadata(config, generateContentWithAnthropic(config, params));
+    case "xai":
+      return withRequestMetadata(config, generateContentWithXai(config, params));
   }
 };
 

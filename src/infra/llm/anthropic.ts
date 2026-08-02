@@ -106,6 +106,7 @@ const generateContentWithAnthropic = (config: AnthropicConfig, params: GenerateC
       return callAnthropicWithSetupToken(config.auth_method.content, config.model, config.effort, params);
     case "google_oauth":
     case "openai_oauth":
+    case "xai_oauth":
       return unsupportedAuth("anthropic", config.auth_method.type);
     default:
       return absurd(config.auth_method, "AuthMethod");

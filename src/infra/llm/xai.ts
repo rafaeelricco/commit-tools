@@ -34,6 +34,14 @@ const buildParams = (model: string, effort: Maybe<XaiEffort>, params: GenerateCo
 /** Grok accepts `reasoning_effort` on some models and rejects it on the rest, and `/v1/models` does not say which. */
 const isUnsupportedEffort = (error: unknown): boolean => error instanceof OpenAI.BadRequestError && /reasoning_effort/i.test(error.message);
 
+/** The proxy's minimum-version gate. Its own message says to run `grok update`, which does not apply here. */
+const isOutdatedClient = (error: unknown): boolean => error instanceof OpenAI.APIError && error.status === 426;
+
+const describeFailure = (error: unknown): string =>
+  isOutdatedClient(error) ?
+    `xAI rejected the client version. Bump XAI_CLIENT_VERSION in src/infra/auth/xai.ts to the version named here: ${error instanceof Error ? error.message : String(error)}`
+  : `Failed to create xAI completion: ${error instanceof Error ? error.message : String(error)}`;
+
 const requestCompletion = async (client: OpenAI, model: string, effort: Maybe<XaiEffort>, params: GenerateContentParams): Promise<Attempt> => {
   const attempt = async (attemptedEffort: Maybe<XaiEffort>): Promise<Attempt> => ({
     completion: await client.chat.completions.create(buildParams(model, attemptedEffort, params)),
@@ -55,7 +63,7 @@ const callXai = (
   params: GenerateContentParams
 ): Future<Error, ProviderGeneratedContent> =>
   Future.attemptP(() => requestCompletion(new OpenAI(options), model, effort, params))
-    .mapRej((error) => new Error(`Failed to create xAI completion: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
+    .mapRej((error) => new Error(describeFailure(error), { cause: error }))
     .chain(({ completion, attemptedEffort }) =>
       extractResponse({ text: fromOptional(completion.choices[0]?.message?.content ?? undefined) }).map((text) => ({
         text,

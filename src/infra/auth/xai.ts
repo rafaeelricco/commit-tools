@@ -39,14 +39,21 @@ const SCOPES = "openid profile email offline_access grok-cli:access api:access";
 const OAUTH_TIMEOUT_MS = 300_000;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+// `/chat/completions` on the proxy rejects requests with no client version (HTTP 426) and
+// enforces a server-side minimum, so this must be bumped whenever xAI raises it. Taken from
+// `crates/codegen/xai-grok-pager/Cargo.toml` in xai-org/grok-build (read 2026-08-01).
+// `/models` does not enforce it, so a stale value fails only at generation time.
+const XAI_CLIENT_VERSION = "0.2.117";
+
 /** xAI's API is OpenAI-compatible, so the `openai` client serves it with only a `baseURL` change. */
 const xaiApiKeyOptions = (apiKey: string): ClientOptions => ({ baseURL: XAI_API_BASE_URL, apiKey, maxRetries: 3, timeout: 120_000 });
 
 const xaiOAuthOptions = (accessToken: string): ClientOptions => ({
   baseURL: XAI_PROXY_BASE_URL,
   apiKey: accessToken,
-  // Tells the proxy the bearer is a user token rather than a deployment key.
-  defaultHeaders: { "X-XAI-Token-Auth": "xai-grok-cli" },
+  // `X-XAI-Token-Auth` tells the proxy the bearer is a user token rather than a deployment
+  // key; `x-grok-client-version` clears its minimum-version gate.
+  defaultHeaders: { "X-XAI-Token-Auth": "xai-grok-cli", "x-grok-client-version": XAI_CLIENT_VERSION },
   // The proxy meters a subscription, so SDK-level retries would multiply quota burn on a
   // 429. `withTransientRetry` already owns retry policy for every provider.
   maxRetries: 0,

@@ -15,6 +15,7 @@ vi.mock("openai", async (importOriginal) => {
 
   class MockOpenAI {
     static BadRequestError = actual.default.BadRequestError;
+    static APIError = actual.default.APIError;
     readonly chat = { completions: { create } };
     constructor(options: unknown) {
       constructed.push(options);
@@ -169,6 +170,27 @@ describe("generateContentWithXai", () => {
       defaultHeaders: { "X-XAI-Token-Auth": "xai-grok-cli" },
       maxRetries: 0
     });
+  });
+
+  it("points a version rejection at the constant rather than xAI's `grok update` advice", async () => {
+    const error = new OpenAI.APIError(
+      426,
+      undefined,
+      "Your Grok CLI version (none) is outdated. Please update to version 0.1.202 or later via `grok update`.",
+      new Headers()
+    );
+    create.mockRejectedValue(error);
+
+    await expect(runFuture(generateContentWithXai(configWith(Nothing()), { prompt: "diff" }))).rejects.toThrow(
+      /Bump XAI_CLIENT_VERSION in src\/infra\/auth\/xai\.ts/
+    );
+  });
+
+  it("keeps xAI's own text so the required version is visible", async () => {
+    const error = new OpenAI.APIError(426, undefined, "Please update to version 0.1.202 or later", new Headers());
+    create.mockRejectedValue(error);
+
+    await expect(runFuture(generateContentWithXai(configWith(Nothing()), { prompt: "diff" }))).rejects.toThrow(/0\.1\.202/);
   });
 
   it("rejects an auth method xAI does not support", async () => {

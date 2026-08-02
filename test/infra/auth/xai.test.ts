@@ -28,6 +28,14 @@ describe("xaiOAuthOptions", () => {
   it("disables SDK retries so a metered subscription is not burned three times over", () => {
     expect(xaiOAuthOptions("access").maxRetries).toBe(0);
   });
+
+  it("sends a client version clearing the proxy's minimum-version gate", () => {
+    const version = (xaiOAuthOptions("access").defaultHeaders as Record<string, string>)["x-grok-client-version"];
+
+    // The proxy returns 426 when the header is absent, and enforces a server-side floor.
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(version?.startsWith("0.1.")).toBe(false);
+  });
 });
 
 describe("buildXaiAuthUrl", () => {

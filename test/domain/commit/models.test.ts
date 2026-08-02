@@ -3,12 +3,36 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchModels } from "@/domain/commit/models";
 import { runFuture } from "@test/helpers/run-future";
 
+const list = vi.hoisted(() => vi.fn());
+const constructed = vi.hoisted(() => [] as unknown[]);
+
+vi.mock("openai", () => {
+  class MockOpenAI {
+    readonly models = { list };
+    constructor(options: unknown) {
+      constructed.push(options);
+    }
+  }
+
+  return { default: MockOpenAI };
+});
+
 const openAIOAuth = {
   type: "openai_oauth" as const,
   content: { access_token: "access", refresh_token: "refresh", expiry_date: 0 }
 };
 
-afterEach(() => vi.unstubAllGlobals());
+const asyncPageOf = (ids: string[]) => ({
+  async *[Symbol.asyncIterator]() {
+    for (const id of ids) yield { id };
+  }
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  list.mockReset();
+  constructed.length = 0;
+});
 
 describe("fetchModels", () => {
   it("preserves supported OpenAI efforts from the Codex catalog", async () => {
@@ -47,5 +71,18 @@ describe("fetchModels", () => {
       options: ["low", "medium", "high", "xhigh"],
       defaultValue: "low"
     });
+  });
+
+  it("lists xAI models sorted by id against the xAI base URL", async () => {
+    list.mockResolvedValue(asyncPageOf(["grok-4.5", "grok-3"]));
+
+    const models = await runFuture(fetchModels("xai", { type: "api_key", content: "xai-test" }));
+
+    expect(constructed[0]).toMatchObject({ baseURL: "https://api.x.ai/v1", apiKey: "xai-test" });
+    expect(models.map((m) => m.id)).toEqual(["grok-3", "grok-4.5"]);
+  });
+
+  it("rejects an auth method xAI does not support", async () => {
+    await expect(runFuture(fetchModels("xai", openAIOAuth))).rejects.toThrow("Unsupported auth method for xai");
   });
 });

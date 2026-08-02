@@ -7,6 +7,7 @@ export {
   type ProviderConfig,
   type OpenAIEffort,
   type OpenAIModelEffort,
+  type XaiEffort,
   type AnthropicEffort,
   type GeminiEffort,
   type Model,
@@ -18,6 +19,7 @@ export {
   resolveAuthMethod,
   COMMIT_CONVENTIONS,
   OPENAI_EFFORTS,
+  XAI_EFFORTS,
   ANTHROPIC_EFFORTS,
   GEMINI_EFFORTS
 };
@@ -73,6 +75,7 @@ const schema_AuthMethod = s.discriminatedUnion([
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 
 const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
+const XAI_EFFORTS = ["low", "high"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
 const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<AnthropicPkg.OutputConfig["effort"]>[];
 const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
 
@@ -81,6 +84,7 @@ type OpenAIModelEffort = {
   readonly options: readonly [OpenAIEffort, ...OpenAIEffort[]];
   readonly defaultValue: OpenAIEffort;
 };
+type XaiEffort = (typeof XAI_EFFORTS)[number];
 type AnthropicEffort = (typeof ANTHROPIC_EFFORTS)[number];
 type GeminiEffort = (typeof GEMINI_EFFORTS)[number];
 
@@ -102,6 +106,12 @@ const schema_ProviderConfig = s.discriminatedUnion([
     model: s.string,
     auth_method: schema_AuthMethod,
     effort: s.optionalMaybe(s.stringEnum([...ANTHROPIC_EFFORTS]))
+  }),
+  s.variant({
+    provider: "xai",
+    model: s.string,
+    auth_method: schema_AuthMethod,
+    effort: s.optionalMaybe(s.stringEnum([...XAI_EFFORTS]))
   })
 ]);
 type ProviderConfig = s.Infer<typeof schema_ProviderConfig>;
@@ -114,6 +124,8 @@ const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth
       return { provider: "anthropic", model: ai.model, auth_method, effort: ai.effort };
     case "gemini":
       return { provider: "gemini", model: ai.model, auth_method, effort: ai.effort };
+    case "xai":
+      return { provider: "xai", model: ai.model, auth_method, effort: ai.effort };
     default:
       return absurd(ai, "ProviderConfig");
   }

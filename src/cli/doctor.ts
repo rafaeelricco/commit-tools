@@ -210,6 +210,8 @@ function authMethodDescription(ai: ProviderConfig): string {
           return "Anthropic API Key";
         case "gemini":
           return "Google AI Studio API Key";
+        case "xai":
+          return "xAI API Key";
       }
     default:
       return "This should never happen. Please run 'commit-tools setup' to create a new configuration.";

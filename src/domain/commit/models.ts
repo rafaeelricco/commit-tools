@@ -4,9 +4,12 @@ import { Future } from "@/libs/future";
 import { OPENAI_EFFORTS, type Model, type OpenAIEffort, type OpenAIModelEffort, type ProviderConfig } from "@/domain/config/config";
 import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { anthropicOAuthHeaders } from "@/infra/auth/anthropic";
+import { xaiApiKeyOptions } from "@/infra/auth/xai";
+import { unsupportedAuth } from "@/domain/llm/auth-error";
+import { absurd } from "@/libs/types";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 
-import OpenAI from "openai";
+import OpenAI, { type ClientOptions } from "openai";
 
 type CodexModel = {
   readonly slug: string;
@@ -132,6 +135,29 @@ const fetchAnthropicModels = (authMethod: ProviderConfig["auth_method"]): Future
       .map((m) => ({ id: m.id, description: m.display_name ?? "", openaiEffort: Nothing<OpenAIModelEffort>() }));
   });
 
+const fetchXaiModelsWith = (options: ClientOptions): Future<Error, Model[]> =>
+  Future.attemptP(async () => {
+    const list = await new OpenAI(options).models.list();
+    const models: Array<{ id: string }> = [];
+    for await (const model of list) {
+      models.push(model);
+    }
+    return models.sort((a, b) => a.id.localeCompare(b.id)).map((m) => ({ id: m.id, description: "", openaiEffort: Nothing<OpenAIModelEffort>() }));
+  }).mapRej((error) => new Error(`Failed to fetch xAI models: ${error instanceof Error ? error.message : String(error)}`));
+
+const fetchXaiModels = (authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> => {
+  switch (authMethod.type) {
+    case "api_key":
+      return fetchXaiModelsWith(xaiApiKeyOptions(authMethod.content));
+    case "google_oauth":
+    case "openai_oauth":
+    case "anthropic_setup_token":
+      return unsupportedAuth("xai", authMethod.type);
+    default:
+      return absurd(authMethod, "AuthMethod");
+  }
+};
+
 const fetchModels = (provider: ProviderConfig["provider"], authMethod: ProviderConfig["auth_method"]): Future<Error, Model[]> => {
   switch (provider) {
     case "openai":
@@ -140,5 +166,7 @@ const fetchModels = (provider: ProviderConfig["provider"], authMethod: ProviderC
       return fetchGeminiModels(authMethod);
     case "anthropic":
       return fetchAnthropicModels(authMethod);
+    case "xai":
+      return fetchXaiModels(authMethod);
   }
 };

@@ -36,7 +36,8 @@ class Setup {
         options: [
           { value: "gemini", label: "Google" },
           { value: "openai", label: "OpenAI" },
-          { value: "anthropic", label: "Anthropic" }
+          { value: "anthropic", label: "Anthropic" },
+          { value: "xai", label: "xAI" }
         ],
         initialValue: "gemini" as const
       });
@@ -225,6 +226,14 @@ function getAuthMethodOptions(provider: ProviderConfig["provider"]): Option<Setu
           hint: "Paste an Anthropic API key (sk-ant-api...)"
         }
       ];
+    case "xai":
+      return [
+        {
+          value: "api_key",
+          label: "API Key",
+          hint: "Paste an xAI API key (xai-...)"
+        }
+      ];
   }
 }
 
@@ -236,6 +245,8 @@ function getInitialValue(provider: ProviderConfig["provider"]): SetupPreferences
       return "google_oauth";
     case "anthropic":
       return "anthropic_setup_token";
+    case "xai":
+      return "api_key";
   }
 }
 
@@ -254,5 +265,7 @@ function apiKeyPromptFor(provider: ProviderConfig["provider"]): ApiKeyPrompt {
       return { message: "Enter your GOOGLE_API_KEY:", validate: genericApiKeyValidator };
     case "anthropic":
       return { message: "Enter your ANTHROPIC_API_KEY (sk-ant-api...):", validate: validateAnthropicApiKey };
+    case "xai":
+      return { message: "Enter your XAI_API_KEY (xai-...):", validate: genericApiKeyValidator };
   }
 }

@@ -22,11 +22,14 @@ vi.mock("@/infra/llm/openai", () => ({
 vi.mock("@/infra/llm/anthropic", () => ({
   generateContentWithAnthropic: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Nothing() }))
 }));
+vi.mock("@/infra/llm/xai", () => ({
+  generateContentWithXai: vi.fn(() => Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Nothing() }))
+}));
 
 describe("generateCommitMessage", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(["gemini", "openai", "anthropic"] as const)("routes to %s provider", async (provider) => {
+  it.each(["gemini", "openai", "anthropic", "xai"] as const)("routes to %s provider", async (provider) => {
     const result = await runFuture(generateCommitMessage(mockProvider(provider), "diff", "conventional", Nothing()));
     expect(result.text).toBe("feat: test");
     expect(result.metadata.model.provider).toBe(provider);

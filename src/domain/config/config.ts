@@ -1,7 +1,7 @@
 export {
   type CommitConvention,
   type OAuthTokens,
-  type OpenAITokens,
+  type BearerTokens,
   type RefreshTokens,
   type AuthMethod,
   type ProviderConfig,
@@ -12,11 +12,10 @@ export {
   type Model,
   Config,
   schema_OAuthTokens,
-  schema_OpenAITokens,
+  schema_BearerTokens,
   schema_AuthMethod,
   schema_ProviderConfig,
   resolveAuthMethod,
-  AI_PROVIDERS,
   COMMIT_CONVENTIONS,
   OPENAI_EFFORTS,
   ANTHROPIC_EFFORTS,
@@ -35,8 +34,6 @@ import type AnthropicPkg from "@anthropic-ai/sdk";
 const COMMIT_CONVENTIONS = ["conventional", "imperative", "custom"] as const;
 type CommitConvention = (typeof COMMIT_CONVENTIONS)[number];
 
-const AI_PROVIDERS = ["gemini", "openai", "anthropic"] as const;
-
 const schema_OAuthTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
@@ -46,14 +43,14 @@ const schema_OAuthTokens = s.object({
 });
 type OAuthTokens = s.Infer<typeof schema_OAuthTokens>;
 
-const schema_OpenAITokens = s.object({
+const schema_BearerTokens = s.object({
   access_token: s.string,
   refresh_token: s.string,
   expiry_date: s.number
 });
-type OpenAITokens = s.Infer<typeof schema_OpenAITokens>;
+type BearerTokens = s.Infer<typeof schema_BearerTokens>;
 
-type RefreshTokens = OAuthTokens | OpenAITokens;
+type RefreshTokens = OAuthTokens | BearerTokens;
 
 const schema_AuthMethod = s.discriminatedUnion([
   s.variant({
@@ -66,7 +63,7 @@ const schema_AuthMethod = s.discriminatedUnion([
   }),
   s.variant({
     type: "openai_oauth",
-    content: schema_OpenAITokens
+    content: schema_BearerTokens
   }),
   s.variant({
     type: "anthropic_setup_token",

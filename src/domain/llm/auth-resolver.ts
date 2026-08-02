@@ -5,7 +5,7 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { resolveAuthMethod, type Config, type ProviderConfig, type RefreshTokens } from "@/domain/config/config";
 import { ensureFreshTokens } from "@/infra/auth/google";
 import { ensureFreshOpenAITokens } from "@/infra/auth/openai";
-import { updateGoogleTokens, updateOpenAITokens } from "@/infra/storage/config";
+import { updateOAuthTokens } from "@/infra/storage/config";
 import { absurd } from "@/libs/types";
 
 type DetectTokenChange = <T extends RefreshTokens>(original: T, fresh: T) => Maybe<T>;
@@ -35,13 +35,13 @@ const resolveProvider: ResolveProvider = (config) => {
       return Future.resolve(ai);
 
     case "google_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, updateGoogleTokens).map((tokens) =>
-        resolveAuthMethod(ai, { type: "google_oauth", content: tokens })
+      return refreshAndPersist(ai.auth_method.content, ensureFreshTokens, (content) => updateOAuthTokens({ type: "google_oauth", content })).map(
+        (tokens) => resolveAuthMethod(ai, { type: "google_oauth", content: tokens })
       );
 
     case "openai_oauth":
-      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, updateOpenAITokens).map((tokens) =>
-        resolveAuthMethod(ai, { type: "openai_oauth", content: tokens })
+      return refreshAndPersist(ai.auth_method.content, ensureFreshOpenAITokens, (content) => updateOAuthTokens({ type: "openai_oauth", content })).map(
+        (tokens) => resolveAuthMethod(ai, { type: "openai_oauth", content: tokens })
       );
 
     default:

@@ -1,6 +1,6 @@
 export { performOpenAIOAuthFlow, ensureFreshOpenAITokens, validateOpenAITokens, getOpenAIAccessToken };
 
-import { type OpenAITokens } from "@/domain/config/config";
+import { type BearerTokens } from "@/domain/config/config";
 import { SUCCESS_HTML, ERROR_HTML } from "@/infra/auth/templates";
 import { Future } from "@/libs/future";
 import { randomBytes, createHash } from "node:crypto";
@@ -114,7 +114,7 @@ const openBrowser = (url: string): Future<Error, void> =>
     return Future.resolve(undefined);
   });
 
-const exchangeCodeForTokens = (code: string, codeVerifier: string, redirectUri: string): Future<Error, OpenAITokens> =>
+const exchangeCodeForTokens = (code: string, codeVerifier: string, redirectUri: string): Future<Error, BearerTokens> =>
   Future.attemptP(async () => {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
@@ -152,7 +152,7 @@ const exchangeCodeForTokens = (code: string, codeVerifier: string, redirectUri: 
     };
   }).mapRej((e) => new Error(`Token exchange failed: ${e}`));
 
-const performOpenAIOAuthFlow = (): Future<Error, OpenAITokens> =>
+const performOpenAIOAuthFlow = (): Future<Error, BearerTokens> =>
   findAvailablePort().chain((port) => {
     const redirectUri = `http://localhost:${port}/auth/callback`;
     const codeVerifier = generateCodeVerifier();
@@ -171,7 +171,7 @@ const performOpenAIOAuthFlow = (): Future<Error, OpenAITokens> =>
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("originator", "codex_cli_rs");
 
-    return Future.bracket<Error, CallbackServer, OpenAITokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
+    return Future.bracket<Error, CallbackServer, BearerTokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
       const waitForCode: Future<Error, string> = openBrowser(authUrl.toString()).chain(() => Future.attemptP(() => cs.codePromise));
 
       const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
@@ -183,7 +183,7 @@ const performOpenAIOAuthFlow = (): Future<Error, OpenAITokens> =>
     });
   });
 
-const ensureFreshOpenAITokens = (tokens: OpenAITokens): Future<Error, OpenAITokens> => {
+const ensureFreshOpenAITokens = (tokens: BearerTokens): Future<Error, BearerTokens> => {
   const isExpired = tokens.expiry_date <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
 
   if (!isExpired) {
@@ -230,8 +230,8 @@ const ensureFreshOpenAITokens = (tokens: OpenAITokens): Future<Error, OpenAIToke
   });
 };
 
-const validateOpenAITokens = (tokens: OpenAITokens): Future<Error, void> =>
+const validateOpenAITokens = (tokens: BearerTokens): Future<Error, void> =>
   tokens.access_token && tokens.access_token.length > 0 ? Future.resolve(undefined) : Future.reject(new Error("No valid OpenAI access token available"));
 
-const getOpenAIAccessToken = (tokens: OpenAITokens): Future<Error, string> =>
+const getOpenAIAccessToken = (tokens: BearerTokens): Future<Error, string> =>
   tokens.access_token ? Future.resolve(tokens.access_token) : Future.reject(new Error("No OpenAI access token provided"));

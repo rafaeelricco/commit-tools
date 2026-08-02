@@ -1,4 +1,4 @@
-export { loadConfig, saveConfig, updateGoogleTokens, updateOpenAITokens, configDir, configFile };
+export { loadConfig, saveConfig, updateOAuthTokens, configDir, configFile };
 
 import * as s from "@/libs/json/schema";
 
@@ -7,8 +7,7 @@ import { Success, Failure, type Result } from "@/libs/result";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { Config, resolveAuthMethod, type OAuthTokens, type OpenAITokens } from "@/domain/config/config";
-import { absurd } from "@/libs/types";
+import { Config, resolveAuthMethod, type RefreshTokens } from "@/domain/config/config";
 
 const configDir = (): string => (process.env["COMMIT_TOOLS_HOME"] ? resolve(process.env["COMMIT_TOOLS_HOME"]) : resolve(homedir(), ".commit-tools"));
 const configFile = (): string => resolve(configDir(), "config.json");
@@ -45,38 +44,12 @@ const saveConfig = (config: Config): Future<Error, void> =>
     await writeFile(configFile(), JSON.stringify(s.encode(Config, config), null, 2), "utf-8");
   });
 
-const updateGoogleTokens = (tokens: OAuthTokens): Future<Error, void> =>
-  loadConfig().chain((config) => {
-    switch (config.ai.auth_method.type) {
-      case "google_oauth":
-        return saveConfig({
-          ai: resolveAuthMethod(config.ai, { type: "google_oauth", content: tokens }),
-          commit_convention: config.commit_convention,
-          custom_template: config.custom_template
-        });
-      case "api_key":
-      case "openai_oauth":
-      case "anthropic_setup_token":
-        return Future.reject<Error, void>(new Error("Cannot update tokens: not using Google OAuth authentication"));
-      default:
-        return absurd(config.ai.auth_method, "AuthMethod");
-    }
-  });
+/** The auth variants whose `content` is a refreshable token pair. Widens on its own when a new one is added. */
+type RefreshableAuthMethod = Extract<Config["ai"]["auth_method"], { content: RefreshTokens }>;
 
-const updateOpenAITokens = (tokens: OpenAITokens): Future<Error, void> =>
-  loadConfig().chain((config) => {
-    switch (config.ai.auth_method.type) {
-      case "openai_oauth":
-        return saveConfig({
-          ai: resolveAuthMethod(config.ai, { type: "openai_oauth", content: tokens }),
-          commit_convention: config.commit_convention,
-          custom_template: config.custom_template
-        });
-      case "api_key":
-      case "google_oauth":
-      case "anthropic_setup_token":
-        return Future.reject<Error, void>(new Error("Cannot update tokens: not using OpenAI OAuth authentication"));
-      default:
-        return absurd(config.ai.auth_method, "AuthMethod");
-    }
-  });
+const updateOAuthTokens = (auth_method: RefreshableAuthMethod): Future<Error, void> =>
+  loadConfig().chain((config) =>
+    config.ai.auth_method.type === auth_method.type ?
+      saveConfig({ ...config, ai: resolveAuthMethod(config.ai, auth_method) })
+    : Future.reject<Error, void>(new Error(`Cannot update tokens: config is not using ${auth_method.type} authentication`))
+  );

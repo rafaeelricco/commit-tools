@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { readFile } from "node:fs/promises";
-import { loadConfig, saveConfig, configFile } from "@/infra/storage/config";
-import { Nothing } from "@/libs/maybe";
+import { loadConfig, saveConfig, updateOAuthTokens, configFile } from "@/infra/storage/config";
+import { Just, Nothing } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
@@ -19,6 +19,8 @@ const sampleConfig = (): ConfigValue => ({
   }
 });
 
+const staleTokens = () => ({ access_token: "stale", refresh_token: "r1", expiry_date: 1 });
+
 describe("config storage", () => {
   beforeEach(async () => {
     await runFuture(saveConfig(sampleConfig()));
@@ -29,6 +31,38 @@ describe("config storage", () => {
     expect(loaded.ai.provider).toBe("openai");
     const raw = await readFile(configFile(), "utf-8");
     expect(JSON.parse(raw).ai.provider).toBe("openai");
+  });
+
+  it("updateOAuthTokens persists new tokens when the config uses that auth method", async () => {
+    await runFuture(saveConfig({ ...sampleConfig(), ai: { ...sampleConfig().ai, auth_method: { type: "openai_oauth", content: staleTokens() } } }));
+
+    await runFuture(updateOAuthTokens({ type: "openai_oauth", content: { access_token: "fresh", refresh_token: "r2", expiry_date: 2 } }));
+
+    const loaded = await runFuture(loadConfig());
+    if (loaded.ai.auth_method.type !== "openai_oauth") throw new Error("expected openai_oauth");
+    expect(loaded.ai.auth_method.content.access_token).toBe("fresh");
+    expect(loaded.ai.auth_method.content.expiry_date).toBe(2);
+  });
+
+  it("updateOAuthTokens rejects when the config uses a different auth method", async () => {
+    await expect(runFuture(updateOAuthTokens({ type: "openai_oauth", content: staleTokens() }))).rejects.toThrow(/not using openai_oauth/);
+  });
+
+  it("updateOAuthTokens leaves sibling config fields untouched", async () => {
+    await runFuture(
+      saveConfig({
+        commit_convention: "imperative",
+        custom_template: Just("tpl"),
+        ai: { ...sampleConfig().ai, auth_method: { type: "openai_oauth", content: staleTokens() } }
+      })
+    );
+
+    await runFuture(updateOAuthTokens({ type: "openai_oauth", content: { access_token: "fresh", refresh_token: "r2", expiry_date: 2 } }));
+
+    const loaded = await runFuture(loadConfig());
+    expect(loaded.commit_convention).toBe("imperative");
+    expect(loaded.custom_template).toBeInstanceOf(Just);
+    expect(loaded.ai.model).toBe("gpt-4.1-mini");
   });
 
   it("rejects invalid JSON on load with a clear error", async () => {

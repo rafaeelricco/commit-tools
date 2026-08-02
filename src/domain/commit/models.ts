@@ -4,7 +4,7 @@ import { Future } from "@/libs/future";
 import { OPENAI_EFFORTS, type Model, type OpenAIEffort, type OpenAIModelEffort, type ProviderConfig } from "@/domain/config/config";
 import { getOpenAIAccessToken } from "@/infra/auth/openai";
 import { anthropicOAuthHeaders } from "@/infra/auth/anthropic";
-import { xaiApiKeyOptions } from "@/infra/auth/xai";
+import { xaiApiKeyOptions, xaiOAuthOptions } from "@/infra/auth/xai";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { absurd } from "@/libs/types";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
@@ -149,6 +149,8 @@ const fetchXaiModels = (authMethod: ProviderConfig["auth_method"]): Future<Error
   switch (authMethod.type) {
     case "api_key":
       return fetchXaiModelsWith(xaiApiKeyOptions(authMethod.content));
+    case "xai_oauth":
+      return fetchXaiModelsWith(xaiOAuthOptions(authMethod.content.access_token));
     case "google_oauth":
     case "openai_oauth":
     case "anthropic_setup_token":

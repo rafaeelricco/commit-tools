@@ -117,6 +117,7 @@ const generateContentWithGemini = (config: GeminiConfig, params: GenerateContent
       return generateContentWithOAuth(config.auth_method.content, config.model, config.effort, params);
     case "openai_oauth":
     case "anthropic_setup_token":
+    case "xai_oauth":
       return unsupportedAuth("gemini", config.auth_method.type);
     default:
       return absurd(config.auth_method, "AuthMethod");

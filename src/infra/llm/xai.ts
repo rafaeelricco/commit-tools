@@ -5,7 +5,7 @@ import OpenAI, { type ClientOptions } from "openai";
 import { type Config, type XaiEffort } from "@/domain/config/config";
 import { type GenerateContentParams, type ProviderGeneratedContent, type TokenUsage } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
-import { xaiApiKeyOptions } from "@/infra/auth/xai";
+import { xaiApiKeyOptions, xaiOAuthOptions, getXaiAccessToken } from "@/infra/auth/xai";
 import { extractResponse } from "@/domain/llm/response-parser";
 import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { absurd } from "@/libs/types";
@@ -68,6 +68,10 @@ const generateContentWithXai = (config: XaiConfig, params: GenerateContentParams
   switch (config.auth_method.type) {
     case "api_key":
       return callXai(xaiApiKeyOptions(config.auth_method.content), config.model, config.effort, params);
+    case "xai_oauth":
+      return getXaiAccessToken(config.auth_method.content).chain((accessToken) =>
+        callXai(xaiOAuthOptions(accessToken), config.model, config.effort, params)
+      );
     case "google_oauth":
     case "openai_oauth":
     case "anthropic_setup_token":

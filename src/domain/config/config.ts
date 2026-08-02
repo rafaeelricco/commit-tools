@@ -70,6 +70,10 @@ const schema_AuthMethod = s.discriminatedUnion([
   s.variant({
     type: "anthropic_setup_token",
     content: s.string
+  }),
+  s.variant({
+    type: "xai_oauth",
+    content: schema_BearerTokens
   })
 ]);
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];

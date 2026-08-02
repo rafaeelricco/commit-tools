@@ -136,6 +136,7 @@ const generateContentWithOpenAI = (config: OpenAIConfig, params: GenerateContent
       );
     case "google_oauth":
     case "anthropic_setup_token":
+    case "xai_oauth":
       return unsupportedAuth("openai", config.auth_method.type);
     default:
       return absurd(config.auth_method, "AuthMethod");

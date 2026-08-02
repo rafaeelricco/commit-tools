@@ -154,6 +154,23 @@ describe("generateContentWithXai", () => {
     await expect(runFuture(generateContentWithXai(configWith(Nothing()), { prompt: "diff" }))).rejects.toThrow("Response text is empty or missing");
   });
 
+  it("routes subscription OAuth through the CLI proxy with the user-token header", async () => {
+    create.mockResolvedValue(completion);
+    const config = {
+      ...configWith(Nothing()),
+      auth_method: { type: "xai_oauth" as const, content: { access_token: "grok-access", refresh_token: "r", expiry_date: 1 } }
+    };
+
+    await runFuture(generateContentWithXai(config, { prompt: "diff" }));
+
+    expect(constructed[0]).toMatchObject({
+      baseURL: "https://cli-chat-proxy.grok.com/v1",
+      apiKey: "grok-access",
+      defaultHeaders: { "X-XAI-Token-Auth": "xai-grok-cli" },
+      maxRetries: 0
+    });
+  });
+
   it("rejects an auth method xAI does not support", async () => {
     const config = {
       ...configWith(Nothing()),

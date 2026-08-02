@@ -171,6 +171,7 @@ function tokenExpiry(authMethod: ProviderConfig["auth_method"]): Maybe<number> {
   switch (authMethod.type) {
     case "google_oauth":
     case "openai_oauth":
+    case "xai_oauth":
       return Just(authMethod.content.expiry_date);
     case "api_key":
     case "anthropic_setup_token":
@@ -184,6 +185,7 @@ function authMethodLabel(authMethod: AuthMethod): string {
   switch (authMethod) {
     case "google_oauth":
     case "openai_oauth":
+    case "xai_oauth":
       return "OAuth";
     case "anthropic_setup_token":
       return "Setup Token";
@@ -200,6 +202,8 @@ function authMethodDescription(ai: ProviderConfig): string {
       return "Google OAuth 2.0";
     case "openai_oauth":
       return "OpenAI Codex OAuth";
+    case "xai_oauth":
+      return "Grok Subscription OAuth";
     case "anthropic_setup_token":
       return "Claude Setup-Token";
     case "api_key":

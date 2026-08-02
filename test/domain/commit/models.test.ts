@@ -82,6 +82,14 @@ describe("fetchModels", () => {
     expect(models.map((m) => m.id)).toEqual(["grok-3", "grok-4.5"]);
   });
 
+  it("lists xAI models over subscription OAuth through the CLI proxy", async () => {
+    list.mockResolvedValue(asyncPageOf(["grok-4.5"]));
+
+    await runFuture(fetchModels("xai", { type: "xai_oauth", content: { access_token: "grok-access", refresh_token: "r", expiry_date: 1 } }));
+
+    expect(constructed[0]).toMatchObject({ baseURL: "https://cli-chat-proxy.grok.com/v1", defaultHeaders: { "X-XAI-Token-Auth": "xai-grok-cli" } });
+  });
+
   it("rejects an auth method xAI does not support", async () => {
     await expect(runFuture(fetchModels("xai", openAIOAuth))).rejects.toThrow("Unsupported auth method for xai");
   });

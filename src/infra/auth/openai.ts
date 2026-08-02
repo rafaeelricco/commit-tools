@@ -2,9 +2,17 @@ export { performOpenAIOAuthFlow, ensureFreshOpenAITokens, validateOpenAITokens, 
 
 import { type BearerTokens } from "@/domain/config/config";
 import { SUCCESS_HTML, ERROR_HTML } from "@/infra/auth/templates";
+import {
+  type CallbackServer,
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+  stopCallbackServer,
+  openBrowser,
+  oauthTimeout
+} from "@/infra/auth/oauth";
 import { Future } from "@/libs/future";
-import { randomBytes, createHash } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer } from "node:http";
 
 const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_ISSUER = "https://auth.openai.com";
@@ -15,16 +23,6 @@ const OAUTH_TIMEOUT_MS = 300_000;
 const DEFAULT_PORT = 1455;
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
-
-type CallbackServer = {
-  readonly server: Server;
-  readonly port: number;
-  readonly codePromise: Promise<string>;
-};
-
-const generateCodeVerifier = (): string => randomBytes(32).toString("base64url");
-
-const generateCodeChallenge = (verifier: string): string => createHash("sha256").update(verifier).digest("base64url");
 
 const findAvailablePort = (): Future<Error, number> =>
   Future.create<Error, number>((reject, resolve) => {
@@ -97,23 +95,6 @@ const startCallbackServer = (port: number, state: string): Future<Error, Callbac
     });
   });
 
-const stopCallbackServer = (cs: CallbackServer): Future<Error, void> =>
-  Future.create<Error, void>((_, resolve) => {
-    cs.server.close(() => {
-      resolve(undefined);
-    });
-  });
-
-const openBrowser = (url: string): Future<Error, void> =>
-  Future.attemptP(async () => {
-    const open = (await import("open")).default;
-    await open(url);
-  }).chainRej((_) => {
-    console.log("\nCould not open browser automatically.");
-    console.log(`Please open the following URL in your browser:\n${url}\n`);
-    return Future.resolve(undefined);
-  });
-
 const exchangeCodeForTokens = (code: string, codeVerifier: string, redirectUri: string): Future<Error, BearerTokens> =>
   Future.attemptP(async () => {
     const body = new URLSearchParams({
@@ -157,7 +138,7 @@ const performOpenAIOAuthFlow = (): Future<Error, BearerTokens> =>
     const redirectUri = `http://localhost:${port}/auth/callback`;
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
-    const state = randomBytes(32).toString("base64url");
+    const state = generateState();
 
     const authUrl = new URL(OPENAI_AUTH_URL);
     authUrl.searchParams.set("response_type", "code");
@@ -174,12 +155,9 @@ const performOpenAIOAuthFlow = (): Future<Error, BearerTokens> =>
     return Future.bracket<Error, CallbackServer, BearerTokens, void>(startCallbackServer(port, state), stopCallbackServer, (cs) => {
       const waitForCode: Future<Error, string> = openBrowser(authUrl.toString()).chain(() => Future.attemptP(() => cs.codePromise));
 
-      const timeout: Future<Error, string> = Future.create<Error, string>((reject) => {
-        const timer = setTimeout(() => reject(new Error("OAuth flow timed out after 5 minutes. Please try again.")), OAUTH_TIMEOUT_MS);
-        return () => clearTimeout(timer);
-      });
+      const timeout = oauthTimeout(OAUTH_TIMEOUT_MS, "OAuth flow timed out after 5 minutes. Please try again.");
 
-      return Future.race(waitForCode, timeout).chain((code) => exchangeCodeForTokens(code, codeVerifier, redirectUri));
+      return Future.race<Error, string>(waitForCode, timeout).chain((code) => exchangeCodeForTokens(code, codeVerifier, redirectUri));
     });
   });
 

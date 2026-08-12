@@ -97,6 +97,7 @@ You will be prompted to choose:
   - Anthropic: Claude setup-token or API key
   - xAI: Sign in with Grok or API key
 - **Commit convention**: Conventional, Imperative, or Custom
+- **Split commits**: whether `commit` should analyze staged files and open a multi-commit plan when they look independent
 
 If you want to use your claude.ai subscription with Anthropic, run `claude setup-token` in another terminal first, then paste the generated setup-token during `commit setup`.
 
@@ -160,7 +161,7 @@ Or explicitly:
 commit generate
 ```
 
-`commit split` for a multi-commit plan.
+With split enabled in setup, `commit` analyzes staged files and opens a multi-commit plan when they look independent. `commit split` always opens that plan. From a single-message prompt you can also pick Split.
 
 ### System Checks
 
@@ -200,7 +201,7 @@ commit --help
 | ------------------------ | ------------------------------------------------- |
 | `commit`                 | Generate a commit message (default)               |
 | `commit generate`        | Generate a commit message                         |
-| `commit split`           | Split staged changes into multiple commits        |
+| `commit split`           | Force a multi-commit plan from staged changes     |
 | `commit setup`           | Configure authentication and conventions          |
 | `commit login`           | Alias for setup — re-authenticate                 |
 | `commit doctor`          | Check installation and environment                |

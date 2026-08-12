@@ -4,7 +4,7 @@ import * as D from "@/libs/json/decoder";
 import { Failure, Success, type Result } from "@/libs/result";
 
 type SplitCommit = { readonly message: string; readonly files: readonly string[] };
-type SplitPlan = { readonly commits: readonly SplitCommit[] };
+type SplitPlan = { readonly commits: readonly SplitCommit[]; readonly shouldSplit: boolean };
 
 const REMAINING_STAGED_MESSAGE = "Commit remaining staged changes";
 
@@ -24,8 +24,9 @@ const splitCommitDecoder: D.Decoder<SplitCommit> = D.object({
 });
 
 const splitPlanDecoder: D.Decoder<SplitPlan> = D.object({
+  should_split: D.boolean,
   commits: D.array(splitCommitDecoder).chain((xs) => (xs.length === 0 ? D.fail("expected at least 1 commit") : D.succeed(xs)))
-});
+}).map(({ should_split, commits }) => ({ shouldSplit: should_split, commits }));
 
 const stripOptionalJsonFence = (s: string): string => {
   const t = s.trim();
@@ -41,8 +42,17 @@ const stripOptionalJsonFence = (s: string): string => {
   return body.slice(0, close).trim();
 };
 
+const extractJsonObject = (s: string): string => {
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    return s;
+  }
+  return s.slice(start, end + 1);
+};
+
 const parseSplitPlan = (raw: string): Result<Error, SplitPlan> => {
-  const trimmed = stripOptionalJsonFence(raw.trim());
+  const trimmed = extractJsonObject(stripOptionalJsonFence(raw.trim()));
   let json: unknown;
   try {
     json = JSON.parse(trimmed);
@@ -70,7 +80,18 @@ const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Res
   if (leftover.length === 0) {
     return Success(plan);
   }
+  if (!plan.shouldSplit) {
+    const [first, ...rest] = plan.commits;
+    if (first === undefined) {
+      return Failure(new Error("Split plan: expected at least 1 commit"));
+    }
+    return Success({
+      shouldSplit: false,
+      commits: [{ message: first.message, files: [...first.files, ...leftover] }, ...rest]
+    });
+  }
   return Success({
+    shouldSplit: true,
     commits: [...plan.commits, { message: REMAINING_STAGED_MESSAGE, files: leftover }]
   });
 };

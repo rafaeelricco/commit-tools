@@ -83,9 +83,7 @@ describe("generateSplitPlan", () => {
       should_split: false,
       commits: [{ message: "feat: a", files: ["a.ts"] }]
     });
-    vi.mocked(generateContentWithOpenAI).mockReturnValue(
-      Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("low") })
-    );
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("low") }));
     const config = { ...mockProvider("openai"), effort: Just("high") } as ProviderConfig;
     await runFuture(generateSplitPlan(config, "diff", ["a.ts"], "conventional", Nothing()));
     expect(generateContentWithOpenAI.mock.calls[0]?.[0].effort).toEqual(Just("low"));

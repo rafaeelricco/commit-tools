@@ -6,7 +6,7 @@ import { Failure, Success, type Result } from "@/libs/result";
 import { fromOptional, Just, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
-const ALIAS_TARGETS = ["generate", "branch", "setup", "doctor", "model", "effort", "update"] as const;
+const ALIAS_TARGETS = ["generate", "split", "branch", "setup", "doctor", "model", "effort", "update"] as const;
 type AliasTarget = (typeof ALIAS_TARGETS)[number];
 
 const NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/;
@@ -57,6 +57,8 @@ const describeTarget = (target: AliasTarget): string => {
   switch (target) {
     case "generate":
       return "Generate a commit message";
+    case "split":
+      return "Split staged changes into multiple commits";
     case "branch":
       return "Suggest branch names and create one";
     case "setup":

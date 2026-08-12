@@ -160,6 +160,8 @@ Or explicitly:
 commit generate
 ```
 
+`commit split` for a multi-commit plan.
+
 ### System Checks
 
 Verify your installation, environment, and configuration:
@@ -198,6 +200,7 @@ commit --help
 | ------------------------ | ------------------------------------------------- |
 | `commit`                 | Generate a commit message (default)               |
 | `commit generate`        | Generate a commit message                         |
+| `commit split`           | Split staged changes into multiple commits        |
 | `commit setup`           | Configure authentication and conventions          |
 | `commit login`           | Alias for setup — re-authenticate                 |
 | `commit doctor`          | Check installation and environment                |

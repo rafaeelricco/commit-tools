@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { generateCommitMessage, refineCommitMessage } from "@/domain/llm/router";
+import { generateCommitMessage, refineCommitMessage, generateSplitPlan } from "@/domain/llm/router";
 import { Future } from "@/libs/future";
 import { Just, Nothing } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
@@ -52,5 +52,25 @@ describe("refineCommitMessage", () => {
 
     const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
     expect(result.metadata.model.effort).toBe("provider default");
+  });
+});
+
+describe("generateSplitPlan", () => {
+  it("parses provider JSON into commits", async () => {
+    const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
+    const json = JSON.stringify({
+      commits: [
+        { message: "feat: a", files: ["a.ts"] },
+        { message: "feat: b", files: ["b.ts"] }
+      ]
+    });
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Nothing() }));
+
+    const result = await runFuture(generateSplitPlan(mockProvider("openai"), "diff", ["a.ts", "b.ts"], "conventional", Nothing()));
+    expect(result.plan.commits).toEqual([
+      { message: "feat: a", files: ["a.ts"] },
+      { message: "feat: b", files: ["b.ts"] }
+    ]);
+    expect(result.metadata.model.provider).toBe("openai");
   });
 });

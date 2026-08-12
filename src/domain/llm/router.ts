@@ -9,7 +9,9 @@ export {
   type BranchSuggestion,
   generateCommitMessage,
   refineCommitMessage,
-  generateBranchNameSuggestions
+  generateBranchNameSuggestions,
+  generateSplitPlan,
+  type SplitPlanContent
 };
 
 import { Future } from "@/libs/future";
@@ -19,8 +21,9 @@ import { generateContentWithGemini } from "@/infra/llm/gemini";
 import { generateContentWithOpenAI } from "@/infra/llm/openai";
 import { generateContentWithAnthropic } from "@/infra/llm/anthropic";
 import { generateContentWithXai } from "@/infra/llm/xai";
-import { getPrompt, getRefinePrompt, getBranchNamePrompt } from "@/domain/commit/prompts";
+import { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt } from "@/domain/commit/prompts";
 import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
+import { parseAndValidateSplitPlan, type SplitPlan } from "@/domain/split/plan";
 import { withTransientRetry } from "@/domain/llm/retry";
 import { Maybe, Nothing } from "@/libs/maybe";
 
@@ -56,6 +59,8 @@ type BranchNameSuggestions = {
   readonly names: readonly [BranchSuggestion, BranchSuggestion, BranchSuggestion];
   readonly metadata: LlmRequestMetadata;
 };
+
+type SplitPlanContent = { readonly plan: SplitPlan; readonly metadata: LlmRequestMetadata };
 
 type ProviderGeneratedContent = {
   readonly text: string;
@@ -130,5 +135,18 @@ const generateBranchNameSuggestions = (config: ProviderConfig, context: string):
         names,
         metadata: gc.metadata
       }))
+    )
+  );
+
+const generateSplitPlan = (
+  config: ProviderConfig,
+  diff: string,
+  files: readonly string[],
+  convention: CommitConvention,
+  customTemplate: Maybe<string>
+): Future<Error, SplitPlanContent> =>
+  withTransientRetry(() =>
+    generateContent(config, { prompt: getSplitPrompt(diff, files, convention, customTemplate) }).chain((gc) =>
+      resultToFuture(parseAndValidateSplitPlan(gc.text, files)).map((plan) => ({ plan, metadata: gc.metadata }))
     )
   );

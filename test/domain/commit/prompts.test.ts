@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPrompt, getRefinePrompt } from "@/domain/commit/prompts";
+import { getPrompt, getRefinePrompt, getSplitPrompt } from "@/domain/commit/prompts";
 import { Just, Nothing } from "@/libs/maybe";
 
 const DIFF = "diff --git a/foo.ts b/foo.ts\n+console.log(1)";
@@ -27,6 +27,16 @@ describe("getPrompt", () => {
   it("falls back to imperative when custom has no template", () => {
     const prompt = getPrompt(DIFF, "custom", Nothing());
     expect(prompt).toContain("imperative");
+  });
+});
+
+describe("getSplitPrompt", () => {
+  it("embeds diff, file list, and commits", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional");
+    expect(prompt).toContain(DIFF);
+    expect(prompt).toContain("foo.ts");
+    expect(prompt).toContain("bar.ts");
+    expect(prompt).toContain("commits");
   });
 });
 

@@ -1,4 +1,5 @@
 import { Commit } from "@/cli/commit";
+import { Split } from "@/cli/split";
 import { Branch } from "@/cli/branch";
 import { Setup } from "@/cli/setup";
 import { Doctor } from "@/cli/doctor";
@@ -13,7 +14,7 @@ import { checkUpdate } from "@/cli/update";
 
 import color from "picocolors";
 
-const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort", "branch", "alias"]);
+const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "split", "setup", "doctor", "model", "effort", "branch", "alias"]);
 
 const main = () => {
   const args = process.argv.slice(2);
@@ -29,6 +30,8 @@ const main = () => {
       switch (command.type) {
         case "generate":
           return Commit.create().chain((c) => c.run());
+        case "split":
+          return Split.create().chain((s) => s.run());
         case "setup":
           return Setup.create().chain((s) => s.run());
         case "doctor":

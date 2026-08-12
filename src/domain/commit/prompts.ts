@@ -1,4 +1,4 @@
-export { getPrompt, getRefinePrompt, getBranchNamePrompt };
+export { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt };
 
 import { CommitConvention } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
@@ -273,6 +273,27 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
       template satisfies never;
       return promptImperative(gitDiff);
   }
+}
+
+function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
+  return `
+      ${getPrompt(diff, convention, customTemplate)}
+
+      <staged_files>
+        ${files.join("\n")}
+      </staged_files>
+
+      <output_shape>
+        Return ONE JSON object. First character "{", last "}".
+        {"commits":[{"message":"<commit message>","files":["<exact path>",...]}]}
+      </output_shape>
+      <partition_rules>
+        - Use only paths from <staged_files>. Exact strings.
+        - Every staged path in exactly one commit.
+        - Prefer 2+ commits when files have distinct concerns; 1 commit is allowed if they are one change.
+        - Each message follows the active convention (SMALL/MEDIUM/LARGE shape).
+      </partition_rules>
+  `;
 }
 
 function getBranchNamePrompt(context: string): string {

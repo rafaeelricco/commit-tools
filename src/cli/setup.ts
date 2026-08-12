@@ -23,6 +23,7 @@ type SetupPreferences = {
   readonly customTemplate: string | undefined;
   readonly provider: ProviderConfig["provider"];
   readonly authMethod: "google_oauth" | "openai_oauth" | "xai_oauth" | "api_key" | "anthropic_setup_token";
+  readonly splitCommits: boolean;
 };
 
 class Setup {
@@ -67,6 +68,16 @@ class Setup {
         customTemplate = template;
       }
 
+      const splitCommits = await p.select({
+        message: "Analyze staged files and split them when they look independent?",
+        options: [
+          { value: true, label: "Auto — split when needed (recommended)" },
+          { value: false, label: "No — always one commit" }
+        ],
+        initialValue: true as const
+      });
+      if (p.isCancel(splitCommits)) throw new Error("Setup cancelled");
+
       const authMethod = await p.select({
         message: "Select authentication method:",
         options: getAuthMethodOptions(provider),
@@ -79,7 +90,8 @@ class Setup {
         convention: convention,
         customTemplate,
         provider: provider,
-        authMethod: authMethod
+        authMethod: authMethod,
+        splitCommits
       });
     });
   }
@@ -103,7 +115,8 @@ class Setup {
     return {
       ai,
       commit_convention: this.preferences.convention,
-      custom_template: this.preferences.customTemplate ? Just(this.preferences.customTemplate) : Nothing()
+      custom_template: this.preferences.customTemplate ? Just(this.preferences.customTemplate) : Nothing(),
+      split_commits: this.preferences.splitCommits
     };
   }
 

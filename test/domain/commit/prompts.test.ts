@@ -37,6 +37,20 @@ describe("getSplitPrompt", () => {
     expect(prompt).toContain("foo.ts");
     expect(prompt).toContain("bar.ts");
     expect(prompt).toContain("commits");
+    expect(prompt).toContain("should_split");
+  });
+
+  it("forbids commit-message-only output and requires JSON-only output", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional");
+    expect(prompt).not.toMatch(/output ONLY the final commit message/i);
+    expect(prompt).toContain("Emit ONLY the JSON object");
+  });
+
+  it("prefers split across unrelated layers", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional");
+    expect(prompt).toContain("Prefer should_split=true");
+    expect(prompt).toContain("unrelated layers");
+    expect(prompt).not.toContain("should_split=true only when");
   });
 });
 

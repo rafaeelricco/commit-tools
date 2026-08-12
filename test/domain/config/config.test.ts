@@ -34,7 +34,7 @@ describe("Config schema", () => {
   it("round-trips xai api_key config with an effort", () => {
     const config: ConfigValue = {
       ...sampleConfig(),
-      ai: { provider: "xai", model: "grok-4.5", effort: Just("high" as const), auth_method: { type: "api_key", content: "xai-test" } }
+      ai: { provider: "xai", model: "grok-4.6", effort: Just("xhigh" as const), auth_method: { type: "api_key", content: "xai-test" } }
     };
 
     const decoded = s.decode(Config, s.encode(Config, config));
@@ -50,7 +50,7 @@ describe("Config schema", () => {
       ...sampleConfig(),
       ai: { provider: "xai", model: "grok-4.5", effort: Just("high" as const), auth_method: { type: "api_key", content: "xai-test" } }
     }) as Record<string, unknown>;
-    const bad = { ...encoded, ai: { ...(encoded["ai"] as Record<string, unknown>), effort: "xhigh" } };
+    const bad = { ...encoded, ai: { ...(encoded["ai"] as Record<string, unknown>), effort: "none" } };
 
     expect(s.decode(Config, bad).isFailure()).toBe(true);
   });

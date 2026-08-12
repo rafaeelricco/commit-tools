@@ -79,7 +79,7 @@ const schema_AuthMethod = s.discriminatedUnion([
 type AuthMethod = s.Infer<typeof schema_AuthMethod>["type"];
 
 const OPENAI_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
-const XAI_EFFORTS = ["low", "high"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
+const XAI_EFFORTS = ["low", "medium", "high", "xhigh"] as const satisfies readonly NonNullable<OpenAIPkg.Reasoning["effort"]>[];
 const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies readonly NonNullable<AnthropicPkg.OutputConfig["effort"]>[];
 const GEMINI_EFFORTS = [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH] as const satisfies readonly ThinkingLevel[];
 

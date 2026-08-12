@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { selectOpenAIEffort } from "@/infra/ui/effort-picker";
-import { Just } from "@/libs/maybe";
+import { selectOpenAIEffort, selectXaiEffort } from "@/infra/ui/effort-picker";
+import { Just, Nothing } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
 
 const render = vi.hoisted(() => vi.fn());
@@ -41,5 +41,21 @@ describe("selectOpenAIEffort", () => {
     const result = await runFuture(selectOpenAIEffort("gpt-5.6-sol", Just("minimal"), capabilities));
 
     expect(result.expect("Expected normalized effort")).toBe("low");
+  });
+});
+
+describe("selectXaiEffort", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("passes xAI efforts to the slider and defaults to high", async () => {
+    render.mockImplementation((element: { props: SliderProps }) => {
+      queueMicrotask(() => element.props.onSubmit("xhigh"));
+      return { unmount: vi.fn() };
+    });
+
+    const result = await runFuture(selectXaiEffort("grok-4.6", Nothing()));
+
+    expect(render.mock.calls[0]?.[0].props.options).toEqual(["low", "medium", "high", "xhigh"]);
+    expect(result.expect("Expected selected effort")).toBe("xhigh");
   });
 });

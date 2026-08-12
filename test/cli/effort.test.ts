@@ -38,6 +38,7 @@ describe("EffortCommand", () => {
       Future.resolve({
         commit_convention: "conventional",
         custom_template: Nothing(),
+        split_commits: false,
         ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
       } satisfies ConfigValue)
     );
@@ -53,6 +54,7 @@ describe("EffortCommand", () => {
     const config: ConfigValue = {
       commit_convention: "conventional",
       custom_template: Nothing(),
+      split_commits: false,
       ai: {
         provider: "openai",
         model: "gpt-5.6-sol",

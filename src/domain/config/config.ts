@@ -138,7 +138,8 @@ const resolveAuthMethod = (ai: ProviderConfig, auth_method: ProviderConfig["auth
 const Config = s.object({
   ai: schema_ProviderConfig,
   commit_convention: s.stringEnum([...COMMIT_CONVENTIONS]),
-  custom_template: s.optionalMaybe(s.string)
+  custom_template: s.optionalMaybe(s.string),
+  split_commits: s.optionalDefault(false, s.boolean)
 });
 type Config = s.Infer<typeof Config>;
 

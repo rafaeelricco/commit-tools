@@ -9,6 +9,7 @@ type ConfigValue = s.Infer<typeof Config>;
 const sampleConfig = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
+  split_commits: false,
   ai: {
     provider: "openai",
     model: "gpt-4.1-mini",
@@ -79,5 +80,13 @@ describe("Config schema", () => {
     });
 
     expect(s.decode(Config, encoded).isSuccess()).toBe(true);
+  });
+
+  it("defaults missing split_commits to false", () => {
+    const encoded = s.encode(Config, sampleConfig()) as Record<string, unknown>;
+    delete encoded["split_commits"];
+    const decoded = s.decode(Config, encoded);
+    expect(decoded.isSuccess()).toBe(true);
+    if (decoded instanceof Success) expect(decoded.value.split_commits).toBe(false);
   });
 });

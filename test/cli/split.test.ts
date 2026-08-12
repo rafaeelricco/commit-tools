@@ -30,6 +30,7 @@ vi.mock("@/domain/llm/router", () => ({
   generateSplitPlan: vi.fn(() =>
     Future.resolve({
       plan: {
+        shouldSplit: true,
         commits: [
           { message: "msg one", files: ["a.ts"] },
           { message: "msg two", files: ["b.ts"] }
@@ -59,6 +60,7 @@ vi.mock("@/infra/ui/spinner", () => ({
 const config = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
+  split_commits: false,
   ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
 });
 

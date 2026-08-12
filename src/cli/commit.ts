@@ -7,16 +7,24 @@ import * as repo from "@/infra/git/repo";
 import { Future } from "@/libs/future";
 import { loadConfig } from "@/infra/storage/config";
 import { Setup } from "@/cli/setup";
+import { Split } from "@/cli/split";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
-import { generateCommitMessage, refineCommitMessage, type GeneratedContent, type LlmRequestMetadata } from "@/domain/llm/router";
+import {
+  generateCommitMessage,
+  generateSplitPlan,
+  refineCommitMessage,
+  type GeneratedContent,
+  type LlmRequestMetadata,
+  type SplitPlanContent
+} from "@/domain/llm/router";
 import { Nothing, type Maybe, Just } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
 
-const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
+const USER_ACTIONS = ["commit_push", "commit", "split", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
 
 class Commit {
@@ -39,12 +47,42 @@ class Commit {
   run(): Future<Error, void> {
     return repo
       .checkIsGitRepo()
-      .chain(() => this.diff())
-      .chain((diff) => this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message)))
+      .chain(() => Future.concurrently({ diff: repo.getStagedDiff(), files: repo.listStagedPaths() }))
+      .chain(({ diff, files }) => this.route(diff, files))
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;
       });
+  }
+
+  private route(diff: string, files: readonly string[]): Future<Error, void> {
+    return this.config.split_commits && files.length >= 2 ?
+        loading(
+          "Analyzing staged changes...",
+          "Ready!",
+          generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
+        ).chain((content) => this.followAnalysis(diff, files, content))
+      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, files, message));
+  }
+
+  private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
+    const { plan, metadata } = content;
+    if (plan.shouldSplit && plan.commits.length >= 2) {
+      return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, plan, metadata);
+    }
+    const first = plan.commits[0];
+    if (first === undefined) {
+      return Future.reject(new Error("Split plan: expected at least 1 commit"));
+    }
+    return this.interact(diff, files, { text: first.message, metadata });
+  }
+
+  private startSplit(diff: string, files: readonly string[]): Future<Error, void> {
+    return loading(
+      "Generating split plan...",
+      "Split plan generated!",
+      generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
+    ).chain((content) => Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, content.plan, content.metadata));
   }
 
   diff(): Future<Error, string> {
@@ -94,17 +132,19 @@ class Commit {
     );
   }
 
-  interact(diff: string, generated: GeneratedContent): Future<Error, void> {
-    return this.promptAction(generated.text).chain((action) => {
+  interact(diff: string, files: readonly string[], generated: GeneratedContent): Future<Error, void> {
+    return this.promptAction(generated.text, files).chain((action) => {
       switch (action) {
         case "commit":
           return this.handleCommit(generated);
         case "commit_push":
           return this.handleCommitAndPush(generated);
+        case "split":
+          return this.startSplit(diff, files);
         case "regenerate":
-          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, msg));
+          return this.route(diff, files);
         case "adjust":
-          return this.handleAdjust(diff, generated);
+          return this.handleAdjust(diff, files, generated);
         case "cancel":
           return Future.resolve(undefined);
       }
@@ -116,18 +156,19 @@ class Commit {
     return msg.includes("non-fast-forward") || msg.includes("updates were rejected");
   }
 
-  private promptAction(message: string): Future<Error, UserAction> {
+  private promptAction(message: string, files: readonly string[]): Future<Error, UserAction> {
     return Future.attemptP(async () => {
       p.note(message, "Proposed Commit Message");
 
       const action = await p.select({
         message: "What would you like to do?",
         options: [
-          { value: "commit_push", label: "Commit & Push" },
-          { value: "commit", label: "Commit" },
-          { value: "regenerate", label: "Regenerate" },
-          { value: "adjust", label: "Adjust" },
-          { value: "cancel", label: "Cancel" }
+          { value: "commit_push" as const, label: "Commit & Push" },
+          { value: "commit" as const, label: "Commit" },
+          ...(files.length >= 2 ? [{ value: "split" as const, label: "Split" }] : []),
+          { value: "regenerate" as const, label: "Regenerate" },
+          { value: "adjust" as const, label: "Adjust" },
+          { value: "cancel" as const, label: "Cancel" }
         ]
       });
 
@@ -191,11 +232,11 @@ class Commit {
     }).chain((shouldForce) => (shouldForce ? this.push(request, undefined, false, true) : Future.resolve(undefined)));
   }
 
-  private handleAdjust(diff: string, generated: GeneratedContent): Future<Error, void> {
+  private handleAdjust(diff: string, files: readonly string[], generated: GeneratedContent): Future<Error, void> {
     return this.promptAdjustment().chain((maybeAdj) =>
       maybeAdj instanceof Nothing ?
-        this.interact(diff, generated)
-      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, refined))
+        this.interact(diff, files, generated)
+      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, files, refined))
     );
   }
 

@@ -31,6 +31,7 @@ const commitOptions = (plan: SplitPlan): { value: number; label: string }[] =>
   plan.commits.map((commit, index) => ({ value: index, label: `${index + 1}. ${commit.message}` }));
 
 const withEditedMessage = (plan: SplitPlan, index: number, message: string): SplitPlan => ({
+  ...plan,
   commits: plan.commits.map((commit, i) => (i === index ? { message, files: commit.files } : commit))
 });
 
@@ -48,7 +49,7 @@ const withMovedFile = (plan: SplitPlan, file: string, destIndex: number): SplitP
     }
     return commit;
   });
-  return { commits: moved.filter((commit) => commit.files.length > 0) };
+  return { commits: moved.filter((commit) => commit.files.length > 0), shouldSplit: plan.shouldSplit };
 };
 
 const withReorderedCommit = (plan: SplitPlan, fromIndex: number, toIndex: number): SplitPlan => {
@@ -61,7 +62,7 @@ const withReorderedCommit = (plan: SplitPlan, fromIndex: number, toIndex: number
     return plan;
   }
   commits.splice(toIndex, 0, item);
-  return { commits };
+  return { commits, shouldSplit: plan.shouldSplit };
 };
 
 class Split {
@@ -79,6 +80,14 @@ class Split {
           .chain(() => loadConfig());
       })
       .chain((config) => resolveProvider(config).map((ai) => new Split(config, ai)));
+  }
+
+  static fromResolved(config: Config, providerConfig: ProviderConfig): Split {
+    return new Split(config, providerConfig);
+  }
+
+  runPlan(diff: string, files: readonly string[], plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
+    return this.interact(diff, files, plan, meta);
   }
 
   run(): Future<Error, void> {

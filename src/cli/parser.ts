@@ -92,7 +92,7 @@ Usage: commit-tools [command]
 
 Commands:
   generate (default)  Generate a commit message
-  split               Split staged changes into multiple commits
+  split               Force a multi-commit plan from staged changes
   branch              Suggest branch names from local changes and create one
   new-branch          Alias for branch
   setup               Configure authentication and conventions

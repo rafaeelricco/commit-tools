@@ -110,4 +110,37 @@ describe("git repo integration", () => {
       chdir(prev);
     }
   });
+
+  it("performCommit with pathspecs leaves other staged files", async () => {
+    const { dir, run } = createTempGitRepo({ staged: true });
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add other.txt");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: one file", ["file.txt"]));
+      const stillStaged = run("diff --staged --name-only").trim();
+      expect(stillStaged).toBe("other.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit pathspecs resolve from worktree root when cwd is a subdirectory", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    mkdirSync(join(dir, "app"));
+    writeFileSync(join(dir, "app", "nested.ts"), "export const n = 1;\n");
+    run("add app/nested.ts");
+    const prev = cwd();
+    chdir(join(dir, "app"));
+    try {
+      const staged = await runFuture(repo.listStagedPaths());
+      expect([...staged]).toEqual(["app/nested.ts"]);
+      await runFuture(repo.performCommit("feat: nested", staged));
+      expect(run("diff --staged --name-only").trim()).toBe("");
+      expect((await runFuture(repo.getCommitMetadata())).subject).toBe("feat: nested");
+    } finally {
+      chdir(prev);
+    }
+  });
 });

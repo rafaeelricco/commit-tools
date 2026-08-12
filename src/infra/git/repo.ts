@@ -1,6 +1,7 @@
 export {
   checkIsGitRepo,
   getStagedDiff,
+  listStagedPaths,
   getLocalChangeContext,
   createAndSwitchBranch,
   performCommit,
@@ -73,6 +74,14 @@ const getStagedDiff = (): Future<Error, string> =>
     stdout.trim() ? Future.resolve<Error, string>(stdout) : Future.reject<Error, string>(new Error("No staged changes found"))
   );
 
+const listStagedPaths = (): Future<Error, readonly string[]> =>
+  execGitChecked(["diff", "--staged", "--name-only", "-z"], "Failed to list staged files").chain((stdout) => {
+    const files = stdout.split("\0").filter((p) => p.length > 0);
+    return files.length > 0 ?
+        Future.resolve<Error, readonly string[]>(files)
+      : Future.reject<Error, readonly string[]>(new Error("No staged changes found"));
+  });
+
 const NO_LOCAL_CHANGES_MESSAGE = "No local changes to infer a branch name from";
 
 const isNoLocalChangesError = (err: unknown): err is Error => err instanceof Error && err.message === NO_LOCAL_CHANGES_MESSAGE;
@@ -94,18 +103,25 @@ const getLocalChangeContext = (): Future<Error, string> =>
 const createAndSwitchBranch = (name: string): Future<Error, void> =>
   execGitChecked(["switch", "-c", name], `Failed to create branch '${name}'`).map(() => {});
 
-const performCommit = (message: string): Future<Error, string> => {
+const getWorkTreeRoot = (): Future<Error, string> =>
+  execGitChecked(["rev-parse", "--show-toplevel"], "Failed to resolve git directory").map((s) => s.trim());
+
+const performCommit = (message: string, paths: readonly string[] = []): Future<Error, string> => {
   const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);
-  return Future.bracket(
-    Future.attemptP(() => writeFile(tmpPath, message, "utf-8")),
-    () => Future.attemptP(() => unlink(tmpPath).catch(() => {})),
-    () => execBin("git", ["commit", "-F", tmpPath])
-  ).chain((result) =>
-    result.either(
-      (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, "Commit failed"))),
-      ({ stdout }) => Future.resolve<Error, string>(formatCommitOutput(stdout))
+  return getWorkTreeRoot()
+    .chain((root) =>
+      Future.bracket(
+        Future.attemptP(() => writeFile(tmpPath, message, "utf-8")),
+        () => Future.attemptP(() => unlink(tmpPath).catch(() => {})),
+        () => execBin("git", paths.length > 0 ? ["-C", root, "commit", "-F", tmpPath, "--", ...paths] : ["-C", root, "commit", "-F", tmpPath])
+      )
     )
-  );
+    .chain((result) =>
+      result.either(
+        (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, "Commit failed"))),
+        ({ stdout }) => Future.resolve<Error, string>(formatCommitOutput(stdout))
+      )
+    );
 };
 
 const performPush = (branch?: string, publish = false, forceWithLease = false): Future<Error, PushResult> => {

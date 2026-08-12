@@ -73,4 +73,4 @@ const selectGeminiEffort = (modelId: string, current: Maybe<GeminiEffort>): Futu
   selectEffort<GeminiEffort>(GEMINI_EFFORTS, modelId, current, ThinkingLevel.MEDIUM);
 
 const selectXaiEffort = (modelId: string, current: Maybe<XaiEffort>): Future<Error, Maybe<XaiEffort>> =>
-  selectEffort<XaiEffort>(XAI_EFFORTS, modelId, current, "low");
+  selectEffort<XaiEffort>(XAI_EFFORTS, modelId, current, "high");

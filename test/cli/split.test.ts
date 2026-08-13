@@ -13,32 +13,9 @@ import { Config } from "@/domain/config/config";
 
 type ConfigValue = s.Infer<typeof Config>;
 
-vi.mock("@/infra/storage/config", () => ({
-  loadConfig: vi.fn()
-}));
-vi.mock("@/domain/llm/auth-resolver", () => ({
-  resolveProvider: vi.fn((c: ConfigValue) => Future.resolve(c.ai))
-}));
 vi.mock("@/infra/git/repo", () => ({
-  checkIsGitRepo: vi.fn(() => Future.resolve(undefined)),
-  getStagedDiff: vi.fn(() => Future.resolve("staged diff")),
-  listStagedPaths: vi.fn(() => Future.resolve(["a.ts", "b.ts"])),
   performCommit: vi.fn(() => Future.resolve("\n 1 file changed\n")),
   findCommitMetadata: vi.fn()
-}));
-vi.mock("@/domain/llm/router", () => ({
-  generateSplitPlan: vi.fn(() =>
-    Future.resolve({
-      plan: {
-        shouldSplit: true,
-        commits: [
-          { message: "msg one", files: ["a.ts"] },
-          { message: "msg two", files: ["b.ts"] }
-        ]
-      },
-      metadata: { durationMs: 1, model: { provider: "openai", model: "m", effort: "medium" }, tokens: Nothing() }
-    })
-  )
 }));
 vi.mock("@clack/prompts", () => ({
   note: vi.fn(),
@@ -64,11 +41,24 @@ const config = (): ConfigValue => ({
   ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
 });
 
-describe("Split.run", () => {
+const plan = {
+  shouldSplit: true,
+  commits: [
+    { message: "msg one", files: ["a.ts"] },
+    { message: "msg two", files: ["b.ts"] }
+  ]
+};
+
+const meta = { durationMs: 1, model: { provider: "openai" as const, model: "m", effort: "medium" as const }, tokens: Nothing() };
+
+const runPlan = () => {
+  const cfg = config();
+  return Split.fromResolved(cfg, cfg.ai).runPlan("staged diff", ["a.ts", "b.ts"], plan, meta);
+};
+
+describe("Split.runPlan", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const storage = await import("@/infra/storage/config");
-    vi.mocked(storage.loadConfig).mockReturnValue(Future.resolve(config()));
     const repo = await import("@/infra/git/repo");
     vi.mocked(repo.findCommitMetadata).mockReturnValue(
       Future.resolve(Just({ hash: "h", short: "h", subject: "msg two", authorName: "t", authorEmail: "t@t.com", date: new Date() }))
@@ -79,7 +69,7 @@ describe("Split.run", () => {
   });
 
   it("applies each commit group with pathspecs when user selects apply", async () => {
-    await runFuture(Split.create().chain((s) => s.run()));
+    await runFuture(runPlan());
     const repo = await import("@/infra/git/repo");
     expect(repo.performCommit).toHaveBeenNthCalledWith(1, "msg one", ["a.ts"]);
     expect(repo.performCommit).toHaveBeenNthCalledWith(2, "msg two", ["b.ts"]);
@@ -89,7 +79,7 @@ describe("Split.run", () => {
     const prompts = await import("@clack/prompts");
     vi.mocked(prompts.select).mockResolvedValue("cancel");
 
-    await runFuture(Split.create().chain((s) => s.run()));
+    await runFuture(runPlan());
     const repo = await import("@/infra/git/repo");
     expect(repo.performCommit).not.toHaveBeenCalled();
   });

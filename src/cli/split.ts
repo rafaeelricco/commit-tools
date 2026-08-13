@@ -5,11 +5,8 @@ import * as pr from "@/infra/github/pr";
 import * as repo from "@/infra/git/repo";
 
 import { Future } from "@/libs/future";
-import { loadConfig } from "@/infra/storage/config";
-import { Setup } from "@/cli/setup";
 import { Commit } from "@/cli/commit";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
-import { resolveProvider } from "@/domain/llm/auth-resolver";
 import { generateSplitPlan, type LlmRequestMetadata, type SplitPlanContent } from "@/domain/llm/router";
 import { type SplitPlan } from "@/domain/split/plan";
 import { Just, type Maybe } from "@/libs/maybe";
@@ -71,34 +68,12 @@ class Split {
     private readonly providerConfig: ProviderConfig
   ) {}
 
-  static create(): Future<Error, Split> {
-    return loadConfig()
-      .chainRej((): Future<Error, Config> => {
-        p.log.warn(color.yellow("No configuration found. Let's set you up first."));
-        return Setup.create()
-          .chain((s) => s.run())
-          .chain(() => loadConfig());
-      })
-      .chain((config) => resolveProvider(config).map((ai) => new Split(config, ai)));
-  }
-
   static fromResolved(config: Config, providerConfig: ProviderConfig): Split {
     return new Split(config, providerConfig);
   }
 
   runPlan(diff: string, files: readonly string[], plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
     return this.interact(diff, files, plan, meta);
-  }
-
-  run(): Future<Error, void> {
-    return repo
-      .checkIsGitRepo()
-      .chain(() => Future.concurrently({ diff: repo.getStagedDiff(), files: repo.listStagedPaths() }))
-      .chain(({ diff, files }) => this.generate(diff, files).chain((content) => this.interact(diff, files, content.plan, content.metadata)))
-      .mapRej((e) => {
-        p.log.error(color.red(e.message));
-        return e;
-      });
   }
 
   private generate(diff: string, files: readonly string[]): Future<Error, SplitPlanContent> {

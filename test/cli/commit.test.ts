@@ -169,33 +169,6 @@ describe("Commit.run", () => {
     expect(router.generateCommitMessage).toHaveBeenCalled();
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
   });
-
-  it("forces a split plan when the user picks Split", async () => {
-    const repo = await import("@/infra/git/repo");
-    vi.mocked(repo.listStagedPaths).mockReturnValue(Future.resolve(["a.ts", "b.ts"]));
-    const router = await import("@/domain/llm/router");
-    vi.mocked(router.generateSplitPlan).mockReturnValue(
-      Future.resolve({
-        plan: {
-          shouldSplit: true,
-          commits: [
-            { message: "msg one", files: ["a.ts"] },
-            { message: "msg two", files: ["b.ts"] }
-          ]
-        },
-        metadata: { durationMs: 1, model: { provider: "openai", model: "m", effort: "medium" }, tokens: Nothing() }
-      })
-    );
-    const prompts = await import("@clack/prompts");
-    vi.mocked(prompts.select).mockResolvedValueOnce("split").mockResolvedValueOnce("apply");
-
-    await runFuture(Commit.create().chain((c) => c.run()));
-
-    expect(router.generateCommitMessage).toHaveBeenCalled();
-    expect(router.generateSplitPlan).toHaveBeenCalled();
-    expect(repo.performCommit).toHaveBeenNthCalledWith(1, "msg one", ["a.ts"]);
-    expect(repo.performCommit).toHaveBeenNthCalledWith(2, "msg two", ["b.ts"]);
-  });
 });
 
 describe("routeAnalysis", () => {

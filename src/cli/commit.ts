@@ -27,7 +27,7 @@ import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
 
-const USER_ACTIONS = ["commit_push", "commit", "split", "regenerate", "adjust", "cancel"] as const;
+const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
 
 type AnalysisRoute = { tag: "split"; plan: SplitPlan } | { tag: "single"; message: string };
@@ -75,7 +75,7 @@ class Commit {
           "Ready!",
           generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
         ).chain((content) => this.followAnalysis(diff, files, content))
-      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, files, message));
+      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message));
   }
 
   private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
@@ -87,20 +87,12 @@ class Commit {
           case "split":
             return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, route.plan, metadata);
           case "single":
-            return this.interact(diff, files, { text: route.message, metadata });
+            return this.interact(diff, { text: route.message, metadata });
           default:
             return absurd(route, "AnalysisRoute");
         }
       }
     );
-  }
-
-  private startSplit(diff: string, files: readonly string[]): Future<Error, void> {
-    return loading(
-      "Generating split plan...",
-      "Split plan generated!",
-      generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
-    ).chain((content) => Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, content.plan, content.metadata));
   }
 
   diff(): Future<Error, string> {
@@ -150,19 +142,17 @@ class Commit {
     );
   }
 
-  interact(diff: string, files: readonly string[], generated: GeneratedContent): Future<Error, void> {
-    return this.promptAction(generated.text, files).chain((action) => {
+  interact(diff: string, generated: GeneratedContent): Future<Error, void> {
+    return this.promptAction(generated.text).chain((action) => {
       switch (action) {
         case "commit":
           return this.handleCommit(generated);
         case "commit_push":
           return this.handleCommitAndPush(generated);
-        case "split":
-          return this.startSplit(diff, files);
         case "regenerate":
-          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, files, msg));
+          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, msg));
         case "adjust":
-          return this.handleAdjust(diff, files, generated);
+          return this.handleAdjust(diff, generated);
         case "cancel":
           return Future.resolve(undefined);
       }
@@ -174,7 +164,7 @@ class Commit {
     return msg.includes("non-fast-forward") || msg.includes("updates were rejected");
   }
 
-  private promptAction(message: string, files: readonly string[]): Future<Error, UserAction> {
+  private promptAction(message: string): Future<Error, UserAction> {
     return Future.attemptP(async () => {
       p.note(message, "Proposed Commit Message");
 
@@ -183,7 +173,6 @@ class Commit {
         options: [
           { value: "commit_push" as const, label: "Commit & Push" },
           { value: "commit" as const, label: "Commit" },
-          ...(files.length >= 2 ? [{ value: "split" as const, label: "Split" }] : []),
           { value: "regenerate" as const, label: "Regenerate" },
           { value: "adjust" as const, label: "Adjust" },
           { value: "cancel" as const, label: "Cancel" }
@@ -250,11 +239,11 @@ class Commit {
     }).chain((shouldForce) => (shouldForce ? this.push(request, undefined, false, true) : Future.resolve(undefined)));
   }
 
-  private handleAdjust(diff: string, files: readonly string[], generated: GeneratedContent): Future<Error, void> {
+  private handleAdjust(diff: string, generated: GeneratedContent): Future<Error, void> {
     return this.promptAdjustment().chain((maybeAdj) =>
       maybeAdj instanceof Nothing ?
-        this.interact(diff, files, generated)
-      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, files, refined))
+        this.interact(diff, generated)
+      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, refined))
     );
   }
 

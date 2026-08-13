@@ -124,13 +124,22 @@ const resetIndexPaths = (root: string, indexFile: string, paths: readonly string
   : execBin("git", ["-C", root, "rev-parse", "-q", "--verify", "HEAD"]).chain((head) =>
       execGitChecked(
         head.either(
-          () => ["-C", root, "rm", "--cached", "-q", "--", ...paths],
+          () => ["-C", root, "rm", "--cached", "-q", "-f", "--", ...paths],
           () => ["-C", root, "reset", "-q", "HEAD", "--", ...paths]
         ),
         "Failed to isolate staged paths",
         indexEnv(indexFile)
       ).map(() => {})
     );
+
+const reconcileCommittedIndex = (root: string, paths: readonly string[]): Future<Error, void> =>
+  execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", ...paths], "Failed to reconcile index after commit").map(() => {});
+
+const finishIsolatedCommit = (root: string, paths: readonly string[], result: ExecResult): Future<Error, ExecResult> =>
+  result.either(
+    () => Future.resolve(result),
+    () => reconcileCommittedIndex(root, paths).map(() => result)
+  );
 
 const commitIsolatedPaths = (root: string, messageFile: string, paths: readonly string[]): Future<Error, ExecResult> => {
   const tmpIndex = join(tmpdir(), `commit-index-${Date.now()}`);
@@ -144,7 +153,9 @@ const commitIsolatedPaths = (root: string, messageFile: string, paths: readonly 
           root,
           tmpIndex,
           staged.filter((path) => !keep.has(path))
-        ).chain(() => execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex)));
+        ).chain(() =>
+          execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex)).chain((result) => finishIsolatedCommit(root, paths, result))
+        );
       })
   );
 };

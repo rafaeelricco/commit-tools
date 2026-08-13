@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -177,6 +177,54 @@ describe("git repo integration", () => {
       expect(run("diff --staged --name-only").trim()).toBe("b.txt");
       expect((await runFuture(repo.getCommitMetadata())).subject).toBe("feat: first");
       expect(run("show HEAD:a.txt")).toBe("a\n");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs isolates unborn leftovers when worktree is dirty", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "commit-tools-git-"));
+    const run = (args: string) => execSync(`git ${args}`, { cwd: dir, encoding: "utf-8" });
+    run("init -b main");
+    run('config user.email "test@example.com"');
+    run('config user.name "Test"');
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    writeFileSync(join(dir, "b.txt"), "b dirty\n");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: first", ["a.txt"]));
+      expect(run("diff --staged --name-only").trim()).toBe("b.txt");
+      expect(run("show :b.txt")).toBe("b\n");
+      expect(run("show HEAD:a.txt")).toBe("a\n");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs copies hook-updated blobs into the real index", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "file.txt"), "unformatted\n");
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add file.txt other.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+printf 'formatted\\n' > file.txt
+git add file.txt
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: formatted", ["file.txt"]));
+      expect(run("show HEAD:file.txt")).toBe("formatted\n");
+      expect(run("show :file.txt")).toBe("formatted\n");
+      expect(run("diff --staged --name-only").trim()).toBe("other.txt");
     } finally {
       chdir(prev);
     }

@@ -276,7 +276,9 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
 }
 
 function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
-  const conventionPrompt = getPrompt(diff, convention, customTemplate).replace(/<output_instructions>[\s\S]*?<\/output_instructions>/, "");
+  const basePrompt = getPrompt(diff, convention, customTemplate);
+  const outputInstructionsStart = basePrompt.lastIndexOf("<output_instructions>");
+  const conventionPrompt = outputInstructionsStart >= 0 ? basePrompt.slice(0, outputInstructionsStart) : basePrompt;
   return `
       <task>
         Partition staged files into reviewable commits. Do not write one message for the whole diff.

@@ -46,6 +46,14 @@ describe("getSplitPrompt", () => {
     expect(prompt).toContain("Emit ONLY the JSON object");
   });
 
+  it("keeps a diff that contains output_instructions tags", () => {
+    const diff = "diff --git a/x b/x\n+<output_instructions>\n+keep this hunk\n+</output_instructions>";
+    const prompt = getSplitPrompt(diff, ["x"], "conventional");
+    expect(prompt).toContain("keep this hunk");
+    expect(prompt).not.toMatch(/output ONLY the final commit message/i);
+    expect(prompt).toContain("Emit ONLY the JSON object");
+  });
+
   it("prefers split across unrelated layers", () => {
     const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional");
     expect(prompt).toContain("Prefer should_split=true");

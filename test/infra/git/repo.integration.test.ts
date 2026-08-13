@@ -261,6 +261,36 @@ git add file.txt
     }
   });
 
+  it("performCommit with pathspecs rejects during a merge", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    run('commit -m "base"');
+    run("checkout -b other");
+    writeFileSync(join(dir, "b.txt"), "other-b\n");
+    run("add b.txt");
+    run('commit -m "other"');
+    run("checkout main");
+    writeFileSync(join(dir, "a.txt"), "main-a\n");
+    writeFileSync(join(dir, "b.txt"), "main-b\n");
+    run("add a.txt b.txt");
+    run('commit -m "main"');
+    try {
+      run("merge other");
+    } catch {
+      // conflict on b.txt
+    }
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await expect(runFuture(repo.performCommit("feat: split merge", ["a.txt"]))).rejects.toThrow(/merge, rebase, cherry-pick, or revert/);
+      expect(run("rev-parse -q --verify MERGE_HEAD").trim().length).toBeGreaterThan(0);
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit pathspecs resolve from worktree root when cwd is a subdirectory", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     mkdirSync(join(dir, "app"));

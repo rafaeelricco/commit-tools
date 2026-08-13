@@ -225,12 +225,38 @@ const isolateAndCommit = (root: string, messageFile: string, tmpIndex: string, p
     );
   });
 
+const SEQUENCER_REFS = ["MERGE_HEAD", "REBASE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"] as const;
+
+const refExists = (root: string, ref: string): Future<Error, boolean> =>
+  execBin("git", ["-C", root, "rev-parse", "-q", "--verify", ref]).map((result) =>
+    result.either(
+      () => false,
+      () => true
+    )
+  );
+
+const rejectIfUnmergedPaths = (root: string): Future<Error, void> =>
+  execGitChecked(["-C", root, "ls-files", "-u", "-z"], "Failed to list unmerged files").chain((stdout) =>
+    splitNulPaths(stdout).length === 0 ?
+      Future.resolve<Error, void>(undefined)
+    : Future.reject<Error, void>(new Error("Cannot isolate a commit while the index has unmerged paths"))
+  );
+
+const rejectIfSequencerInProgress = (root: string): Future<Error, void> =>
+  Future.traverse((ref) => refExists(root, ref), [...SEQUENCER_REFS]).chain((present) =>
+    present.some(Boolean) ?
+      Future.reject<Error, void>(new Error("Cannot isolate a commit while a merge, rebase, cherry-pick, or revert is in progress"))
+    : rejectIfUnmergedPaths(root)
+  );
+
 const commitIsolatedPaths = (root: string, messageFile: string, paths: readonly string[]): Future<Error, ExecResult> => {
   const tmpIndex = join(tmpdir(), `commit-index-${Date.now()}`);
-  return Future.bracket(
-    copyIndexFile(root, tmpIndex),
-    () => Future.attemptP(() => unlink(tmpIndex).catch(() => {})),
-    () => isolateAndCommit(root, messageFile, tmpIndex, paths)
+  return rejectIfSequencerInProgress(root).chain(() =>
+    Future.bracket(
+      copyIndexFile(root, tmpIndex),
+      () => Future.attemptP(() => unlink(tmpIndex).catch(() => {})),
+      () => isolateAndCommit(root, messageFile, tmpIndex, paths)
+    )
   );
 };
 

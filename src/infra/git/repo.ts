@@ -67,6 +67,8 @@ const execGitChecked = (args: string[], fallbackMsg: string, env?: NodeJS.Proces
     )
   );
 
+const splitNulPaths = (stdout: string): readonly string[] => stdout.split("\0").filter((p) => p.length > 0);
+
 const checkIsGitRepo = (): Future<Error, void> => execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
 
 const getStagedDiff = (): Future<Error, string> =>
@@ -75,8 +77,8 @@ const getStagedDiff = (): Future<Error, string> =>
   );
 
 const listStagedPaths = (): Future<Error, readonly string[]> =>
-  execGitChecked(["diff", "--staged", "--name-only", "-z"], "Failed to list staged files").chain((stdout) => {
-    const files = stdout.split("\0").filter((p) => p.length > 0);
+  execGitChecked(["diff", "--staged", "--name-only", "--no-renames", "-z"], "Failed to list staged files").chain((stdout) => {
+    const files = splitNulPaths(stdout);
     return files.length > 0 ?
         Future.resolve<Error, readonly string[]>(files)
       : Future.reject<Error, readonly string[]>(new Error("No staged changes found"));
@@ -107,8 +109,6 @@ const getWorkTreeRoot = (): Future<Error, string> =>
   execGitChecked(["rev-parse", "--show-toplevel"], "Failed to resolve git directory").map((s) => s.trim());
 
 const indexEnv = (indexFile: string): NodeJS.ProcessEnv => ({ GIT_INDEX_FILE: indexFile });
-
-const splitNulPaths = (stdout: string): readonly string[] => stdout.split("\0").filter((p) => p.length > 0);
 
 const copyIndexFile = (root: string, dest: string): Future<Error, void> =>
   execGitChecked(["-C", root, "rev-parse", "--absolute-git-dir"], "Failed to resolve git directory").chain((gitDir) =>

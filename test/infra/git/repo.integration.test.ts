@@ -126,6 +126,22 @@ describe("git repo integration", () => {
     }
   });
 
+  it("listStagedPaths includes both sides of a rename and apply leaves no staged deletion", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    run("mv file.txt renamed.txt");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const staged = await runFuture(repo.listStagedPaths());
+      expect([...staged].sort()).toEqual(["file.txt", "renamed.txt"]);
+      await runFuture(repo.performCommit("feat: rename file", staged));
+      expect(run("diff --staged --name-only").trim()).toBe("");
+      expect(run("ls-files").trim()).toBe("renamed.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with paths records the staged blob not the worktree", async () => {
     const { dir, run } = createTempGitRepo({ staged: true });
     writeFileSync(join(dir, "file.txt"), "hello unstaged secret\n");

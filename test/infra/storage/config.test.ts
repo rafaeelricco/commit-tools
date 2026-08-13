@@ -11,6 +11,7 @@ type ConfigValue = s.Infer<typeof Config>;
 const sampleConfig = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
+  split_commits: false,
   ai: {
     provider: "openai",
     model: "gpt-4.1-mini",
@@ -53,6 +54,7 @@ describe("config storage", () => {
       saveConfig({
         commit_convention: "imperative",
         custom_template: Just("tpl"),
+        split_commits: false,
         ai: { ...sampleConfig().ai, auth_method: { type: "openai_oauth", content: staleTokens() } }
       })
     );

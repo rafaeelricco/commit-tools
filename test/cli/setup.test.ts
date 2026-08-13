@@ -62,18 +62,18 @@ vi.mock("@/infra/auth/anthropic", () => ({
   validateAnthropicSetupToken: vi.fn()
 }));
 
-/** The wizard asks provider, then convention, then auth method — in that order. */
-const scriptWizard = async (provider: string, convention: string, authMethod: string) => {
+/** The wizard asks provider, then convention, then split, then auth method — in that order. */
+const scriptWizard = async (provider: string, convention: string, split: boolean, authMethod: string) => {
   const p = await import("@clack/prompts");
   vi.mocked(p.select).mockReset();
-  vi.mocked(p.select).mockResolvedValueOnce(provider).mockResolvedValueOnce(convention).mockResolvedValueOnce(authMethod);
+  vi.mocked(p.select).mockResolvedValueOnce(provider).mockResolvedValueOnce(convention).mockResolvedValueOnce(split).mockResolvedValueOnce(authMethod);
 };
 
 describe("Setup.run", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("saves config after wizard", async () => {
-    await scriptWizard("openai", "conventional", "api_key");
+    await scriptWizard("openai", "conventional", false, "api_key");
     const { saveConfig } = await import("@/infra/storage/config");
 
     await runFuture(Setup.create().chain((s) => s.run()));
@@ -82,7 +82,7 @@ describe("Setup.run", () => {
   });
 
   it("saves an xai api_key config", async () => {
-    await scriptWizard("xai", "conventional", "api_key");
+    await scriptWizard("xai", "conventional", false, "api_key");
     const { saveConfig } = await import("@/infra/storage/config");
 
     await runFuture(Setup.create().chain((s) => s.run()));

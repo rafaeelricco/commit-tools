@@ -11,6 +11,7 @@ type ConfigValue = s.Infer<typeof Config>;
 const config = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
+  split_commits: false,
   ai: { provider: "openai", model: "old", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
 });
 

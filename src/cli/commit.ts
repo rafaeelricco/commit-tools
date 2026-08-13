@@ -1,4 +1,4 @@
-export { Commit };
+export { Commit, routeAnalysis, type AnalysisRoute };
 
 import * as p from "@clack/prompts";
 import * as pr from "@/infra/github/pr";
@@ -7,10 +7,21 @@ import * as repo from "@/infra/git/repo";
 import { Future } from "@/libs/future";
 import { loadConfig } from "@/infra/storage/config";
 import { Setup } from "@/cli/setup";
+import { Split } from "@/cli/split";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
-import { generateCommitMessage, refineCommitMessage, type GeneratedContent, type LlmRequestMetadata } from "@/domain/llm/router";
-import { Nothing, type Maybe, Just } from "@/libs/maybe";
+import {
+  generateCommitMessage,
+  generateSplitPlan,
+  refineCommitMessage,
+  type GeneratedContent,
+  type LlmRequestMetadata,
+  type SplitPlanContent
+} from "@/domain/llm/router";
+import { type SplitPlan } from "@/domain/split/plan";
+import { Nothing, type Maybe, Just, fromOptional } from "@/libs/maybe";
+import { Failure, Success, type Result } from "@/libs/result";
+import { absurd } from "@/libs/types";
 import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
@@ -18,6 +29,16 @@ import color from "picocolors";
 
 const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
+
+type AnalysisRoute = { tag: "split"; plan: SplitPlan } | { tag: "single"; message: string };
+
+const routeAnalysis = (plan: SplitPlan): Result<Error, AnalysisRoute> =>
+  plan.shouldSplit && plan.commits.length >= 2 ?
+    Success({ tag: "split", plan })
+  : fromOptional(plan.commits[0]).unwrap<Result<Error, AnalysisRoute>>(
+      () => Failure(new Error("Split plan: expected at least 1 commit")),
+      (first) => Success({ tag: "single", message: first.message })
+    );
 
 class Commit {
   private constructor(
@@ -39,12 +60,39 @@ class Commit {
   run(): Future<Error, void> {
     return repo
       .checkIsGitRepo()
-      .chain(() => this.diff())
-      .chain((diff) => this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message)))
+      .chain(() => Future.concurrently({ diff: repo.getStagedDiff(), files: repo.listStagedPaths() }))
+      .chain(({ diff, files }) => this.route(diff, files))
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;
       });
+  }
+
+  private route(diff: string, files: readonly string[]): Future<Error, void> {
+    return this.config.split_commits && files.length >= 2 ?
+        loading(
+          "Analyzing staged changes...",
+          "Ready!",
+          generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
+        ).chain((content) => this.followAnalysis(diff, files, content))
+      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message));
+  }
+
+  private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
+    const { plan, metadata } = content;
+    return routeAnalysis(plan).either(
+      (e) => Future.reject(e),
+      (route) => {
+        switch (route.tag) {
+          case "split":
+            return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, route.plan, metadata);
+          case "single":
+            return this.interact(diff, { text: route.message, metadata });
+          default:
+            return absurd(route, "AnalysisRoute");
+        }
+      }
+    );
   }
 
   diff(): Future<Error, string> {
@@ -123,11 +171,11 @@ class Commit {
       const action = await p.select({
         message: "What would you like to do?",
         options: [
-          { value: "commit_push", label: "Commit & Push" },
-          { value: "commit", label: "Commit" },
-          { value: "regenerate", label: "Regenerate" },
-          { value: "adjust", label: "Adjust" },
-          { value: "cancel", label: "Cancel" }
+          { value: "commit_push" as const, label: "Commit & Push" },
+          { value: "commit" as const, label: "Commit" },
+          { value: "regenerate" as const, label: "Regenerate" },
+          { value: "adjust" as const, label: "Adjust" },
+          { value: "cancel" as const, label: "Cancel" }
         ]
       });
 

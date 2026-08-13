@@ -1,4 +1,4 @@
-export { getPrompt, getRefinePrompt, getBranchNamePrompt };
+export { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt };
 
 import { CommitConvention } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
@@ -273,6 +273,53 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
       template satisfies never;
       return promptImperative(gitDiff);
   }
+}
+
+function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
+  const basePrompt = getPrompt(diff, convention, customTemplate);
+  const outputInstructionsStart = basePrompt.lastIndexOf("<output_instructions>");
+  const conventionPrompt = outputInstructionsStart >= 0 ? basePrompt.slice(0, outputInstructionsStart) : basePrompt;
+  return `
+      <task>
+        Partition staged files into reviewable commits. Do not write one message for the whole diff.
+        A feature that touches unrelated layers is several commits.
+      </task>
+      ${conventionPrompt}
+
+      <staged_files>
+        ${files.join("\n")}
+      </staged_files>
+
+      <output_shape>
+        Return ONE JSON object. First character "{", last "}".
+        {"should_split":<true|false>,"commits":[{"message":"<commit message>","files":["<exact path>",...]}]}
+      </output_shape>
+      <partition_rules>
+        - Use only paths from <staged_files>. Exact strings.
+        - Every staged path in exactly one commit.
+        - Prefer should_split=true when files (or groups) do not share one concern. Each group is its own commit.
+        - should_split=false only when every file is the same concern (implementation + its test, rename + callers). Then exactly 1 commit covering every staged path.
+        - Same feature across unrelated layers (CLI, domain, docs, unrelated tests) is still should_split=true.
+        - When unsure across 2+ areas, should_split=true with 2+ commits.
+        - Each message follows the active convention (SMALL/MEDIUM/LARGE shape) for that commit only.
+      </partition_rules>
+      <examples>
+        <example>
+          <staged_files>src/cli/setup.ts
+test/cli/setup.test.ts</staged_files>
+          <output>{"should_split":false,"commits":[{"message":"Add split option to setup","files":["src/cli/setup.ts","test/cli/setup.test.ts"]}]}</output>
+        </example>
+        <example>
+          <staged_files>src/cli/setup.ts
+src/domain/split/plan.ts
+test/domain/split/plan.test.ts</staged_files>
+          <output>{"should_split":true,"commits":[{"message":"Add split option to setup","files":["src/cli/setup.ts"]},{"message":"Parse should_split in split plans","files":["src/domain/split/plan.ts","test/domain/split/plan.test.ts"]}]}</output>
+        </example>
+      </examples>
+      <output_instructions>
+        Emit ONLY the JSON object. No prose, no markdown fences, no commentary.
+      </output_instructions>
+  `;
 }
 
 function getBranchNamePrompt(context: string): string {

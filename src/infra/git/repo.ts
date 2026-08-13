@@ -299,26 +299,31 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
 const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
   resolveHooksDir(root).chain((hooks) => execBin(join(hooks, "pre-commit"), [], indexEnv(tmpIndex), root));
 
-const resetForeignIndexPaths = (root: string, tmpIndex: string, selected: readonly string[]): Future<Error, void> =>
-  execGitChecked(["-C", root, "ls-files", "-z"], "Failed to list index after hook", indexEnv(tmpIndex)).chain((stdout) => {
-    const keep = new Set(selected);
-    return resetIndexPaths(
-      root,
-      tmpIndex,
-      splitNulPaths(stdout).filter((path) => !keep.has(path))
-    );
-  });
+const listAllIndexPaths = (root: string, tmpIndex: string, failMsg: string): Future<Error, readonly string[]> =>
+  execGitChecked(["-C", root, "ls-files", "-z"], failMsg, indexEnv(tmpIndex)).map(splitNulPaths);
+
+const foreignIndexPaths = (selected: readonly string[], preHook: readonly string[], postHook: readonly string[]): readonly string[] => {
+  const keep = new Set(selected);
+  return [...new Set([...preHook, ...postHook])].filter((path) => !keep.has(path));
+};
+
+const resetForeignIndexPaths = (root: string, tmpIndex: string, selected: readonly string[], preHook: readonly string[]): Future<Error, void> =>
+  listAllIndexPaths(root, tmpIndex, "Failed to list index after hook").chain((postHook) =>
+    resetIndexPaths(root, tmpIndex, foreignIndexPaths(selected, preHook, postHook))
+  );
+
+const commitIsolatedAfterHook = (root: string, messageFile: string, tmpIndex: string): Future<Error, ExecResult> =>
+  Future.bracket(acquireHookIsolation(root), releaseHookIsolation, (iso) =>
+    execBin("git", ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile], indexEnv(tmpIndex))
+  );
 
 const commitAfterHook = (root: string, messageFile: string, tmpIndex: string, selected: readonly string[]): Future<Error, ExecResult> =>
-  runUserPreCommit(root, tmpIndex).chain((hookResult) =>
-    hookResult.either(
-      () => Future.resolve(hookResult),
-      () =>
-        resetForeignIndexPaths(root, tmpIndex, selected).chain(() =>
-          Future.bracket(acquireHookIsolation(root), releaseHookIsolation, (iso) =>
-            execBin("git", ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile], indexEnv(tmpIndex))
-          )
-        )
+  listAllIndexPaths(root, tmpIndex, "Failed to list index before hook").chain((preHook) =>
+    runUserPreCommit(root, tmpIndex).chain((hookResult) =>
+      hookResult.either(
+        () => Future.resolve(hookResult),
+        () => resetForeignIndexPaths(root, tmpIndex, selected, preHook).chain(() => commitIsolatedAfterHook(root, messageFile, tmpIndex))
+      )
     )
   );
 

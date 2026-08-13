@@ -315,6 +315,36 @@ git add -A
     }
   });
 
+  it("performCommit with pathspecs ignores hook git add of unstaged unrelated deletions", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "gone.txt"), "tracked\n");
+    run("add gone.txt");
+    run('commit -m "track gone"');
+    writeFileSync(join(dir, "file.txt"), "hello staged\n");
+    run("add file.txt");
+    unlinkSync(join(dir, "gone.txt"));
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: keep", ["file.txt"]));
+      expect(run("show HEAD:file.txt")).toBe("hello staged\n");
+      expect(run("show HEAD:gone.txt")).toBe("tracked\n");
+      expect(run("ls-files").trim().split("\n").sort()).toEqual(["file.txt", "gone.txt"]);
+      expect(run("diff --staged --name-only").trim()).toBe("");
+      expect(run("status --porcelain")).toContain("gone.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs ignores untracked files added by hook git add -A", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     writeFileSync(join(dir, "selected.txt"), "keep\n");

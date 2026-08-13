@@ -126,6 +126,23 @@ describe("git repo integration", () => {
     }
   });
 
+  it("performCommit with paths records the staged blob not the worktree", async () => {
+    const { dir, run } = createTempGitRepo({ staged: true });
+    writeFileSync(join(dir, "file.txt"), "hello unstaged secret\n");
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add other.txt");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: staged only", ["file.txt"]));
+      expect(run("show HEAD:file.txt")).toBe("hello world\n");
+      expect(run("diff --staged --name-only").trim()).toBe("other.txt");
+      expect(run("diff -- file.txt")).toContain("hello unstaged secret");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit pathspecs resolve from worktree root when cwd is a subdirectory", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     mkdirSync(join(dir, "app"));

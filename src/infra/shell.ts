@@ -16,9 +16,12 @@ const commandResult = (output: CommandOutput, exitCode: number | null, signal: N
     Success<CommandFailure, CommandOutput>(output)
   : Failure<CommandFailure, CommandOutput>({ output, error: exitCodeError(exitCode, signal) });
 
-const execBin = (bin: string, args: string[]): Future<Error, ExecResult> =>
+const execBin = (bin: string, args: string[], env?: NodeJS.ProcessEnv): Future<Error, ExecResult> =>
   Future.create<Error, ExecResult>((reject, resolve) => {
-    const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const proc = spawn(bin, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: env === undefined ? undefined : { ...process.env, ...env }
+    });
 
     let stdout = "";
     let stderr = "";

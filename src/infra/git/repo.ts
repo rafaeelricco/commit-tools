@@ -29,9 +29,9 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Result, Failure } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
-import { execBin } from "@/infra/shell";
+import { execBin, type ExecResult } from "@/infra/shell";
 import * as Decoder from "@/libs/json/decoder";
-import { unlink, writeFile } from "node:fs/promises";
+import { copyFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -59,8 +59,8 @@ type PushResult = {
   range: Maybe<PushRange>;
 };
 
-const execGitChecked = (args: string[], fallbackMsg: string): Future<Error, string> =>
-  execBin("git", args).chain((result) =>
+const execGitChecked = (args: string[], fallbackMsg: string, env?: NodeJS.ProcessEnv): Future<Error, string> =>
+  execBin("git", args, env).chain((result) =>
     result.either(
       (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, fallbackMsg))),
       ({ stdout }) => Future.resolve<Error, string>(stdout)
@@ -106,6 +106,40 @@ const createAndSwitchBranch = (name: string): Future<Error, void> =>
 const getWorkTreeRoot = (): Future<Error, string> =>
   execGitChecked(["rev-parse", "--show-toplevel"], "Failed to resolve git directory").map((s) => s.trim());
 
+const indexEnv = (indexFile: string): NodeJS.ProcessEnv => ({ GIT_INDEX_FILE: indexFile });
+
+const splitNulPaths = (stdout: string): readonly string[] => stdout.split("\0").filter((p) => p.length > 0);
+
+const copyIndexFile = (root: string, dest: string): Future<Error, void> =>
+  execGitChecked(["-C", root, "rev-parse", "--absolute-git-dir"], "Failed to resolve git directory").chain((gitDir) =>
+    Future.attemptP(() => copyFile(join(gitDir.trim(), "index"), dest))
+  );
+
+const listStagedPathsNoRenames = (root: string): Future<Error, readonly string[]> =>
+  execGitChecked(["-C", root, "diff", "--staged", "--name-only", "--no-renames", "-z"], "Failed to list staged files").map(splitNulPaths);
+
+const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
+  paths.length === 0 ?
+    Future.resolve(undefined)
+  : execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", ...paths], "Failed to isolate staged paths", indexEnv(indexFile)).map(() => {});
+
+const commitIsolatedPaths = (root: string, messageFile: string, paths: readonly string[]): Future<Error, ExecResult> => {
+  const tmpIndex = join(tmpdir(), `commit-index-${Date.now()}`);
+  return Future.bracket(
+    copyIndexFile(root, tmpIndex),
+    () => Future.attemptP(() => unlink(tmpIndex).catch(() => {})),
+    () =>
+      listStagedPathsNoRenames(root).chain((staged) => {
+        const keep = new Set(paths);
+        return resetIndexPaths(
+          root,
+          tmpIndex,
+          staged.filter((path) => !keep.has(path))
+        ).chain(() => execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex)));
+      })
+  );
+};
+
 const performCommit = (message: string, paths: readonly string[] = []): Future<Error, string> => {
   const tmpPath = join(tmpdir(), `commit-msg-${Date.now()}.txt`);
   return getWorkTreeRoot()
@@ -113,7 +147,7 @@ const performCommit = (message: string, paths: readonly string[] = []): Future<E
       Future.bracket(
         Future.attemptP(() => writeFile(tmpPath, message, "utf-8")),
         () => Future.attemptP(() => unlink(tmpPath).catch(() => {})),
-        () => execBin("git", paths.length > 0 ? ["-C", root, "commit", "-F", tmpPath, "--", ...paths] : ["-C", root, "commit", "-F", tmpPath])
+        () => (paths.length > 0 ? commitIsolatedPaths(root, tmpPath, paths) : execBin("git", ["-C", root, "commit", "-F", tmpPath]))
       )
     )
     .chain((result) =>

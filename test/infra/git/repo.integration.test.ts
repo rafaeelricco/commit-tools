@@ -204,6 +204,37 @@ describe("git repo integration", () => {
     }
   });
 
+  it("performCommit with pathspecs ignores hook git add of later groups", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+printf 'fmt-a\\n' > a.txt
+printf 'fmt-b\\n' > b.txt
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: first", ["a.txt"]));
+      expect(run("show HEAD:a.txt")).toBe("fmt-a\n");
+      expect(() => run("show HEAD:b.txt")).toThrow();
+      expect(run("diff --staged --name-only").trim()).toBe("b.txt");
+      expect(run("show :b.txt")).toBe("b\n");
+      await runFuture(repo.performCommit("feat: second", ["b.txt"]));
+      expect(run("show HEAD:b.txt")).toBe("fmt-b\n");
+      expect(run("diff --staged --name-only").trim()).toBe("");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs copies hook-updated blobs into the real index", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     writeFileSync(join(dir, "file.txt"), "unformatted\n");

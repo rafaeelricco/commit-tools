@@ -34,7 +34,7 @@ import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
 import { access, copyFile, mkdir, readdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import {
   parsePushRange,
   formatCommitOutput,
@@ -167,23 +167,83 @@ const hasExecutablePreCommit = (root: string): Future<Error, boolean> =>
     )
   );
 
-const commitIsolatedIndex = (root: string, messageFile: string, tmpIndex: string, unselected: readonly string[]): Future<Error, ExecResult> =>
-  unselected.length === 0 ?
-    execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex))
-  : hasExecutablePreCommit(root).chain((wrap) =>
-      wrap ?
-        Future.bracket(acquireHookIsolation(root, unselected), releaseHookIsolation, (iso) =>
-          execBin(
-            "git",
-            ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile],
-            indexEnv(tmpIndex, {
-              COMMIT_TOOLS_ORIG_PRE_COMMIT: iso.origPreCommit,
-              COMMIT_TOOLS_RESET_PATHS: iso.pathsFile
-            })
-          )
+type WorktreeSnapshot = { dir: string; paths: readonly string[] };
+
+const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]): Promise<void> =>
+  Promise.all(
+    paths.map(async (rel) => {
+      const dest = join(dir, rel);
+      await mkdir(dirname(dest), { recursive: true });
+      await copyFile(join(root, rel), dest).catch(() => {});
+    })
+  ).then(() => {});
+
+const acquireWorktreeSnapshot = (root: string, tmpIndex: string, selected: readonly string[]): Future<Error, WorktreeSnapshot> => {
+  const dir = join(tmpdir(), `commit-wt-${Date.now()}`);
+  const snap: WorktreeSnapshot = { dir, paths: selected };
+  return Future.attemptP(async () => {
+    await mkdir(dir);
+    await backupWorktreeFiles(root, dir, selected);
+  })
+    .chain(() =>
+      selected.length === 0 ?
+        Future.resolve(snap)
+      : execGitChecked(["-C", root, "checkout-index", "-f", "--", ...selected], "Failed to isolate worktree for hooks", indexEnv(tmpIndex)).map(
+          () => snap
         )
-      : execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex))
+    )
+    .chainRej((err) => Future.attemptP(() => rm(dir, { recursive: true, force: true })).chain(() => Future.reject(err)));
+};
+
+const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<Error, void> =>
+  Future.attemptP(async () => {
+    await Promise.all(
+      snap.paths.map(async (rel) => {
+        const backup = join(snap.dir, rel);
+        const dest = join(root, rel);
+        try {
+          await access(backup);
+          await mkdir(dirname(dest), { recursive: true });
+          await copyFile(backup, dest);
+        } catch {
+          await unlink(dest).catch(() => {});
+        }
+      })
     );
+    await rm(snap.dir, { recursive: true, force: true });
+  });
+
+const runIsolatedCommit = (
+  root: string,
+  messageFile: string,
+  tmpIndex: string,
+  unselected: readonly string[],
+  wrapHooks: boolean
+): Future<Error, ExecResult> =>
+  wrapHooks ?
+    Future.bracket(acquireHookIsolation(root, unselected), releaseHookIsolation, (iso) =>
+      execBin(
+        "git",
+        ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile],
+        indexEnv(tmpIndex, {
+          COMMIT_TOOLS_ORIG_PRE_COMMIT: iso.origPreCommit,
+          COMMIT_TOOLS_RESET_PATHS: iso.pathsFile
+        })
+      )
+    )
+  : execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex));
+
+const commitIsolatedIndex = (
+  root: string,
+  messageFile: string,
+  tmpIndex: string,
+  selected: readonly string[],
+  unselected: readonly string[]
+): Future<Error, ExecResult> =>
+  hasExecutablePreCommit(root).chain((hasHook) => {
+    const commit = () => runIsolatedCommit(root, messageFile, tmpIndex, unselected, hasHook && unselected.length > 0);
+    return hasHook ? Future.bracket(acquireWorktreeSnapshot(root, tmpIndex, selected), (snap) => releaseWorktreeSnapshot(root, snap), commit) : commit();
+  });
 
 const copyIndexFile = (root: string, dest: string): Future<Error, void> =>
   execGitChecked(["-C", root, "rev-parse", "--absolute-git-dir"], "Failed to resolve git directory").chain((gitDir) =>
@@ -221,7 +281,7 @@ const isolateAndCommit = (root: string, messageFile: string, tmpIndex: string, p
     const keep = new Set(paths);
     const unselected = staged.filter((path) => !keep.has(path));
     return resetIndexPaths(root, tmpIndex, unselected).chain(() =>
-      commitIsolatedIndex(root, messageFile, tmpIndex, unselected).chain((result) => finishIsolatedCommit(root, paths, result))
+      commitIsolatedIndex(root, messageFile, tmpIndex, paths, unselected).chain((result) => finishIsolatedCommit(root, paths, result))
     );
   });
 

@@ -235,6 +235,32 @@ git add -A
     }
   });
 
+  it("performCommit with pathspecs does not commit unstaged selected edits via hook git add -A", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "a.txt"), "staged safe\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    writeFileSync(join(dir, "a.txt"), "unstaged SECRET\n");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: first", ["a.txt"]));
+      expect(run("show HEAD:a.txt")).toBe("staged safe\n");
+      expect(run("diff -- a.txt")).toContain("unstaged SECRET");
+      expect(() => run("show HEAD:b.txt")).toThrow();
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs copies hook-updated blobs into the real index", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     writeFileSync(join(dir, "file.txt"), "unformatted\n");

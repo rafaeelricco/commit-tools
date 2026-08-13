@@ -1,4 +1,4 @@
-export { Commit };
+export { Commit, routeAnalysis, type AnalysisRoute };
 
 import * as p from "@clack/prompts";
 import * as pr from "@/infra/github/pr";
@@ -18,7 +18,10 @@ import {
   type LlmRequestMetadata,
   type SplitPlanContent
 } from "@/domain/llm/router";
-import { Nothing, type Maybe, Just } from "@/libs/maybe";
+import { type SplitPlan } from "@/domain/split/plan";
+import { Nothing, type Maybe, Just, fromOptional } from "@/libs/maybe";
+import { Failure, Success, type Result } from "@/libs/result";
+import { absurd } from "@/libs/types";
 import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
@@ -26,6 +29,16 @@ import color from "picocolors";
 
 const USER_ACTIONS = ["commit_push", "commit", "split", "regenerate", "adjust", "cancel"] as const;
 type UserAction = (typeof USER_ACTIONS)[number];
+
+type AnalysisRoute = { tag: "split"; plan: SplitPlan } | { tag: "single"; message: string };
+
+const routeAnalysis = (plan: SplitPlan): Result<Error, AnalysisRoute> =>
+  plan.shouldSplit && plan.commits.length >= 2 ?
+    Success({ tag: "split", plan })
+  : fromOptional(plan.commits[0]).unwrap<Result<Error, AnalysisRoute>>(
+      () => Failure(new Error("Split plan: expected at least 1 commit")),
+      (first) => Success({ tag: "single", message: first.message })
+    );
 
 class Commit {
   private constructor(
@@ -67,14 +80,19 @@ class Commit {
 
   private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
     const { plan, metadata } = content;
-    if (plan.shouldSplit && plan.commits.length >= 2) {
-      return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, plan, metadata);
-    }
-    const first = plan.commits[0];
-    if (first === undefined) {
-      return Future.reject(new Error("Split plan: expected at least 1 commit"));
-    }
-    return this.interact(diff, files, { text: first.message, metadata });
+    return routeAnalysis(plan).either(
+      (e) => Future.reject(e),
+      (route) => {
+        switch (route.tag) {
+          case "split":
+            return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, route.plan, metadata);
+          case "single":
+            return this.interact(diff, files, { text: route.message, metadata });
+          default:
+            return absurd(route, "AnalysisRoute");
+        }
+      }
+    );
   }
 
   private startSplit(diff: string, files: readonly string[]): Future<Error, void> {

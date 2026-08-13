@@ -4,9 +4,10 @@ vi.mock("@/infra/env", () => ({
   environment: { GOOGLE_CLIENT_ID: "test", GOOGLE_CLIENT_SECRET: "test" }
 }));
 
-import { Commit } from "@/cli/commit";
+import { Commit, routeAnalysis } from "@/cli/commit";
 import { Future } from "@/libs/future";
 import { Nothing, Just } from "@/libs/maybe";
+import { Failure, Success } from "@/libs/result";
 import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
@@ -194,5 +195,53 @@ describe("Commit.run", () => {
     expect(router.generateSplitPlan).toHaveBeenCalled();
     expect(repo.performCommit).toHaveBeenNthCalledWith(1, "msg one", ["a.ts"]);
     expect(repo.performCommit).toHaveBeenNthCalledWith(2, "msg two", ["b.ts"]);
+  });
+});
+
+describe("routeAnalysis", () => {
+  const twoCommits = [
+    { message: "msg one", files: ["a.ts"] },
+    { message: "msg two", files: ["b.ts"] }
+  ] as const;
+
+  it("routes a multi-commit split plan to split", () => {
+    const plan = { shouldSplit: true, commits: twoCommits };
+    const r = routeAnalysis(plan);
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value).toEqual({ tag: "split", plan });
+    }
+  });
+
+  it("routes a single-commit plan to that message", () => {
+    const r = routeAnalysis({ shouldSplit: false, commits: [{ message: "feat: one", files: ["a.ts"] }] });
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value).toEqual({ tag: "single", message: "feat: one" });
+    }
+  });
+
+  it("does not split when shouldSplit is true but only one commit exists", () => {
+    const r = routeAnalysis({ shouldSplit: true, commits: [{ message: "feat: one", files: ["a.ts"] }] });
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value).toEqual({ tag: "single", message: "feat: one" });
+    }
+  });
+
+  it("uses the first message when shouldSplit is false with multiple commits", () => {
+    const r = routeAnalysis({ shouldSplit: false, commits: twoCommits });
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value).toEqual({ tag: "single", message: "msg one" });
+    }
+  });
+
+  it("fails when the plan has no commits", () => {
+    const r = routeAnalysis({ shouldSplit: false, commits: [] });
+    expect(r instanceof Failure).toBe(true);
+    if (r instanceof Failure) {
+      expect(r.error.message).toBe("Split plan: expected at least 1 commit");
+    }
   });
 });

@@ -78,32 +78,44 @@ const collapseToSingleCommit = (commits: readonly SplitCommit[], leftover: reado
   });
 };
 
-const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Result<Error, SplitPlan> => {
+const takePath = (file: string, staged: Set<string>, seen: Set<string>): Result<Error, void> => {
+  if (seen.has(file)) {
+    return Failure(new Error(`Split plan: duplicate path: ${file}`));
+  }
+  if (!staged.has(file)) {
+    return Failure(new Error(`Split plan: unknown path: ${file}`));
+  }
+  seen.add(file);
+  return Success(undefined);
+};
+
+const leftoverStagedPaths = (plan: SplitPlan, stagedFiles: readonly string[]): Result<Error, readonly string[]> => {
   const staged = new Set(stagedFiles);
   const seen = new Set<string>();
   for (const commit of plan.commits) {
     for (const file of commit.files) {
-      if (seen.has(file)) {
-        return Failure(new Error(`Split plan: duplicate path: ${file}`));
+      const taken = takePath(file, staged, seen);
+      if (taken instanceof Failure) {
+        return Failure<Error, readonly string[]>(taken.error);
       }
-      if (!staged.has(file)) {
-        return Failure(new Error(`Split plan: unknown path: ${file}`));
-      }
-      seen.add(file);
     }
   }
-  const leftover = stagedFiles.filter((file) => !seen.has(file));
-  if (!plan.shouldSplit) {
-    return collapseToSingleCommit(plan.commits, leftover);
-  }
-  if (leftover.length === 0) {
-    return Success(plan);
-  }
-  return Success({
-    shouldSplit: true,
-    commits: [...plan.commits, { message: REMAINING_STAGED_MESSAGE, files: leftover }]
-  });
+  return Success(stagedFiles.filter((file) => !seen.has(file)));
 };
+
+const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Result<Error, SplitPlan> =>
+  leftoverStagedPaths(plan, stagedFiles).chain((leftover) => {
+    if (!plan.shouldSplit) {
+      return collapseToSingleCommit(plan.commits, leftover);
+    }
+    if (leftover.length === 0) {
+      return Success(plan);
+    }
+    return Success({
+      shouldSplit: true,
+      commits: [...plan.commits, { message: REMAINING_STAGED_MESSAGE, files: leftover }]
+    });
+  });
 
 const parseAndValidateSplitPlan = (raw: string, stagedFiles: readonly string[]): Result<Error, SplitPlan> =>
   parseSplitPlan(raw).chain((plan) => validateSplitPlan(plan, stagedFiles));

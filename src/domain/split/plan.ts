@@ -66,6 +66,17 @@ const parseSplitPlan = (raw: string): Result<Error, SplitPlan> => {
   return D.decode(json, splitPlanDecoder).mapFailure((msg) => new Error(`Split plan: ${msg}`));
 };
 
+const collapseToSingleCommit = (commits: readonly SplitCommit[], leftover: readonly string[]): Result<Error, SplitPlan> => {
+  const [first, ...rest] = commits;
+  if (first === undefined) {
+    return Failure(new Error("Split plan: expected at least 1 commit"));
+  }
+  return Success({
+    shouldSplit: false,
+    commits: [{ message: first.message, files: [...first.files, ...rest.flatMap((commit) => commit.files), ...leftover] }]
+  });
+};
+
 const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Result<Error, SplitPlan> => {
   const staged = new Set(stagedFiles);
   const seen = new Set<string>();
@@ -81,18 +92,11 @@ const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Res
     }
   }
   const leftover = stagedFiles.filter((file) => !seen.has(file));
+  if (!plan.shouldSplit) {
+    return collapseToSingleCommit(plan.commits, leftover);
+  }
   if (leftover.length === 0) {
     return Success(plan);
-  }
-  if (!plan.shouldSplit) {
-    const [first, ...rest] = plan.commits;
-    if (first === undefined) {
-      return Failure(new Error("Split plan: expected at least 1 commit"));
-    }
-    return Success({
-      shouldSplit: false,
-      commits: [{ message: first.message, files: [...first.files, ...leftover] }, ...rest]
-    });
   }
   return Success({
     shouldSplit: true,

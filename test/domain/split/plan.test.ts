@@ -83,6 +83,22 @@ describe("parseAndValidateSplitPlan", () => {
     }
   });
 
+  it("collapses extra commits when should_split is false", () => {
+    const raw = JSON.stringify({
+      should_split: false,
+      commits: [
+        { message: "feat: a", files: ["a.ts"] },
+        { message: "feat: b", files: ["b.ts", "c.ts"] }
+      ]
+    });
+    const r = parseAndValidateSplitPlan(raw, staged);
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value.shouldSplit).toBe(false);
+      expect(r.value.commits).toEqual([{ message: "feat: a", files: ["a.ts", "b.ts", "c.ts"] }]);
+    }
+  });
+
   it("folds leftover into first commit when should_split is false", () => {
     const r = parseAndValidateSplitPlan('{"should_split":false,"commits":[{"message":"feat: a","files":["a.ts"]}]}', staged);
     expect(r instanceof Success).toBe(true);

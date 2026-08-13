@@ -368,8 +368,24 @@ const resetIndexPaths = (root: string, indexFile: string, paths: readonly string
       )
     );
 
+const isExactHeadBlob = (lsTree: string): boolean => {
+  const kind = lsTree.trim().split(/\s+/)[1];
+  return kind === "blob" || kind === "commit";
+};
+
+const resetExactIndexPath = (root: string, path: string): Future<Error, void> =>
+  execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", path], "Failed to reconcile index after commit").map(() => {});
+
+const removeExactIndexPath = (root: string, path: string): Future<Error, void> =>
+  execGitChecked(["-C", root, "update-index", "--force-remove", "--", path], "Failed to reconcile index after commit").map(() => {});
+
+const reconcileOneIndexPath = (root: string, path: string): Future<Error, void> =>
+  execGitChecked(["-C", root, "ls-tree", "HEAD", "--", path], "Failed to reconcile index after commit").chain((stdout) =>
+    isExactHeadBlob(stdout) ? resetExactIndexPath(root, path) : removeExactIndexPath(root, path)
+  );
+
 const reconcileCommittedIndex = (root: string, paths: readonly string[]): Future<Error, void> =>
-  execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", ...paths], "Failed to reconcile index after commit").map(() => {});
+  Future.traverse((path) => reconcileOneIndexPath(root, path), [...paths]).map(() => {});
 
 const finishIsolatedCommit = (root: string, paths: readonly string[], result: ExecResult): Future<Error, ExecResult> =>
   result.either(

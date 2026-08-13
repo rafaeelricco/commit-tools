@@ -446,6 +446,32 @@ git add -A
     }
   });
 
+  it("performCommit with pathspecs keeps later descendants staged after an ancestor file-to-directory commit", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "thing"), "file\n");
+    run("add thing");
+    run('commit -m "add thing"');
+    unlinkSync(join(dir, "thing"));
+    mkdirSync(join(dir, "thing"));
+    writeFileSync(join(dir, "thing", "a"), "a\n");
+    writeFileSync(join(dir, "thing", "b"), "b\n");
+    run("add -A");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: replace file", ["thing", "thing/a"]));
+      expect(run("show HEAD:thing/a")).toBe("a\n");
+      expect(run("cat-file -t HEAD:thing").trim()).toBe("tree");
+      expect(() => run("show HEAD:thing/b")).toThrow();
+      expect(run("diff --staged --name-only").trim()).toBe("thing/b");
+      await runFuture(repo.performCommit("feat: add b", ["thing/b"]));
+      expect(run("show HEAD:thing/b")).toBe("b\n");
+      expect(run("diff --staged --name-only").trim()).toBe("");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs isolates a directory-to-file replacement when a hook exists", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     mkdirSync(join(dir, "thing"));

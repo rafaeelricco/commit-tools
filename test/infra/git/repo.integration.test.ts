@@ -386,6 +386,36 @@ test -n "$files"
     }
   });
 
+  it("performCommit with pathspecs isolates a file-to-directory replacement when a hook runs git add -A", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "thing"), "file\n");
+    run("add thing");
+    run('commit -m "add thing"');
+    unlinkSync(join(dir, "thing"));
+    mkdirSync(join(dir, "thing"));
+    writeFileSync(join(dir, "thing", "child"), "child\n");
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add -A");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: replace file", ["thing", "thing/child"]));
+      expect(run("show HEAD:thing/child")).toBe("child\n");
+      expect(run("cat-file -t HEAD:thing").trim()).toBe("tree");
+      expect(run("diff --staged --name-only").trim()).toBe("other.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs isolates a directory-to-file replacement when a hook exists", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     mkdirSync(join(dir, "thing"));

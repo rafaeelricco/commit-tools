@@ -171,13 +171,15 @@ const dirtyPathSet = (root: string, tmpIndex: string, paths: readonly string[]):
     Future.resolve(new Set<string>())
   : execGitChecked(["-C", root, "diff", "--name-only", "-z", "--", ...paths], "Failed to list dirty worktree paths", indexEnv(tmpIndex)).map(nulPathSet);
 
+const hasIndexedDescendant = (path: string, inIndex: ReadonlySet<string>): boolean => [...inIndex].some((indexed) => indexed.startsWith(`${path}/`));
+
 const planWorktreeHide = (
   selected: readonly string[],
   inIndex: ReadonlySet<string>,
   dirty: ReadonlySet<string>
 ): { checkout: readonly string[]; hide: readonly string[] } => {
   const checkout = selected.filter((path) => inIndex.has(path) && dirty.has(path));
-  const deleted = selected.filter((path) => !inIndex.has(path));
+  const deleted = selected.filter((path) => !inIndex.has(path) && !hasIndexedDescendant(path, inIndex));
   return { checkout, hide: [...checkout, ...deleted] };
 };
 

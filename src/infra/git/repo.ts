@@ -326,7 +326,10 @@ const isMissingGitHookCommand = (failure: CommandFailure): boolean => {
 };
 
 const runPreCommitFile = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
-  resolveHooksDir(root).chain((hooks) => execBin("sh", [join(hooks, "pre-commit")], indexEnv(tmpIndex), root));
+  resolveHooksDir(root).chain((hooks) => {
+    const hook = join(hooks, "pre-commit");
+    return process.platform === "win32" ? execBin("sh", [hook], indexEnv(tmpIndex), root) : execBin(hook, [], indexEnv(tmpIndex), root);
+  });
 
 const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
   execBin("git", ["-C", root, "hook", "run", "pre-commit"], indexEnv(tmpIndex)).chain((result) =>

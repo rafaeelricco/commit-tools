@@ -47,7 +47,8 @@ const stripOptionalJsonFence = (s: string): string => {
 };
 
 const extractJsonObject = (s: string): string => {
-  const start = s.indexOf("{");
+  const match = s.match(/\{\s*"should_split"\s*:/);
+  const start = match?.index ?? s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start === -1 || end <= start) {
     return s;

@@ -39,6 +39,11 @@ describe("parseAndValidateSplitPlan", () => {
     expect(r instanceof Success).toBe(true);
   });
 
+  it("skips a preview brace before the plan object", () => {
+    const r = parseAndValidateSplitPlan('First character "{", last "}".\n' + threeCommits, staged);
+    expect(r instanceof Success).toBe(true);
+  });
+
   it("rejects invalid JSON", () => {
     const r = parseAndValidateSplitPlan("feat: add foo", staged);
     expect(r instanceof Failure).toBe(true);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -282,6 +282,52 @@ git add -A
       expect(run("show HEAD:a.txt")).toBe("staged safe\n");
       expect(run("diff -- a.txt")).toContain("unstaged SECRET");
       expect(() => run("show HEAD:b.txt")).toThrow();
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs restores an unstaged symlink retarget after a hook", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "target.txt"), "staged-target\n");
+    writeFileSync(join(dir, "link-dest.txt"), "unstaged-dest\n");
+    symlinkSync("target.txt", join(dir, "link"));
+    run("add link");
+    unlinkSync(join(dir, "link"));
+    symlinkSync("link-dest.txt", join(dir, "link"));
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: link", ["link"]));
+      expect(run("show HEAD:link").trim()).toBe("target.txt");
+      expect(readlinkSync(join(dir, "link"))).toBe("link-dest.txt");
+      expect(readFileSync(join(dir, "target.txt"), "utf-8")).toBe("staged-target\n");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs treats bracket filenames as literal pathspecs", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    mkdirSync(join(dir, "app", "[id]"), { recursive: true });
+    mkdirSync(join(dir, "app", "i"), { recursive: true });
+    writeFileSync(join(dir, "app", "[id]", "page.tsx"), "bracket\n");
+    writeFileSync(join(dir, "app", "i", "page.tsx"), "plain\n");
+    run("add app");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: bracket route", ["app/[id]/page.tsx"]));
+      expect(run("show HEAD:app/[id]/page.tsx")).toBe("bracket\n");
+      expect(run("diff --staged --name-only").trim()).toBe("app/i/page.tsx");
     } finally {
       chdir(prev);
     }

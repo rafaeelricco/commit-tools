@@ -32,7 +32,7 @@ import { type BaseLookupError } from "@/infra/git/parsers";
 import { execBin, type ExecResult } from "@/infra/shell";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
-import { access, copyFile, mkdir, readdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { access, copyFile, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import {
@@ -61,7 +61,7 @@ type PushResult = {
 };
 
 const execGitChecked = (args: string[], fallbackMsg: string, env?: NodeJS.ProcessEnv): Future<Error, string> =>
-  execBin("git", args, env).chain((result) =>
+  execBin("git", args, { GIT_LITERAL_PATHSPECS: "1", ...env }).chain((result) =>
     result.either(
       (failure) => Future.reject<Error, string>(new Error(commandFailureMessage(failure, fallbackMsg))),
       ({ stdout }) => Future.resolve<Error, string>(stdout)
@@ -111,6 +111,7 @@ const getWorkTreeRoot = (): Future<Error, string> =>
 
 const indexEnv = (indexFile: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
   GIT_INDEX_FILE: indexFile,
+  GIT_LITERAL_PATHSPECS: "1",
   ...extra
 });
 
@@ -191,12 +192,39 @@ const planWorktreeHide = (
   return { checkout, hide: [...checkout, ...deleted] };
 };
 
+const isEnoent = (err: unknown): boolean => err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT";
+
+const snapshotWorktreeEntry = async (src: string, dest: string): Promise<void> => {
+  const st = await lstat(src);
+  await mkdir(dirname(dest), { recursive: true });
+  if (st.isSymbolicLink()) {
+    await symlink(await readlink(src), dest);
+    return;
+  }
+  await copyFile(src, dest);
+};
+
+const restoreWorktreeEntry = async (backup: string, dest: string): Promise<void> => {
+  const st = await lstat(backup);
+  await unlink(dest).catch(() => {});
+  await mkdir(dirname(dest), { recursive: true });
+  if (st.isSymbolicLink()) {
+    await symlink(await readlink(backup), dest);
+    return;
+  }
+  await copyFile(backup, dest);
+};
+
 const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]): Promise<void> =>
   Promise.all(
     paths.map(async (rel) => {
-      const dest = join(dir, rel);
-      await mkdir(dirname(dest), { recursive: true });
-      await copyFile(join(root, rel), dest).catch(() => {});
+      try {
+        await snapshotWorktreeEntry(join(root, rel), join(dir, rel));
+      } catch (err) {
+        if (!isEnoent(err)) {
+          throw err;
+        }
+      }
     })
   ).then(() => {});
 
@@ -236,12 +264,12 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
         const backup = join(snap.dir, rel);
         const dest = join(root, rel);
         try {
-          await access(backup);
-          await mkdir(dirname(dest), { recursive: true });
-          await copyFile(backup, dest);
+          await lstat(backup);
         } catch {
           await unlink(dest).catch(() => {});
+          return;
         }
+        await restoreWorktreeEntry(backup, dest);
       })
     );
     await rm(snap.dir, { recursive: true, force: true });

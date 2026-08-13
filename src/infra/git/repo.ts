@@ -30,6 +30,7 @@ import { type Result, Failure } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
 import { execBin, type ExecResult } from "@/infra/shell";
+import { spawn } from "node:child_process";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
 import { access, copyFile, cp, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
@@ -173,15 +174,31 @@ const dirtyPathSet = (root: string, tmpIndex: string, paths: readonly string[]):
 
 const hasIndexedDescendant = (path: string, inIndex: ReadonlySet<string>): boolean => [...inIndex].some((indexed) => indexed.startsWith(`${path}/`));
 
+const hasIndexedCaseAlias = (path: string, inIndex: ReadonlySet<string>): boolean => {
+  const folded = path.toLowerCase();
+  return [...inIndex].some((indexed) => indexed.toLowerCase() === folded);
+};
+
 const planWorktreeHide = (
   selected: readonly string[],
   inIndex: ReadonlySet<string>,
-  dirty: ReadonlySet<string>
+  dirty: ReadonlySet<string>,
+  ignoreCase: boolean
 ): { checkout: readonly string[]; hide: readonly string[] } => {
   const checkout = selected.filter((path) => inIndex.has(path) && dirty.has(path));
-  const deleted = selected.filter((path) => !inIndex.has(path) && !hasIndexedDescendant(path, inIndex));
+  const deleted = selected.filter(
+    (path) => !inIndex.has(path) && !hasIndexedDescendant(path, inIndex) && !(ignoreCase && hasIndexedCaseAlias(path, inIndex))
+  );
   return { checkout, hide: [...checkout, ...deleted] };
 };
+
+const repoIgnoresCase = (root: string): Future<Error, boolean> =>
+  execBin("git", ["-C", root, "config", "--bool", "core.ignorecase"]).map((result) =>
+    result.either(
+      () => false,
+      ({ stdout }) => stdout.trim() === "true"
+    )
+  );
 
 const errnoCode = (err: unknown): string | undefined => (err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined);
 
@@ -251,26 +268,28 @@ const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]
 
 const acquireWorktreeSnapshot = (root: string, tmpIndex: string, selected: readonly string[]): Future<Error, WorktreeSnapshot> => {
   const dir = join(tmpdir(), `commit-wt-${Date.now()}`);
-  return Future.both(indexPathSet(root, tmpIndex, selected), dirtyPathSet(root, tmpIndex, selected)).chain(([inIndex, dirty]) => {
-    const { checkout, hide } = planWorktreeHide(selected, inIndex, dirty);
-    const snap: WorktreeSnapshot = { dir, paths: hide, checkout };
-    if (hide.length === 0) {
-      return Future.resolve(snap);
+  return Future.both(Future.both(indexPathSet(root, tmpIndex, selected), dirtyPathSet(root, tmpIndex, selected)), repoIgnoresCase(root)).chain(
+    ([[inIndex, dirty], ignoreCase]) => {
+      const { checkout, hide } = planWorktreeHide(selected, inIndex, dirty, ignoreCase);
+      const snap: WorktreeSnapshot = { dir, paths: hide, checkout };
+      if (hide.length === 0) {
+        return Future.resolve(snap);
+      }
+      return Future.attemptP(async () => {
+        await mkdir(dir);
+        await backupWorktreeFiles(root, dir, hide);
+        await Promise.all(hide.filter((path) => !checkout.includes(path)).map((rel) => removeWorktreePath(join(root, rel))));
+      })
+        .chain(() =>
+          checkout.length === 0 ?
+            Future.resolve(snap)
+          : execGitChecked(["-C", root, "checkout-index", "-f", "--", ...checkout], "Failed to isolate worktree for hooks", indexEnv(tmpIndex)).map(
+              () => snap
+            )
+        )
+        .chainRej((err) => releaseWorktreeSnapshot(root, snap).chain(() => Future.reject(err)));
     }
-    return Future.attemptP(async () => {
-      await mkdir(dir);
-      await backupWorktreeFiles(root, dir, hide);
-      await Promise.all(hide.filter((path) => !checkout.includes(path)).map((rel) => removeWorktreePath(join(root, rel))));
-    })
-      .chain(() =>
-        checkout.length === 0 ?
-          Future.resolve(snap)
-        : execGitChecked(["-C", root, "checkout-index", "-f", "--", ...checkout], "Failed to isolate worktree for hooks", indexEnv(tmpIndex)).map(
-            () => snap
-          )
-      )
-      .chainRej((err) => releaseWorktreeSnapshot(root, snap).chain(() => Future.reject(err)));
-  });
+  );
 };
 
 const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<Error, void> =>
@@ -349,43 +368,87 @@ const writeNulPathspecFile = (paths: readonly string[]): Future<Error, string> =
     return file;
   });
 
+const execGitStdin = (args: string[], stdin: string, fallbackMsg: string, env?: NodeJS.ProcessEnv): Future<Error, string> =>
+  Future.create((reject, resolve) => {
+    const proc = spawn("git", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, GIT_LITERAL_PATHSPECS: "1", ...env }
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
+    proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+    proc.on("error", (err) => reject(new Error(`Failed to start process: ${err.message}`)));
+    proc.on("close", (exitCode) => {
+      if (exitCode === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(new Error(stderr.trim() || stdout.trim() || `Command failed with exit code ${exitCode}: ${fallbackMsg}`));
+    });
+    proc.stdin.end(stdin);
+    return () => proc.kill();
+  });
+
+const resetExactHeadBlobs = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
+  paths.length === 0 ?
+    Future.resolve(undefined)
+  : Future.bracket(
+      writeNulPathspecFile(paths),
+      (file) => Future.attemptP(() => unlink(file).catch(() => {})),
+      (file) =>
+        execGitChecked(
+          ["-C", root, "reset", "-q", "HEAD", `--pathspec-from-file=${file}`, "--pathspec-file-nul"],
+          "Failed to isolate staged paths",
+          indexEnv(indexFile)
+        ).map(() => {})
+    );
+
+const removeExactIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
+  paths.length === 0 ?
+    Future.resolve(undefined)
+  : execGitStdin(
+      ["-C", root, "update-index", "--force-remove", "-z", "--stdin"],
+      `${paths.join("\0")}\0`,
+      "Failed to isolate staged paths",
+      indexEnv(indexFile)
+    ).map(() => {});
+
+const partitionHeadIndexPaths = (root: string, paths: readonly string[]): Future<Error, { reset: readonly string[]; remove: readonly string[] }> =>
+  execGitStdin(["-C", root, "cat-file", "--batch-check"], `${paths.map((path) => `HEAD:${path}`).join("\n")}\n`, "Failed to isolate staged paths").map(
+    (stdout) => {
+      const lines = stdout.split("\n");
+      const reset: string[] = [];
+      const remove: string[] = [];
+      paths.forEach((path, i) => {
+        const kind = (lines[i] ?? "").split(" ")[1];
+        if (kind === "blob" || kind === "commit") {
+          reset.push(path);
+        } else {
+          remove.push(path);
+        }
+      });
+      return { reset, remove };
+    }
+  );
+
 const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
   paths.length === 0 ?
     Future.resolve(undefined)
   : execBin("git", ["-C", root, "rev-parse", "-q", "--verify", "HEAD"]).chain((head) =>
-      Future.bracket(
-        writeNulPathspecFile(paths),
-        (file) => Future.attemptP(() => unlink(file).catch(() => {})),
-        (file) =>
-          execGitChecked(
-            head.either(
-              () => ["-C", root, "rm", "--cached", "-q", "-f", `--pathspec-from-file=${file}`, "--pathspec-file-nul"],
-              () => ["-C", root, "reset", "-q", "HEAD", `--pathspec-from-file=${file}`, "--pathspec-file-nul"]
-            ),
-            "Failed to isolate staged paths",
-            indexEnv(indexFile)
-          ).map(() => {})
+      head.either(
+        () => removeExactIndexPaths(root, indexFile, paths),
+        () =>
+          partitionHeadIndexPaths(root, paths).chain(({ reset, remove }) =>
+            resetExactHeadBlobs(root, indexFile, reset).chain(() => removeExactIndexPaths(root, indexFile, remove))
+          )
       )
     );
 
-const isExactHeadBlob = (lsTree: string): boolean => {
-  const kind = lsTree.trim().split(/\s+/)[1];
-  return kind === "blob" || kind === "commit";
-};
-
-const resetExactIndexPath = (root: string, path: string): Future<Error, void> =>
-  execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", path], "Failed to reconcile index after commit").map(() => {});
-
-const removeExactIndexPath = (root: string, path: string): Future<Error, void> =>
-  execGitChecked(["-C", root, "update-index", "--force-remove", "--", path], "Failed to reconcile index after commit").map(() => {});
-
-const reconcileOneIndexPath = (root: string, path: string): Future<Error, void> =>
-  execGitChecked(["-C", root, "ls-tree", "HEAD", "--", path], "Failed to reconcile index after commit").chain((stdout) =>
-    isExactHeadBlob(stdout) ? resetExactIndexPath(root, path) : removeExactIndexPath(root, path)
-  );
-
 const reconcileCommittedIndex = (root: string, paths: readonly string[]): Future<Error, void> =>
-  Future.traverse((path) => reconcileOneIndexPath(root, path), [...paths]).map(() => {});
+  execGitChecked(["-C", root, "rev-parse", "--absolute-git-dir"], "Failed to reconcile index after commit").chain((gitDir) =>
+    resetIndexPaths(root, join(gitDir.trim(), "index"), paths)
+  );
 
 const finishIsolatedCommit = (root: string, paths: readonly string[], result: ExecResult): Future<Error, ExecResult> =>
   result.either(

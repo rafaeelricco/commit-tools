@@ -170,6 +170,33 @@ git add -A
     }
   });
 
+  it("performCommit with pathspecs keeps a case-only rename when a hook runs git add -A", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add other.txt");
+    run("mv -f file.txt File.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const staged = await runFuture(repo.listStagedPaths());
+      expect([...staged].sort()).toEqual(["File.txt", "file.txt", "other.txt"]);
+      await runFuture(repo.performCommit("feat: case rename", ["file.txt", "File.txt"]));
+      expect(run("ls-tree -r --name-only HEAD").trim()).toBe("File.txt");
+      expect(run("show HEAD:File.txt")).toBe("hello\n");
+      expect(run("diff --staged --name-only").trim()).toBe("other.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with paths records the staged blob not the worktree", async () => {
     const { dir, run } = createTempGitRepo({ staged: true });
     writeFileSync(join(dir, "file.txt"), "hello unstaged secret\n");
@@ -466,6 +493,29 @@ git add -A
       expect(run("diff --staged --name-only").trim()).toBe("thing/b");
       await runFuture(repo.performCommit("feat: add b", ["thing/b"]));
       expect(run("show HEAD:thing/b")).toBe("b\n");
+      expect(run("diff --staged --name-only").trim()).toBe("");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs keeps a later ancestor file after committing a directory deletion", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    mkdirSync(join(dir, "thing"));
+    writeFileSync(join(dir, "thing", "a"), "a\n");
+    run("add thing");
+    run('commit -m "add dir"');
+    run("rm -rf thing");
+    writeFileSync(join(dir, "thing"), "file\n");
+    run("add -A");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: delete child", ["thing/a"]));
+      expect(() => run("show HEAD:thing/a")).toThrow();
+      expect(run("diff --staged --name-only").trim()).toBe("thing");
+      await runFuture(repo.performCommit("feat: add file", ["thing"]));
+      expect(run("show HEAD:thing")).toBe("file\n");
       expect(run("diff --staged --name-only").trim()).toBe("");
     } finally {
       chdir(prev);

@@ -161,7 +161,7 @@ Or explicitly:
 commit generate
 ```
 
-With split enabled in setup, `commit` analyzes staged files and opens a multi-commit plan when they look independent. `commit split` always opens that plan. From a single-message prompt you can also pick Split.
+With split enabled in setup, `commit` analyzes staged files and opens a multi-commit plan when they look independent.
 
 ### System Checks
 
@@ -201,7 +201,6 @@ commit --help
 | ------------------------ | ------------------------------------------------- |
 | `commit`                 | Generate a commit message (default)               |
 | `commit generate`        | Generate a commit message                         |
-| `commit split`           | Force a multi-commit plan from staged changes     |
 | `commit setup`           | Configure authentication and conventions          |
 | `commit login`           | Alias for setup — re-authenticate                 |
 | `commit doctor`          | Check installation and environment                |

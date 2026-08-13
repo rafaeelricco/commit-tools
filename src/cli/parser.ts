@@ -10,7 +10,6 @@ type AliasAction = { type: "hub" } | { type: "list" } | { type: "add"; name: str
 
 type CliCommand =
   | { type: "generate" }
-  | { type: "split" }
   | { type: "setup" }
   | { type: "doctor" }
   | { type: "model" }
@@ -54,8 +53,6 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
   switch (cmd) {
     case "generate":
       return D.succeed({ type: "generate" });
-    case "split":
-      return D.succeed({ type: "split" });
     case "setup":
     case "login":
       return D.succeed({ type: "setup" });
@@ -92,7 +89,6 @@ Usage: commit-tools [command]
 
 Commands:
   generate (default)  Generate a commit message
-  split               Force a multi-commit plan from staged changes
   branch              Suggest branch names from local changes and create one
   new-branch          Alias for branch
   setup               Configure authentication and conventions

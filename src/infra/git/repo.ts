@@ -328,7 +328,7 @@ const foreignIndexPaths = (selected: readonly string[], preHook: readonly string
 
 const resetForeignIndexPaths = (root: string, tmpIndex: string, selected: readonly string[], preHook: readonly string[]): Future<Error, void> =>
   listAllIndexPaths(root, tmpIndex, "Failed to list index after hook").chain((postHook) =>
-    resetIndexPaths(root, tmpIndex, foreignIndexPaths(selected, preHook, postHook))
+    resetIndexPaths(root, tmpIndex, foreignIndexPaths(selected, preHook, postHook), new Set(selected))
   );
 
 const commitIsolatedAfterHook = (root: string, messageFile: string, tmpIndex: string): Future<Error, ExecResult> =>
@@ -361,13 +361,6 @@ const copyIndexFile = (root: string, dest: string): Future<Error, void> =>
 const listStagedPathsNoRenames = (root: string): Future<Error, readonly string[]> =>
   execGitChecked(["-C", root, "diff", "--staged", "--name-only", "--no-renames", "-z"], "Failed to list staged files").map(splitNulPaths);
 
-const writeNulPathspecFile = (paths: readonly string[]): Future<Error, string> =>
-  Future.attemptP(async () => {
-    const file = join(tmpdir(), `commit-pathspec-${Date.now()}`);
-    await writeFile(file, `${paths.join("\0")}\0`);
-    return file;
-  });
-
 const execGitStdin = (args: string[], stdin: string, fallbackMsg: string, env?: NodeJS.ProcessEnv): Future<Error, string> =>
   Future.create((reject, resolve) => {
     const proc = spawn("git", args, {
@@ -390,19 +383,38 @@ const execGitStdin = (args: string[], stdin: string, fallbackMsg: string, env?: 
     return () => proc.kill();
   });
 
-const resetExactHeadBlobs = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
-  paths.length === 0 ?
+type HeadBlob = { mode: string; sha: string };
+
+const parseHeadBlobMap = (stdout: string): ReadonlyMap<string, HeadBlob> => {
+  const map = new Map<string, HeadBlob>();
+  for (const rec of splitNulPaths(stdout)) {
+    const tab = rec.indexOf("\t");
+    if (tab < 0) {
+      continue;
+    }
+    const [mode, kind, sha] = rec.slice(0, tab).split(" ");
+    const path = rec.slice(tab + 1);
+    if ((kind === "blob" || kind === "commit") && mode && sha && path) {
+      map.set(path, { mode, sha });
+    }
+  }
+  return map;
+};
+
+const listHeadBlobMap = (root: string): Future<Error, ReadonlyMap<string, HeadBlob>> =>
+  execGitChecked(["-C", root, "ls-tree", "-r", "-z", "HEAD"], "Failed to isolate staged paths").map(parseHeadBlobMap);
+
+const hasKeptDescendant = (path: string, keep: ReadonlySet<string>): boolean => [...keep].some((kept) => kept.startsWith(`${path}/`));
+
+const restoreExactHeadBlobs = (root: string, indexFile: string, entries: readonly (HeadBlob & { path: string })[]): Future<Error, void> =>
+  entries.length === 0 ?
     Future.resolve(undefined)
-  : Future.bracket(
-      writeNulPathspecFile(paths),
-      (file) => Future.attemptP(() => unlink(file).catch(() => {})),
-      (file) =>
-        execGitChecked(
-          ["-C", root, "reset", "-q", "HEAD", `--pathspec-from-file=${file}`, "--pathspec-file-nul"],
-          "Failed to isolate staged paths",
-          indexEnv(indexFile)
-        ).map(() => {})
-    );
+  : execGitStdin(
+      ["-C", root, "update-index", "-z", "--index-info"],
+      `${entries.map((entry) => `${entry.mode} ${entry.sha}\t${entry.path}`).join("\0")}\0`,
+      "Failed to isolate staged paths",
+      indexEnv(indexFile)
+    ).map(() => {});
 
 const removeExactIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
   paths.length === 0 ?
@@ -414,40 +426,34 @@ const removeExactIndexPaths = (root: string, indexFile: string, paths: readonly 
       indexEnv(indexFile)
     ).map(() => {});
 
-const partitionHeadIndexPaths = (root: string, paths: readonly string[]): Future<Error, { reset: readonly string[]; remove: readonly string[] }> =>
-  execGitStdin(["-C", root, "cat-file", "--batch-check"], `${paths.map((path) => `HEAD:${path}`).join("\n")}\n`, "Failed to isolate staged paths").map(
-    (stdout) => {
-      const lines = stdout.split("\n");
-      const reset: string[] = [];
-      const remove: string[] = [];
-      paths.forEach((path, i) => {
-        const kind = (lines[i] ?? "").split(" ")[1];
-        if (kind === "blob" || kind === "commit") {
-          reset.push(path);
-        } else {
-          remove.push(path);
-        }
-      });
-      return { reset, remove };
-    }
-  );
+const applyHeadIndexPartition = (
+  root: string,
+  indexFile: string,
+  paths: readonly string[],
+  keep: ReadonlySet<string>,
+  head: ReadonlyMap<string, HeadBlob>
+): Future<Error, void> => {
+  const restore = paths.flatMap((path) => {
+    const blob = head.get(path);
+    return blob === undefined || hasKeptDescendant(path, keep) ? [] : [{ path, ...blob }];
+  });
+  const remove = paths.filter((path) => head.get(path) === undefined);
+  return removeExactIndexPaths(root, indexFile, remove).chain(() => restoreExactHeadBlobs(root, indexFile, restore));
+};
 
-const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
+const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[], keep: ReadonlySet<string>): Future<Error, void> =>
   paths.length === 0 ?
     Future.resolve(undefined)
   : execBin("git", ["-C", root, "rev-parse", "-q", "--verify", "HEAD"]).chain((head) =>
       head.either(
         () => removeExactIndexPaths(root, indexFile, paths),
-        () =>
-          partitionHeadIndexPaths(root, paths).chain(({ reset, remove }) =>
-            resetExactHeadBlobs(root, indexFile, reset).chain(() => removeExactIndexPaths(root, indexFile, remove))
-          )
+        () => listHeadBlobMap(root).chain((blobs) => applyHeadIndexPartition(root, indexFile, paths, keep, blobs))
       )
     );
 
 const reconcileCommittedIndex = (root: string, paths: readonly string[]): Future<Error, void> =>
   execGitChecked(["-C", root, "rev-parse", "--absolute-git-dir"], "Failed to reconcile index after commit").chain((gitDir) =>
-    resetIndexPaths(root, join(gitDir.trim(), "index"), paths)
+    resetIndexPaths(root, join(gitDir.trim(), "index"), paths, new Set())
   );
 
 const finishIsolatedCommit = (root: string, paths: readonly string[], result: ExecResult): Future<Error, ExecResult> =>
@@ -460,7 +466,7 @@ const isolateAndCommit = (root: string, messageFile: string, tmpIndex: string, p
   listStagedPathsNoRenames(root).chain((staged) => {
     const keep = new Set(paths);
     const unselected = staged.filter((path) => !keep.has(path));
-    return resetIndexPaths(root, tmpIndex, unselected).chain(() =>
+    return resetIndexPaths(root, tmpIndex, unselected, keep).chain(() =>
       commitIsolatedIndex(root, messageFile, tmpIndex, paths).chain((result) => finishIsolatedCommit(root, paths, result))
     );
   });

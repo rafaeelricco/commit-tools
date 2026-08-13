@@ -10,6 +10,7 @@ import { Nothing, Just } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
+import { type LlmRequestMetadata } from "@/domain/llm/router";
 
 type ConfigValue = s.Infer<typeof Config>;
 
@@ -49,7 +50,11 @@ const plan = {
   ]
 };
 
-const meta = { durationMs: 1, model: { provider: "openai" as const, model: "m", effort: "medium" as const }, tokens: Nothing() };
+const meta: LlmRequestMetadata = {
+  durationMs: 1,
+  model: { provider: "openai", model: "m", effort: "medium" },
+  tokens: Nothing()
+};
 
 const runPlan = () => {
   const cfg = config();

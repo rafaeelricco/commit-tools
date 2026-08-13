@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runFuture } from "@test/helpers/run-future";
 import { createTempGitRepo } from "@test/helpers/temp-git-repo";
@@ -154,6 +156,27 @@ describe("git repo integration", () => {
       expect(run("show HEAD:file.txt")).toBe("hello world\n");
       expect(run("diff --staged --name-only").trim()).toBe("other.txt");
       expect(run("diff -- file.txt")).toContain("hello unstaged secret");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs isolates files on an unborn branch", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "commit-tools-git-"));
+    const run = (args: string) => execSync(`git ${args}`, { cwd: dir, encoding: "utf-8" });
+    run("init -b main");
+    run('config user.email "test@example.com"');
+    run('config user.name "Test"');
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: first", ["a.txt"]));
+      expect(run("diff --staged --name-only").trim()).toBe("b.txt");
+      expect((await runFuture(repo.getCommitMetadata())).subject).toBe("feat: first");
+      expect(run("show HEAD:a.txt")).toBe("a\n");
     } finally {
       chdir(prev);
     }

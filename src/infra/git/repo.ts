@@ -121,7 +121,16 @@ const listStagedPathsNoRenames = (root: string): Future<Error, readonly string[]
 const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
   paths.length === 0 ?
     Future.resolve(undefined)
-  : execGitChecked(["-C", root, "reset", "-q", "HEAD", "--", ...paths], "Failed to isolate staged paths", indexEnv(indexFile)).map(() => {});
+  : execBin("git", ["-C", root, "rev-parse", "-q", "--verify", "HEAD"]).chain((head) =>
+      execGitChecked(
+        head.either(
+          () => ["-C", root, "rm", "--cached", "-q", "--", ...paths],
+          () => ["-C", root, "reset", "-q", "HEAD", "--", ...paths]
+        ),
+        "Failed to isolate staged paths",
+        indexEnv(indexFile)
+      ).map(() => {})
+    );
 
 const commitIsolatedPaths = (root: string, messageFile: string, paths: readonly string[]): Future<Error, ExecResult> => {
   const tmpIndex = join(tmpdir(), `commit-index-${Date.now()}`);

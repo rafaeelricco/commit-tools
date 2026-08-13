@@ -32,7 +32,7 @@ import { type BaseLookupError } from "@/infra/git/parsers";
 import { execBin, type ExecResult } from "@/infra/shell";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
-import { access, copyFile, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { access, copyFile, cp, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import {
@@ -111,26 +111,10 @@ const getWorkTreeRoot = (): Future<Error, string> =>
 
 const indexEnv = (indexFile: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
   GIT_INDEX_FILE: indexFile,
-  GIT_LITERAL_PATHSPECS: "1",
   ...extra
 });
 
-const PRE_COMMIT_WRAPPER = `#!/bin/sh
-set -e
-if [ -n "$COMMIT_TOOLS_ORIG_PRE_COMMIT" ] && [ -x "$COMMIT_TOOLS_ORIG_PRE_COMMIT" ]; then
-  "$COMMIT_TOOLS_ORIG_PRE_COMMIT"
-fi
-if [ -z "$COMMIT_TOOLS_RESET_PATHS" ] || [ ! -s "$COMMIT_TOOLS_RESET_PATHS" ]; then
-  exit 0
-fi
-if git rev-parse -q --verify HEAD >/dev/null; then
-  git reset -q HEAD --pathspec-from-file="$COMMIT_TOOLS_RESET_PATHS" --pathspec-file-nul || true
-else
-  git rm --cached -q -f --pathspec-from-file="$COMMIT_TOOLS_RESET_PATHS" --pathspec-file-nul || true
-fi
-`;
-
-type HookIsolation = { hooksDir: string; pathsFile: string; origPreCommit: string };
+type HookIsolation = { hooksDir: string; origPreCommit: string };
 
 const resolveHooksDir = (root: string): Future<Error, string> =>
   execGitChecked(["-C", root, "rev-parse", "--git-path", "hooks"], "Failed to resolve git hooks").map((p) => {
@@ -138,17 +122,23 @@ const resolveHooksDir = (root: string): Future<Error, string> =>
     return isAbsolute(trimmed) ? trimmed : join(root, trimmed);
   });
 
-const acquireHookIsolation = (root: string, unselected: readonly string[]): Future<Error, HookIsolation> => {
+const copyHookEntry = async (src: string, dest: string): Promise<void> => {
+  const st = await lstat(src);
+  if (st.isDirectory()) {
+    await cp(src, dest, { recursive: true });
+    return;
+  }
+  await copyFile(src, dest);
+};
+
+const acquireHookIsolation = (root: string): Future<Error, HookIsolation> => {
   const hooksDir = join(tmpdir(), `commit-hooks-${Date.now()}`);
-  const pathsFile = join(tmpdir(), `commit-reset-${Date.now()}`);
   return resolveHooksDir(root).chain((origHooks) =>
     Future.attemptP(async () => {
       await mkdir(hooksDir);
-      await writeFile(pathsFile, `${unselected.join("\0")}\0`);
-      await writeFile(join(hooksDir, "pre-commit"), PRE_COMMIT_WRAPPER, { mode: 0o755 });
       const names = await readdir(origHooks).catch(() => [] as string[]);
-      await Promise.all(names.filter((name) => name !== "pre-commit").map((name) => symlink(join(origHooks, name), join(hooksDir, name))));
-      return { hooksDir, pathsFile, origPreCommit: join(origHooks, "pre-commit") };
+      await Promise.all(names.filter((name) => name !== "pre-commit").map((name) => copyHookEntry(join(origHooks, name), join(hooksDir, name))));
+      return { hooksDir, origPreCommit: join(origHooks, "pre-commit") };
     })
   );
 };
@@ -156,7 +146,6 @@ const acquireHookIsolation = (root: string, unselected: readonly string[]): Futu
 const releaseHookIsolation = (iso: HookIsolation): Future<Error, void> =>
   Future.attemptP(async () => {
     await rm(iso.hooksDir, { recursive: true, force: true });
-    await unlink(iso.pathsFile).catch(() => {});
   });
 
 const hasExecutablePreCommit = (root: string): Future<Error, boolean> =>
@@ -192,7 +181,29 @@ const planWorktreeHide = (
   return { checkout, hide: [...checkout, ...deleted] };
 };
 
-const isEnoent = (err: unknown): boolean => err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT";
+const errnoCode = (err: unknown): string | undefined => (err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined);
+
+const isStructuralPathErr = (err: unknown): boolean => {
+  const code = errnoCode(err);
+  return code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR";
+};
+
+const removeWorktreePath = async (path: string): Promise<void> => {
+  let st;
+  try {
+    st = await lstat(path);
+  } catch (err) {
+    if (isStructuralPathErr(err)) {
+      return;
+    }
+    throw err;
+  }
+  if (st.isDirectory()) {
+    await rm(path, { recursive: true, force: true });
+    return;
+  }
+  await unlink(path);
+};
 
 const snapshotWorktreeEntry = async (src: string, dest: string): Promise<void> => {
   const st = await lstat(src);
@@ -201,15 +212,23 @@ const snapshotWorktreeEntry = async (src: string, dest: string): Promise<void> =
     await symlink(await readlink(src), dest);
     return;
   }
+  if (st.isDirectory()) {
+    await cp(src, dest, { recursive: true });
+    return;
+  }
   await copyFile(src, dest);
 };
 
 const restoreWorktreeEntry = async (backup: string, dest: string): Promise<void> => {
   const st = await lstat(backup);
-  await unlink(dest).catch(() => {});
+  await removeWorktreePath(dest);
   await mkdir(dirname(dest), { recursive: true });
   if (st.isSymbolicLink()) {
     await symlink(await readlink(backup), dest);
+    return;
+  }
+  if (st.isDirectory()) {
+    await cp(backup, dest, { recursive: true });
     return;
   }
   await copyFile(backup, dest);
@@ -221,7 +240,7 @@ const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]
       try {
         await snapshotWorktreeEntry(join(root, rel), join(dir, rel));
       } catch (err) {
-        if (!isEnoent(err)) {
+        if (!isStructuralPathErr(err)) {
           throw err;
         }
       }
@@ -239,7 +258,7 @@ const acquireWorktreeSnapshot = (root: string, tmpIndex: string, selected: reado
     return Future.attemptP(async () => {
       await mkdir(dir);
       await backupWorktreeFiles(root, dir, hide);
-      await Promise.all(hide.filter((path) => !checkout.includes(path)).map((rel) => unlink(join(root, rel)).catch(() => {})));
+      await Promise.all(hide.filter((path) => !checkout.includes(path)).map((rel) => removeWorktreePath(join(root, rel))));
     })
       .chain(() =>
         checkout.length === 0 ?
@@ -266,7 +285,7 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
         try {
           await lstat(backup);
         } catch {
-          await unlink(dest).catch(() => {});
+          await removeWorktreePath(dest);
           return;
         }
         await restoreWorktreeEntry(backup, dest);
@@ -275,35 +294,36 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
     await rm(snap.dir, { recursive: true, force: true });
   });
 
-const runIsolatedCommit = (
-  root: string,
-  messageFile: string,
-  tmpIndex: string,
-  unselected: readonly string[],
-  wrapHooks: boolean
-): Future<Error, ExecResult> =>
-  wrapHooks ?
-    Future.bracket(acquireHookIsolation(root, unselected), releaseHookIsolation, (iso) =>
-      execBin(
-        "git",
-        ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile],
-        indexEnv(tmpIndex, {
-          COMMIT_TOOLS_ORIG_PRE_COMMIT: iso.origPreCommit,
-          COMMIT_TOOLS_RESET_PATHS: iso.pathsFile
-        })
-      )
-    )
-  : execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex));
+const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
+  resolveHooksDir(root).chain((hooks) => execBin(join(hooks, "pre-commit"), [], indexEnv(tmpIndex), root));
 
-const commitIsolatedIndex = (
-  root: string,
-  messageFile: string,
-  tmpIndex: string,
-  selected: readonly string[],
-  unselected: readonly string[]
-): Future<Error, ExecResult> =>
+const resetForeignIndexPaths = (root: string, tmpIndex: string, selected: readonly string[]): Future<Error, void> =>
+  execGitChecked(["-C", root, "ls-files", "-z"], "Failed to list index after hook", indexEnv(tmpIndex)).chain((stdout) => {
+    const keep = new Set(selected);
+    return resetIndexPaths(
+      root,
+      tmpIndex,
+      splitNulPaths(stdout).filter((path) => !keep.has(path))
+    );
+  });
+
+const commitAfterHook = (root: string, messageFile: string, tmpIndex: string, selected: readonly string[]): Future<Error, ExecResult> =>
+  runUserPreCommit(root, tmpIndex).chain((hookResult) =>
+    hookResult.either(
+      () => Future.resolve(hookResult),
+      () =>
+        resetForeignIndexPaths(root, tmpIndex, selected).chain(() =>
+          Future.bracket(acquireHookIsolation(root), releaseHookIsolation, (iso) =>
+            execBin("git", ["-C", root, "-c", `core.hooksPath=${iso.hooksDir}`, "commit", "-F", messageFile], indexEnv(tmpIndex))
+          )
+        )
+    )
+  );
+
+const commitIsolatedIndex = (root: string, messageFile: string, tmpIndex: string, selected: readonly string[]): Future<Error, ExecResult> =>
   hasExecutablePreCommit(root).chain((hasHook) => {
-    const commit = () => runIsolatedCommit(root, messageFile, tmpIndex, unselected, hasHook && unselected.length > 0);
+    const commit = () =>
+      hasHook ? commitAfterHook(root, messageFile, tmpIndex, selected) : execBin("git", ["-C", root, "commit", "-F", messageFile], indexEnv(tmpIndex));
     return hasHook ? Future.bracket(acquireWorktreeSnapshot(root, tmpIndex, selected), (snap) => releaseWorktreeSnapshot(root, snap), commit) : commit();
   });
 
@@ -343,7 +363,7 @@ const isolateAndCommit = (root: string, messageFile: string, tmpIndex: string, p
     const keep = new Set(paths);
     const unselected = staged.filter((path) => !keep.has(path));
     return resetIndexPaths(root, tmpIndex, unselected).chain(() =>
-      commitIsolatedIndex(root, messageFile, tmpIndex, paths, unselected).chain((result) => finishIsolatedCommit(root, paths, result))
+      commitIsolatedIndex(root, messageFile, tmpIndex, paths).chain((result) => finishIsolatedCommit(root, paths, result))
     );
   });
 

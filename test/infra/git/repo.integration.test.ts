@@ -315,6 +315,100 @@ git add -A
     }
   });
 
+  it("performCommit with pathspecs ignores untracked files added by hook git add -A", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "selected.txt"), "keep\n");
+    writeFileSync(join(dir, "secret.txt"), "UNTRACKED SECRET\n");
+    run("add selected.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: selected", ["selected.txt"]));
+      expect(run("show HEAD:selected.txt")).toBe("keep\n");
+      expect(() => run("show HEAD:secret.txt")).toThrow();
+      expect(run("status --porcelain").trim()).toBe("?? secret.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs lets hooks see glob pathspecs", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    run("add a.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+files=$(git diff --cached --name-only -- '*.txt')
+test -n "$files"
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: glob hook", ["a.txt"]));
+      expect(run("show HEAD:a.txt")).toBe("a\n");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs isolates a file-to-directory replacement when a hook exists", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "thing"), "file\n");
+    run("add thing");
+    run('commit -m "add thing"');
+    unlinkSync(join(dir, "thing"));
+    mkdirSync(join(dir, "thing"));
+    writeFileSync(join(dir, "thing", "child"), "child\n");
+    run("add -A");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(hookPath, "#!/bin/sh\nexit 0\n");
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: replace file", ["thing", "thing/child"]));
+      expect(run("show HEAD:thing/child")).toBe("child\n");
+      expect(run("cat-file -t HEAD:thing").trim()).toBe("tree");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("performCommit with pathspecs isolates a directory-to-file replacement when a hook exists", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    mkdirSync(join(dir, "thing"));
+    writeFileSync(join(dir, "thing", "child"), "child\n");
+    run("add thing");
+    run('commit -m "add dir"');
+    run("rm -rf thing");
+    writeFileSync(join(dir, "thing"), "file\n");
+    run("add -A");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(hookPath, "#!/bin/sh\nexit 0\n");
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const staged = await runFuture(repo.listStagedPaths());
+      await runFuture(repo.performCommit("feat: replace dir", staged));
+      expect(run("show HEAD:thing")).toBe("file\n");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs treats bracket filenames as literal pathspecs", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     mkdirSync(join(dir, "app", "[id]"), { recursive: true });

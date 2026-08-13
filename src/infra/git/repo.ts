@@ -29,7 +29,7 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Result, Failure, Success } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
-import { execBin, type ExecResult } from "@/infra/shell";
+import { execBin, type CommandFailure, type ExecResult } from "@/infra/shell";
 import { spawn } from "node:child_process";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
@@ -320,8 +320,21 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
     await rm(snap.dir, { recursive: true, force: true });
   });
 
+const isMissingGitHookCommand = (failure: CommandFailure): boolean => {
+  const text = `${failure.output.stderr}\n${failure.output.stdout}`.toLowerCase();
+  return text.includes("is not a git command") && text.includes("hook");
+};
+
+const runPreCommitFile = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
+  resolveHooksDir(root).chain((hooks) => execBin(join(hooks, "pre-commit"), [], indexEnv(tmpIndex), root));
+
 const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
-  execBin("git", ["-C", root, "hook", "run", "pre-commit"], indexEnv(tmpIndex));
+  execBin("git", ["-C", root, "hook", "run", "pre-commit"], indexEnv(tmpIndex)).chain((result) =>
+    result.either(
+      (failure) => (isMissingGitHookCommand(failure) ? runPreCommitFile(root, tmpIndex) : Future.resolve(result)),
+      (ok) => Future.resolve(Success(ok))
+    )
+  );
 
 const listAllIndexPaths = (root: string, tmpIndex: string, failMsg: string): Future<Error, readonly string[]> =>
   execGitChecked(["-C", root, "ls-files", "-z"], failMsg, indexEnv(tmpIndex)).map(splitNulPaths);

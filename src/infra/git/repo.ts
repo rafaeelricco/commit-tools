@@ -337,18 +337,30 @@ const copyIndexFile = (root: string, dest: string): Future<Error, void> =>
 const listStagedPathsNoRenames = (root: string): Future<Error, readonly string[]> =>
   execGitChecked(["-C", root, "diff", "--staged", "--name-only", "--no-renames", "-z"], "Failed to list staged files").map(splitNulPaths);
 
+const writeNulPathspecFile = (paths: readonly string[]): Future<Error, string> =>
+  Future.attemptP(async () => {
+    const file = join(tmpdir(), `commit-pathspec-${Date.now()}`);
+    await writeFile(file, `${paths.join("\0")}\0`);
+    return file;
+  });
+
 const resetIndexPaths = (root: string, indexFile: string, paths: readonly string[]): Future<Error, void> =>
   paths.length === 0 ?
     Future.resolve(undefined)
   : execBin("git", ["-C", root, "rev-parse", "-q", "--verify", "HEAD"]).chain((head) =>
-      execGitChecked(
-        head.either(
-          () => ["-C", root, "rm", "--cached", "-q", "-f", "--", ...paths],
-          () => ["-C", root, "reset", "-q", "HEAD", "--", ...paths]
-        ),
-        "Failed to isolate staged paths",
-        indexEnv(indexFile)
-      ).map(() => {})
+      Future.bracket(
+        writeNulPathspecFile(paths),
+        (file) => Future.attemptP(() => unlink(file).catch(() => {})),
+        (file) =>
+          execGitChecked(
+            head.either(
+              () => ["-C", root, "rm", "--cached", "-q", "-f", `--pathspec-from-file=${file}`, "--pathspec-file-nul"],
+              () => ["-C", root, "reset", "-q", "HEAD", `--pathspec-from-file=${file}`, "--pathspec-file-nul"]
+            ),
+            "Failed to isolate staged paths",
+            indexEnv(indexFile)
+          ).map(() => {})
+      )
     );
 
 const reconcileCommittedIndex = (root: string, paths: readonly string[]): Future<Error, void> =>

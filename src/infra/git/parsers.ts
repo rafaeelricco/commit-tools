@@ -8,6 +8,7 @@ export {
   parseRemoteFromUpstream,
   splitCommitFields,
   commandFailureMessage,
+  parseHookInterpreter,
   CREATED_FROM_RE,
   COMMIT_KEYS,
   type BaseLookupError
@@ -27,6 +28,16 @@ const COMMIT_KEYS = ["hash", "short", "subject", "authorName", "authorEmail", "d
 
 const commandFailureMessage = (failure: CommandFailure, fallbackMsg: string): string =>
   failure.output.stderr.trim() || failure.output.stdout.trim() || `${failure.error.message}: ${fallbackMsg}`;
+
+const lastPathSegment = (path: string): string => path.split(/[/\\]/).filter(Boolean).at(-1) ?? path;
+
+const parseHookInterpreter = (shebangLine: string): string => {
+  const line = shebangLine.trim();
+  const env = /^#!\s*\/usr\/bin\/env(?:\s+(\S+))?/.exec(line);
+  if (env) return env[1] === undefined || env[1] === "" ? "sh" : lastPathSegment(env[1]);
+  const interp = /^#!\s*(\S+)/.exec(line);
+  return interp?.[1] === undefined ? "sh" : lastPathSegment(interp[1]);
+};
 
 const formatCommitOutput = (stdout: string): string =>
   "\n" +

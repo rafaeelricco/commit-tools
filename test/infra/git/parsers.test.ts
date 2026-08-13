@@ -5,7 +5,8 @@ import {
   parseBaseFromReflog,
   splitCommitFields,
   parseRemoteFromUpstream,
-  commandFailureMessage
+  commandFailureMessage,
+  parseHookInterpreter
 } from "@/infra/git/parsers";
 import { Just, Nothing } from "@/libs/maybe";
 import { Success } from "@/libs/result";
@@ -64,5 +65,23 @@ describe("commandFailureMessage", () => {
   it("prefers stderr over stdout", () => {
     const msg = commandFailureMessage({ output: { stderr: "fatal: no repo", stdout: "" }, error: new Error("exit 128") }, "fallback");
     expect(msg).toBe("fatal: no repo");
+  });
+});
+
+describe("parseHookInterpreter", () => {
+  it("defaults to sh without a shebang", () => {
+    expect(parseHookInterpreter("exit 0")).toBe("sh");
+  });
+
+  it("uses env program and path basename", () => {
+    expect(parseHookInterpreter("#!/usr/bin/env python3")).toBe("python3");
+    expect(parseHookInterpreter("#! /usr/bin/env node")).toBe("node");
+    expect(parseHookInterpreter("#!/usr/bin/env")).toBe("sh");
+  });
+
+  it("uses the interpreter basename for direct shebangs", () => {
+    expect(parseHookInterpreter("#!/bin/sh")).toBe("sh");
+    expect(parseHookInterpreter("#!/bin/bash")).toBe("bash");
+    expect(parseHookInterpreter("#!/usr/bin/python")).toBe("python");
   });
 });

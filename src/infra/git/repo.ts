@@ -33,7 +33,7 @@ import { execBin, type CommandFailure, type ExecResult } from "@/infra/shell";
 import { spawn } from "node:child_process";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
-import { access, chmod, copyFile, cp, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, cp, lstat, mkdir, readdir, readFile, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import {
@@ -42,7 +42,8 @@ import {
   parseBaseFromReflog,
   parseRemoteFromUpstream,
   splitCommitFields,
-  commandFailureMessage
+  commandFailureMessage,
+  parseHookInterpreter
 } from "@/infra/git/parsers";
 
 type CommitMetadata = {
@@ -325,10 +326,16 @@ const isMissingGitHookCommand = (failure: CommandFailure): boolean => {
   return text.includes("is not a git command") && text.includes("hook");
 };
 
+const runWindowsPreCommitFile = (hook: string, env: NodeJS.ProcessEnv, root: string): Future<Error, ExecResult> =>
+  Future.attemptP(() => readFile(hook, "utf8"))
+    .chainRej(() => Future.resolve<Error, string>(""))
+    .chain((text) => execBin(parseHookInterpreter(text.split(/\r?\n/, 1)[0] ?? ""), [hook], env, root));
+
 const runPreCommitFile = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
   resolveHooksDir(root).chain((hooks) => {
     const hook = join(hooks, "pre-commit");
-    return process.platform === "win32" ? execBin("sh", [hook], indexEnv(tmpIndex), root) : execBin(hook, [], indexEnv(tmpIndex), root);
+    const env = indexEnv(tmpIndex);
+    return process.platform === "win32" ? runWindowsPreCommitFile(hook, env, root) : execBin(hook, [], env, root);
   });
 
 const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>

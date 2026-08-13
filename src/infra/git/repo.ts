@@ -167,7 +167,29 @@ const hasExecutablePreCommit = (root: string): Future<Error, boolean> =>
     )
   );
 
-type WorktreeSnapshot = { dir: string; paths: readonly string[] };
+type WorktreeSnapshot = { dir: string; paths: readonly string[]; checkout: readonly string[] };
+
+const nulPathSet = (stdout: string): ReadonlySet<string> => new Set(splitNulPaths(stdout));
+
+const indexPathSet = (root: string, tmpIndex: string, paths: readonly string[]): Future<Error, ReadonlySet<string>> =>
+  paths.length === 0 ?
+    Future.resolve(new Set<string>())
+  : execGitChecked(["-C", root, "ls-files", "-z", "--", ...paths], "Failed to list index paths", indexEnv(tmpIndex)).map(nulPathSet);
+
+const dirtyPathSet = (root: string, tmpIndex: string, paths: readonly string[]): Future<Error, ReadonlySet<string>> =>
+  paths.length === 0 ?
+    Future.resolve(new Set<string>())
+  : execGitChecked(["-C", root, "diff", "--name-only", "-z", "--", ...paths], "Failed to list dirty worktree paths", indexEnv(tmpIndex)).map(nulPathSet);
+
+const planWorktreeHide = (
+  selected: readonly string[],
+  inIndex: ReadonlySet<string>,
+  dirty: ReadonlySet<string>
+): { checkout: readonly string[]; hide: readonly string[] } => {
+  const checkout = selected.filter((path) => inIndex.has(path) && dirty.has(path));
+  const deleted = selected.filter((path) => !inIndex.has(path));
+  return { checkout, hide: [...checkout, ...deleted] };
+};
 
 const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]): Promise<void> =>
   Promise.all(
@@ -180,23 +202,35 @@ const backupWorktreeFiles = (root: string, dir: string, paths: readonly string[]
 
 const acquireWorktreeSnapshot = (root: string, tmpIndex: string, selected: readonly string[]): Future<Error, WorktreeSnapshot> => {
   const dir = join(tmpdir(), `commit-wt-${Date.now()}`);
-  const snap: WorktreeSnapshot = { dir, paths: selected };
-  return Future.attemptP(async () => {
-    await mkdir(dir);
-    await backupWorktreeFiles(root, dir, selected);
-  })
-    .chain(() =>
-      selected.length === 0 ?
-        Future.resolve(snap)
-      : execGitChecked(["-C", root, "checkout-index", "-f", "--", ...selected], "Failed to isolate worktree for hooks", indexEnv(tmpIndex)).map(
-          () => snap
-        )
-    )
-    .chainRej((err) => Future.attemptP(() => rm(dir, { recursive: true, force: true })).chain(() => Future.reject(err)));
+  return Future.both(indexPathSet(root, tmpIndex, selected), dirtyPathSet(root, tmpIndex, selected)).chain(([inIndex, dirty]) => {
+    const { checkout, hide } = planWorktreeHide(selected, inIndex, dirty);
+    const snap: WorktreeSnapshot = { dir, paths: hide, checkout };
+    if (hide.length === 0) {
+      return Future.resolve(snap);
+    }
+    return Future.attemptP(async () => {
+      await mkdir(dir);
+      await backupWorktreeFiles(root, dir, hide);
+      await Promise.all(hide.filter((path) => !checkout.includes(path)).map((rel) => unlink(join(root, rel)).catch(() => {})));
+    })
+      .chain(() =>
+        checkout.length === 0 ?
+          Future.resolve(snap)
+        : execGitChecked(["-C", root, "checkout-index", "-f", "--", ...checkout], "Failed to isolate worktree for hooks", indexEnv(tmpIndex)).map(
+            () => snap
+          )
+      )
+      .chainRej((err) => releaseWorktreeSnapshot(root, snap).chain(() => Future.reject(err)));
+  });
 };
 
 const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<Error, void> =>
   Future.attemptP(async () => {
+    try {
+      await access(snap.dir);
+    } catch {
+      return;
+    }
     await Promise.all(
       snap.paths.map(async (rel) => {
         const backup = join(snap.dir, rel);

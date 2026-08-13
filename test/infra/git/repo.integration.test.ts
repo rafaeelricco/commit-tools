@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chdir, cwd } from "node:process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -144,6 +144,32 @@ describe("git repo integration", () => {
     }
   });
 
+  it("performCommit with pathspecs isolates a rename when a hook runs git add -A", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "other.txt"), "other\n");
+    run("add other.txt");
+    run("mv file.txt renamed.txt");
+    const hookPath = join(dir, ".git", "hooks", "pre-commit");
+    writeFileSync(
+      hookPath,
+      `#!/bin/sh
+git add -A
+`
+    );
+    chmodSync(hookPath, 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const staged = await runFuture(repo.listStagedPaths());
+      expect([...staged].sort()).toEqual(["file.txt", "other.txt", "renamed.txt"]);
+      await runFuture(repo.performCommit("feat: rename file", ["file.txt", "renamed.txt"]));
+      expect(run("diff --staged --name-only").trim()).toBe("other.txt");
+      expect(run("ls-files").trim().split("\n").sort()).toEqual(["other.txt", "renamed.txt"]);
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with paths records the staged blob not the worktree", async () => {
     const { dir, run } = createTempGitRepo({ staged: true });
     writeFileSync(join(dir, "file.txt"), "hello unstaged secret\n");
@@ -281,6 +307,7 @@ git add file.txt
       await runFuture(repo.performCommit("feat: formatted", ["file.txt"]));
       expect(run("show HEAD:file.txt")).toBe("formatted\n");
       expect(run("show :file.txt")).toBe("formatted\n");
+      expect(readFileSync(join(dir, "file.txt"), "utf-8")).toBe("formatted\n");
       expect(run("diff --staged --name-only").trim()).toBe("other.txt");
     } finally {
       chdir(prev);

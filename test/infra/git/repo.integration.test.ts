@@ -420,6 +420,36 @@ test -n "$files"
     }
   });
 
+  it("performCommit with pathspecs runs commit-msg from its original hook path", async () => {
+    const { dir, run } = createTempGitRepo({ staged: false });
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    run("add a.txt b.txt");
+    mkdirSync(join(dir, ".git", "hook-tools"));
+    writeFileSync(join(dir, ".git", "hook-tools", "check-msg"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(dir, ".git", "hook-tools", "check-msg"), 0o755);
+    writeFileSync(join(dir, ".git", "hooks", "pre-commit"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(dir, ".git", "hooks", "pre-commit"), 0o755);
+    writeFileSync(
+      join(dir, ".git", "hooks", "commit-msg"),
+      `#!/bin/sh
+helper=$(dirname "$0")/../hook-tools/check-msg
+test -x "$helper" && exec "$helper"
+exit 1
+`
+    );
+    chmodSync(join(dir, ".git", "hooks", "commit-msg"), 0o755);
+    const prev = cwd();
+    chdir(dir);
+    try {
+      await runFuture(repo.performCommit("feat: original hook path", ["a.txt"]));
+      expect(run("show HEAD:a.txt")).toBe("a\n");
+      expect(run("diff --staged --name-only").trim()).toBe("b.txt");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit with pathspecs isolates a file-to-directory replacement when a hook exists", async () => {
     const { dir, run } = createTempGitRepo({ staged: false });
     writeFileSync(join(dir, "thing"), "file\n");
@@ -489,6 +519,8 @@ git add -A
       await runFuture(repo.performCommit("feat: add a", ["thing/a"]));
       expect(run("show HEAD:thing/a")).toBe("a\n");
       expect(run("cat-file -t HEAD:thing").trim()).toBe("tree");
+      expect(run("diff --staged --name-only").trim()).toBe("thing/b");
+      await runFuture(repo.performCommit("feat: delete thing", ["thing"]));
       expect(run("diff --staged --name-only").trim()).toBe("thing/b");
       await runFuture(repo.performCommit("feat: add b", ["thing/b"]));
       expect(run("show HEAD:thing/b")).toBe("b\n");

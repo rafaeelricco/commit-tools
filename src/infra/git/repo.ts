@@ -26,14 +26,14 @@ export {
 
 import { Future } from "@/libs/future";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
-import { type Result, Failure } from "@/libs/result";
+import { type Result, Failure, Success } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
 import { execBin, type ExecResult } from "@/infra/shell";
 import { spawn } from "node:child_process";
 import * as Decoder from "@/libs/json/decoder";
 import { constants as fsConstants } from "node:fs";
-import { access, copyFile, cp, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, cp, lstat, mkdir, readdir, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import {
@@ -123,13 +123,18 @@ const resolveHooksDir = (root: string): Future<Error, string> =>
     return isAbsolute(trimmed) ? trimmed : join(root, trimmed);
   });
 
+const shellSingleQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
 const copyHookEntry = async (src: string, dest: string): Promise<void> => {
   const st = await lstat(src);
   if (st.isDirectory()) {
-    await cp(src, dest, { recursive: true });
+    await mkdir(dest, { recursive: true });
+    const names = await readdir(src);
+    await Promise.all(names.map((name) => copyHookEntry(join(src, name), join(dest, name))));
     return;
   }
-  await copyFile(src, dest);
+  await writeFile(dest, `#!/bin/sh\nexec ${shellSingleQuote(src)} "$@"\n`);
+  await chmod(dest, st.mode);
 };
 
 const acquireHookIsolation = (root: string): Future<Error, HookIsolation> => {
@@ -316,7 +321,7 @@ const releaseWorktreeSnapshot = (root: string, snap: WorktreeSnapshot): Future<E
   });
 
 const runUserPreCommit = (root: string, tmpIndex: string): Future<Error, ExecResult> =>
-  resolveHooksDir(root).chain((hooks) => execBin(join(hooks, "pre-commit"), [], indexEnv(tmpIndex), root));
+  execBin("git", ["-C", root, "hook", "run", "pre-commit"], indexEnv(tmpIndex));
 
 const listAllIndexPaths = (root: string, tmpIndex: string, failMsg: string): Future<Error, readonly string[]> =>
   execGitChecked(["-C", root, "ls-files", "-z"], failMsg, indexEnv(tmpIndex)).map(splitNulPaths);
@@ -464,10 +469,14 @@ const finishIsolatedCommit = (root: string, paths: readonly string[], result: Ex
 
 const isolateAndCommit = (root: string, messageFile: string, tmpIndex: string, paths: readonly string[]): Future<Error, ExecResult> =>
   listStagedPathsNoRenames(root).chain((staged) => {
-    const keep = new Set(paths);
+    const stagedSet = new Set(staged);
+    const keep = new Set(paths.filter((path) => stagedSet.has(path)));
+    if (keep.size === 0) {
+      return Future.resolve<Error, ExecResult>(Success({ stdout: "", stderr: "" }));
+    }
     const unselected = staged.filter((path) => !keep.has(path));
     return resetIndexPaths(root, tmpIndex, unselected, keep).chain(() =>
-      commitIsolatedIndex(root, messageFile, tmpIndex, paths).chain((result) => finishIsolatedCommit(root, paths, result))
+      commitIsolatedIndex(root, messageFile, tmpIndex, [...keep]).chain((result) => finishIsolatedCommit(root, [...keep], result))
     );
   });
 

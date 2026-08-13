@@ -142,7 +142,7 @@ class Commit {
         case "split":
           return this.startSplit(diff, files);
         case "regenerate":
-          return this.route(diff, files);
+          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, files, msg));
         case "adjust":
           return this.handleAdjust(diff, files, generated);
         case "cancel":

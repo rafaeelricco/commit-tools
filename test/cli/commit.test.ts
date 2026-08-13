@@ -153,6 +153,22 @@ describe("Commit.run", () => {
     expect(repo.performCommit).toHaveBeenCalledWith("feat: one");
   });
 
+  it("regenerates the single message instead of re-routing into split", async () => {
+    const storage = await import("@/infra/storage/config");
+    vi.mocked(storage.loadConfig).mockReturnValue(Future.resolve(config(true)));
+    const repo = await import("@/infra/git/repo");
+    vi.mocked(repo.listStagedPaths).mockReturnValue(Future.resolve(["a.ts", "b.ts"]));
+    const prompts = await import("@clack/prompts");
+    vi.mocked(prompts.select).mockResolvedValueOnce("regenerate").mockResolvedValueOnce("commit");
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const router = await import("@/domain/llm/router");
+    expect(router.generateSplitPlan).toHaveBeenCalledTimes(1);
+    expect(router.generateCommitMessage).toHaveBeenCalled();
+    expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
+  });
+
   it("forces a split plan when the user picks Split", async () => {
     const repo = await import("@/infra/git/repo");
     vi.mocked(repo.listStagedPaths).mockReturnValue(Future.resolve(["a.ts", "b.ts"]));

@@ -23,9 +23,13 @@ const splitCommitDecoder: D.Decoder<SplitCommit> = D.object({
   files: nonEmptyFiles
 });
 
+const nonEmptyCommits: D.Decoder<readonly SplitCommit[]> = D.array(splitCommitDecoder).chain((xs) =>
+  xs.length === 0 ? D.fail<readonly SplitCommit[]>("expected at least 1 commit") : D.succeed(xs)
+);
+
 const splitPlanDecoder: D.Decoder<SplitPlan> = D.object({
   should_split: D.boolean,
-  commits: D.array(splitCommitDecoder).chain((xs) => (xs.length === 0 ? D.fail("expected at least 1 commit") : D.succeed(xs)))
+  commits: nonEmptyCommits
 }).map(({ should_split, commits }) => ({ shouldSplit: should_split, commits }));
 
 const stripOptionalJsonFence = (s: string): string => {

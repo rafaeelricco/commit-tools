@@ -1,4 +1,4 @@
-export { seedProviderConfig, withModel, withMinEffort, selectEffortForProvider };
+export { seedProviderConfig, withModel, selectEffortForProvider };
 
 import { type Future } from "@/libs/future";
 import {
@@ -7,10 +7,9 @@ import {
   type OpenAIModelEffort,
   type XaiEffort,
   type AnthropicEffort,
-  type GeminiEffort,
-  GEMINI_EFFORTS
+  type GeminiEffort
 } from "@/domain/config/config";
-import { Just, Nothing, type Maybe } from "@/libs/maybe";
+import { Nothing, type Maybe } from "@/libs/maybe";
 import { selectOpenAIEffort, selectAnthropicEffort, selectGeminiEffort, selectXaiEffort } from "@/infra/ui/effort-picker";
 import { absurd } from "@/libs/types";
 
@@ -41,21 +40,6 @@ const withModel = (ai: ProviderConfig, model: string): ProviderConfig => {
       return { provider: "xai", model, auth_method: ai.auth_method, effort: ai.effort };
     default:
       return absurd(ai, "ProviderConfig");
-  }
-};
-
-const withMinEffort = (config: ProviderConfig): ProviderConfig => {
-  switch (config.provider) {
-    case "openai":
-      return { provider: "openai", model: config.model, auth_method: config.auth_method, effort: Just("low") };
-    case "anthropic":
-      return { provider: "anthropic", model: config.model, auth_method: config.auth_method, effort: Just("low") };
-    case "gemini":
-      return { provider: "gemini", model: config.model, auth_method: config.auth_method, effort: Just(GEMINI_EFFORTS[0]) };
-    case "xai":
-      return { provider: "xai", model: config.model, auth_method: config.auth_method, effort: Just("low") };
-    default:
-      return absurd(config, "ProviderConfig");
   }
 };
 

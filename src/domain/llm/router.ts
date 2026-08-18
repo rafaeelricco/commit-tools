@@ -25,7 +25,6 @@ import { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt } from 
 import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
 import { parseAndValidateSplitPlan, type SplitPlan } from "@/domain/split/plan";
 import { withTransientRetry } from "@/domain/llm/retry";
-import { withMinEffort } from "@/domain/llm/effort";
 import { Maybe, Nothing } from "@/libs/maybe";
 
 type GenerateContentParams = {
@@ -147,7 +146,7 @@ const generateSplitPlan = (
   customTemplate: Maybe<string>
 ): Future<Error, SplitPlanContent> =>
   withTransientRetry(() =>
-    generateContent(withMinEffort(config), { prompt: getSplitPrompt(diff, files, convention, customTemplate) }).chain((gc) =>
+    generateContent(config, { prompt: getSplitPrompt(diff, files, convention, customTemplate) }).chain((gc) =>
       resultToFuture(parseAndValidateSplitPlan(gc.text, files)).map((plan) => ({ plan, metadata: gc.metadata }))
     )
   );

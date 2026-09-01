@@ -6,7 +6,10 @@ import {
   splitCommitFields,
   parseRemoteFromUpstream,
   commandFailureMessage,
-  parseHookInterpreter
+  parseHookInterpreter,
+  isGeneratedPath,
+  parseNumstatCounts,
+  formatOmittedPaths
 } from "@/infra/git/parsers";
 import { Just, Nothing } from "@/libs/maybe";
 import { Success } from "@/libs/result";
@@ -83,5 +86,28 @@ describe("parseHookInterpreter", () => {
     expect(parseHookInterpreter("#!/bin/sh")).toBe("sh");
     expect(parseHookInterpreter("#!/bin/bash")).toBe("bash");
     expect(parseHookInterpreter("#!/usr/bin/python")).toBe("python");
+  });
+});
+
+describe("isGeneratedPath", () => {
+  it("matches lockfiles, build output, and snapshots", () => {
+    for (const p of ["pnpm-lock.yaml", "web/package-lock.json", "dist/app.js", "src/__snapshots__/a.snap", "a.min.css"]) {
+      expect(isGeneratedPath(p)).toBe(true);
+    }
+  });
+
+  it("keeps source paths that merely resemble generated ones", () => {
+    for (const p of ["src/distributed.ts", "src/outbox.ts", "lock.ts", "app/[id]/page.tsx"]) {
+      expect(isGeneratedPath(p)).toBe(false);
+    }
+  });
+});
+
+describe("formatOmittedPaths", () => {
+  it("renders churn per omitted path and empty for none", () => {
+    const counts = parseNumstatCounts("412\t87\tpnpm-lock.yaml\0-\t-\tdist/logo.png\0");
+    expect(formatOmittedPaths(["pnpm-lock.yaml"], counts)).toContain("pnpm-lock.yaml | +412 -87 (generated, body omitted)");
+    expect(formatOmittedPaths(["dist/logo.png"], counts)).toContain("dist/logo.png | binary (generated, body omitted)");
+    expect(formatOmittedPaths([], counts)).toBe("");
   });
 });

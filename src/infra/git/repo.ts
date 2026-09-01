@@ -43,7 +43,10 @@ import {
   parseRemoteFromUpstream,
   splitCommitFields,
   commandFailureMessage,
-  parseHookInterpreter
+  parseHookInterpreter,
+  isGeneratedPath,
+  parseNumstatCounts,
+  formatOmittedPaths
 } from "@/infra/git/parsers";
 
 type CommitMetadata = {
@@ -74,9 +77,27 @@ const splitNulPaths = (stdout: string): readonly string[] => stdout.split("\0").
 
 const checkIsGitRepo = (): Future<Error, void> => execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
 
+const stagedDiffBody = (root: string, paths: readonly string[]): Future<Error, string> =>
+  paths.length === 0 ?
+    Future.resolve<Error, string>("")
+  : execGitChecked(["-C", root, "diff", "--staged", "--", ...paths], "Failed to get staged changes");
+
+const omittedPathsSummary = (root: string, paths: readonly string[]): Future<Error, string> =>
+  paths.length === 0 ?
+    Future.resolve<Error, string>("")
+  : execGitChecked(["-C", root, "diff", "--staged", "--numstat", "--no-renames", "-z", "--", ...paths], "Failed to get staged changes").map((stdout) =>
+      formatOmittedPaths(paths, parseNumstatCounts(stdout))
+    );
+
 const getStagedDiff = (): Future<Error, string> =>
-  execGitChecked(["diff", "--staged"], "Failed to get staged changes").chain((stdout) =>
-    stdout.trim() ? Future.resolve<Error, string>(stdout) : Future.reject<Error, string>(new Error("No staged changes found"))
+  Future.concurrently<Error, { root: string; files: readonly string[] }>({ root: getWorkTreeRoot(), files: listStagedPaths() }).chain(({ root, files }) =>
+    Future.concurrently<Error, { body: string; note: string }>({
+      body: stagedDiffBody(
+        root,
+        files.filter((path) => !isGeneratedPath(path))
+      ),
+      note: omittedPathsSummary(root, files.filter(isGeneratedPath))
+    }).map(({ body, note }) => body + note)
   );
 
 const listStagedPaths = (): Future<Error, readonly string[]> =>

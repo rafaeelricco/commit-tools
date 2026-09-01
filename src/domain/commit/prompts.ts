@@ -4,7 +4,11 @@ import { CommitConvention } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
-function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
+type CommitPrompt = { prompt: string; systemInstruction: string };
+
+const diffPrompt = (gitDiff: string): string => `<git_diff>\n${gitDiff}\n</git_diff>`;
+
+function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): CommitPrompt {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);
@@ -17,8 +21,8 @@ function getPrompt(diff: string, convention: CommitConvention, customTemplate: M
   }
 }
 
-function promptConventional(gitDiff: string): string {
-  return `
+function promptConventional(gitDiff: string): CommitPrompt {
+  const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -102,12 +106,6 @@ function promptConventional(gitDiff: string): string {
         </example>
       </examples>
 
-      <input>
-        <git_diff>
-          ${gitDiff}
-        </git_diff>
-      </input>
-
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE.
         2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
@@ -122,10 +120,11 @@ function promptConventional(gitDiff: string): string {
             • Remaining lines: each line is a bullet starting with "- ".
       </output_instructions>
   `;
+  return { prompt: diffPrompt(gitDiff), systemInstruction };
 }
 
-function promptImperative(gitDiff: string): string {
-  return `
+function promptImperative(gitDiff: string): CommitPrompt {
+  const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -216,12 +215,6 @@ function promptImperative(gitDiff: string): string {
 
       </examples>
 
-      <input>
-        <git_diff>
-          ${gitDiff}
-        </git_diff>
-      </input>
-
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE
           according to the rules above.
@@ -238,15 +231,15 @@ function promptImperative(gitDiff: string): string {
         7. Inline code with single backticks is allowed in the bullet points.
       </output_instructions>
 `;
+  return { prompt: diffPrompt(gitDiff), systemInstruction };
 }
 
-function promptCustom(gitDiff: string, template: Maybe<string>): string {
+function promptCustom(gitDiff: string, template: Maybe<string>): CommitPrompt {
   switch (true) {
     case template instanceof Nothing:
       return promptImperative(gitDiff);
     case template instanceof Just: {
-      const processedTemplate = template.value.replace("{diff}", gitDiff);
-      return `
+      const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -254,12 +247,8 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
       </system>
 
       <user_template>
-        ${processedTemplate}
+        ${template.value.replace("{diff}", "").trim()}
       </user_template>
-
-      <git_diff>
-        ${gitDiff}
-      </git_diff>
 
       <output_instructions>
         1. Follow the user's template style and format.
@@ -268,6 +257,7 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
         4. Do NOT wrap the commit message in quotes or code fences.
       </output_instructions>
 `;
+      return { prompt: diffPrompt(gitDiff), systemInstruction };
     }
     default:
       template satisfies never;
@@ -275,20 +265,44 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
   }
 }
 
+const IMPERATIVE_SUMMARY = `Each message starts with a capitalized imperative verb ("Add", "Fix", "Refactor").
+        No Conventional Commits prefix, no ticket IDs, no author names, no "WIP".`;
+
+function conventionSummary(convention: CommitConvention, customTemplate: Maybe<string>): string {
+  switch (convention) {
+    case "conventional":
+      return `Each message uses Conventional Commits: "type(optional-scope): description",
+        type drawn from feat, fix, refactor, chore, docs, style, test, perf, ci, build.
+        Imperative and lowercase after the prefix, no ticket IDs, no author names, no "WIP".`;
+    case "imperative":
+      return IMPERATIVE_SUMMARY;
+    case "custom":
+      return customTemplate.maybe(IMPERATIVE_SUMMARY, (t) => `Each message follows this user style template:\n        ${t.replace("{diff}", "").trim()}`);
+    default:
+      return absurd(convention, "CommitConvention");
+  }
+}
+
 function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
-  const basePrompt = getPrompt(diff, convention, customTemplate);
-  const outputInstructionsStart = basePrompt.lastIndexOf("<output_instructions>");
-  const conventionPrompt = outputInstructionsStart >= 0 ? basePrompt.slice(0, outputInstructionsStart) : basePrompt;
   return `
       <task>
         Partition staged files into reviewable commits. Do not write one message for the whole diff.
         A feature that touches unrelated layers is several commits.
       </task>
-      ${conventionPrompt}
 
       <staged_files>
         ${files.join("\n")}
       </staged_files>
+
+      <git_diff>
+        ${diff}
+      </git_diff>
+
+      <message_convention>
+        ${conventionSummary(convention, customTemplate)}
+        A commit covering one small change is a single line. A commit covering several files
+        may add a blank line then "- " bullets.
+      </message_convention>
 
       <output_shape>
         Return ONE JSON object. First character "{", last "}".
@@ -301,7 +315,7 @@ function getSplitPrompt(diff: string, files: readonly string[], convention: Comm
         - should_split=false only when every file is the same concern (implementation + its test, rename + callers). Then exactly 1 commit covering every staged path.
         - Same feature across unrelated layers (CLI, domain, docs, unrelated tests) is still should_split=true.
         - When unsure across 2+ areas, should_split=true with 2+ commits.
-        - Each message follows the active convention (SMALL/MEDIUM/LARGE shape) for that commit only.
+        - Each message follows the active convention in message_convention, scoped to that commit only.
       </partition_rules>
       <examples>
         <example>

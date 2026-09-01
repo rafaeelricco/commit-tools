@@ -25,7 +25,7 @@ import { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt } from 
 import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
 import { parseAndValidateSplitPlan, type SplitPlan } from "@/domain/split/plan";
 import { withTransientRetry } from "@/domain/llm/retry";
-import { withMinEffort } from "@/domain/llm/effort";
+import { withMinEffort, withDefaultMinEffort } from "@/domain/llm/effort";
 import { Maybe, Nothing } from "@/libs/maybe";
 
 type GenerateContentParams = {
@@ -118,10 +118,11 @@ const generateCommitMessage = (
   diff: string,
   convention: CommitConvention,
   customTemplate: Maybe<string> = Nothing()
-): Future<Error, GeneratedContent> => withTransientRetry(() => generateContent(config, { prompt: getPrompt(diff, convention, customTemplate) }));
+): Future<Error, GeneratedContent> =>
+  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getPrompt(diff, convention, customTemplate)));
 
 const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
-  withTransientRetry(() => generateContent(config, getRefinePrompt({ diff, currentMessage, adjustment })));
+  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ diff, currentMessage, adjustment })));
 
 const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
   r.either(

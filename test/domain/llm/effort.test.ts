@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withMinEffort } from "@/domain/llm/effort";
+import { withMinEffort, withDefaultMinEffort } from "@/domain/llm/effort";
 import { GEMINI_EFFORTS, type ProviderConfig } from "@/domain/config/config";
 import { Just, Nothing } from "@/libs/maybe";
 
@@ -23,5 +23,15 @@ describe("withMinEffort", () => {
   });
   it("forces xai low", () => {
     expect(withMinEffort(base("xai")).effort).toEqual(Just("low"));
+  });
+});
+
+describe("withDefaultMinEffort", () => {
+  it("applies the minimum when effort is unset", () => {
+    expect(withDefaultMinEffort(base("anthropic")).effort).toEqual(Just("low"));
+  });
+  it("keeps an explicit effort", () => {
+    const config = { ...base("anthropic"), effort: Just("high") } as ProviderConfig;
+    expect(withDefaultMinEffort(config)).toBe(config);
   });
 });

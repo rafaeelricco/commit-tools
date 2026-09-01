@@ -100,6 +100,37 @@ describe("git repo integration", () => {
     }
   });
 
+  it("getStagedDiff omits generated file bodies but names them", async () => {
+    const { dir, run } = createTempGitRepo({ staged: true });
+    writeFileSync(join(dir, "pnpm-lock.yaml"), "lock: 1\nlock: 2\n");
+    run("add pnpm-lock.yaml");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const diff = await runFuture(repo.getStagedDiff());
+      expect(diff).toContain("file.txt");
+      expect(diff).not.toContain("lock: 2");
+      expect(diff).toContain("pnpm-lock.yaml | +2 -0 (generated, body omitted)");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getStagedDiff resolves with a summary when only generated files are staged", async () => {
+    const { dir, run } = createTempGitRepo();
+    writeFileSync(join(dir, "pnpm-lock.yaml"), "lock: 1\n");
+    run("add pnpm-lock.yaml");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const diff = await runFuture(repo.getStagedDiff());
+      expect(diff).toContain("pnpm-lock.yaml");
+      expect(diff).not.toContain("diff --git");
+    } finally {
+      chdir(prev);
+    }
+  });
+
   it("performCommit creates commit with message", async () => {
     const { dir } = createTempGitRepo({ staged: true });
     const prev = cwd();

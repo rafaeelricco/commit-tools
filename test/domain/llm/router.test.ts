@@ -35,6 +35,28 @@ describe("generateCommitMessage", () => {
     expect(result.metadata.model.provider).toBe(provider);
     expect(result.metadata.durationMs).toBeGreaterThanOrEqual(0);
   });
+
+  it("defaults to low effort when the config has none", async () => {
+    const { generateContentWithAnthropic } = await import("@/infra/llm/anthropic");
+    await runFuture(generateCommitMessage(mockProvider("anthropic"), "diff", "conventional", Nothing()));
+    expect(vi.mocked(generateContentWithAnthropic).mock.calls[0]?.[0].effort).toEqual(Just("low"));
+  });
+
+  it("keeps an explicit effort", async () => {
+    const { generateContentWithAnthropic } = await import("@/infra/llm/anthropic");
+    const config = { ...mockProvider("anthropic"), effort: Just("high") } as ProviderConfig;
+    await runFuture(generateCommitMessage(config, "diff", "conventional", Nothing()));
+    expect(vi.mocked(generateContentWithAnthropic).mock.calls[0]?.[0].effort).toEqual(Just("high"));
+  });
+
+  it("sends the static prompt as the system instruction and the diff as the prompt", async () => {
+    const { generateContentWithAnthropic } = await import("@/infra/llm/anthropic");
+    await runFuture(generateCommitMessage(mockProvider("anthropic"), "diff body", "conventional", Nothing()));
+    const params = vi.mocked(generateContentWithAnthropic).mock.calls[0]?.[1];
+    expect(params?.systemInstruction).toContain("Conventional Commits");
+    expect(params?.systemInstruction).not.toContain("diff body");
+    expect(params?.prompt).toContain("diff body");
+  });
 });
 
 describe("refineCommitMessage", () => {

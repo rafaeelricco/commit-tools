@@ -52,7 +52,7 @@ vi.mock("@clack/prompts", () => ({
   confirm: vi.fn(),
   isCancel: vi.fn(() => false),
   outro: vi.fn(),
-  log: { warn: vi.fn(), error: vi.fn() }
+  log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() }
 }));
 vi.mock("@/infra/ui/push-note", () => ({
   renderCommitNote: vi.fn(),
@@ -97,6 +97,20 @@ describe("Commit.run", () => {
     await runFuture(Commit.create().chain((c) => c.run()));
     const repo = await import("@/infra/git/repo");
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
+  });
+
+  it("commits a local message without calling the model when only generated files are staged", async () => {
+    const repo = await import("@/infra/git/repo");
+    vi.mocked(repo.listStagedPaths).mockReturnValue(Future.resolve(["pnpm-lock.yaml"]));
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const router = await import("@/domain/llm/router");
+    expect(router.generateCommitMessage).not.toHaveBeenCalled();
+    expect(router.generateSplitPlan).not.toHaveBeenCalled();
+    expect(repo.performCommit).toHaveBeenCalledWith("chore: update pnpm-lock.yaml");
+    const note = await import("@/infra/ui/push-note");
+    expect(vi.mocked(note.renderCommitNote).mock.calls[0]?.[0].request).toEqual(Nothing());
   });
 
   it("does not analyze when split is disabled and two files are staged", async () => {

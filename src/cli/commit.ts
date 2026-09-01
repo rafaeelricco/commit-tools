@@ -3,6 +3,8 @@ export { Commit, routeAnalysis, type AnalysisRoute };
 import * as p from "@clack/prompts";
 import * as pr from "@/infra/github/pr";
 import * as repo from "@/infra/git/repo";
+import { isGeneratedPath } from "@/infra/git/parsers";
+import { generatedOnlyMessage } from "@/domain/commit/generated-only";
 
 import { Future } from "@/libs/future";
 import { loadConfig } from "@/infra/storage/config";
@@ -31,6 +33,10 @@ const USER_ACTIONS = ["commit_push", "commit", "regenerate", "adjust", "cancel"]
 type UserAction = (typeof USER_ACTIONS)[number];
 
 type AnalysisRoute = { tag: "split"; plan: SplitPlan } | { tag: "single"; message: string };
+
+type Proposal = { readonly text: string; readonly metadata: Maybe<LlmRequestMetadata> };
+
+const fromGenerated = (generated: GeneratedContent): Proposal => ({ text: generated.text, metadata: Just(generated.metadata) });
 
 const routeAnalysis = (plan: SplitPlan): Result<Error, AnalysisRoute> =>
   plan.shouldSplit && plan.commits.length >= 2 ?
@@ -69,13 +75,17 @@ class Commit {
   }
 
   private route(diff: string, files: readonly string[]): Future<Error, void> {
+    if (files.every(isGeneratedPath)) {
+      p.log.info("Only generated files are staged. Skipped the model.");
+      return this.interact(diff, { text: generatedOnlyMessage(files, this.config.commit_convention), metadata: Nothing() });
+    }
     return this.config.split_commits && files.length >= 2 ?
         loading(
           "Analyzing staged changes...",
           "Ready!",
           generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
         ).chain((content) => this.followAnalysis(diff, files, content))
-      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, message));
+      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, fromGenerated(message)));
   }
 
   private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
@@ -87,7 +97,7 @@ class Commit {
           case "split":
             return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, route.plan, metadata);
           case "single":
-            return this.interact(diff, { text: route.message, metadata });
+            return this.interact(diff, { text: route.message, metadata: Just(metadata) });
           default:
             return absurd(route, "AnalysisRoute");
         }
@@ -142,17 +152,17 @@ class Commit {
     );
   }
 
-  interact(diff: string, generated: GeneratedContent): Future<Error, void> {
-    return this.promptAction(generated.text).chain((action) => {
+  interact(diff: string, proposal: Proposal): Future<Error, void> {
+    return this.promptAction(proposal.text).chain((action) => {
       switch (action) {
         case "commit":
-          return this.handleCommit(generated);
+          return this.handleCommit(proposal);
         case "commit_push":
-          return this.handleCommitAndPush(generated);
+          return this.handleCommitAndPush(proposal);
         case "regenerate":
-          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, msg));
+          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, fromGenerated(msg)));
         case "adjust":
-          return this.handleAdjust(diff, generated);
+          return this.handleAdjust(diff, proposal);
         case "cancel":
           return Future.resolve(undefined);
       }
@@ -188,21 +198,21 @@ class Commit {
     });
   }
 
-  private handleCommit(generated: GeneratedContent): Future<Error, void> {
-    return this.commit(generated.text).chain((stats) =>
+  private handleCommit(proposal: Proposal): Future<Error, void> {
+    return this.commit(proposal.text).chain((stats) =>
       repo.findCommitMetadata().map((commit) => {
         process.stdout.write(stats);
-        renderCommitNote({ commit, request: Just(generated.metadata) });
+        renderCommitNote({ commit, request: proposal.metadata });
         p.outro(color.green("Committed successfully!"));
       })
     );
   }
 
-  private handleCommitAndPush(generated: GeneratedContent): Future<Error, void> {
-    return this.commit(generated.text)
+  private handleCommitAndPush(proposal: Proposal): Future<Error, void> {
+    return this.commit(proposal.text)
       .chain((stats) => {
         process.stdout.write(stats);
-        return this.pushAfterCommit(Just(generated.metadata));
+        return this.pushAfterCommit(proposal.metadata);
       })
       .map(() => {
         p.outro(color.green("Done!"));
@@ -239,11 +249,11 @@ class Commit {
     }).chain((shouldForce) => (shouldForce ? this.push(request, undefined, false, true) : Future.resolve(undefined)));
   }
 
-  private handleAdjust(diff: string, generated: GeneratedContent): Future<Error, void> {
+  private handleAdjust(diff: string, proposal: Proposal): Future<Error, void> {
     return this.promptAdjustment().chain((maybeAdj) =>
       maybeAdj instanceof Nothing ?
-        this.interact(diff, generated)
-      : this.refine(generated.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, refined))
+        this.interact(diff, proposal)
+      : this.refine(proposal.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, fromGenerated(refined)))
     );
   }
 

@@ -60,6 +60,22 @@ describe("getSplitPrompt", () => {
     expect(prompt).toContain("unrelated layers");
     expect(prompt).not.toContain("should_split=true only when");
   });
+
+  it("drops single-message instructions from the split prompt", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional");
+    expect(prompt).toContain(DIFF);
+    expect(prompt).not.toContain("SMALL");
+    expect(prompt).not.toContain("MEDIUM");
+    expect(prompt).not.toContain("<commit_message>");
+    expect(prompt).toContain("Conventional Commits");
+  });
+
+  it("summarizes a custom template without interpolating the diff twice", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts"], "custom", Just("Change:\n{diff}"));
+    expect(prompt).toContain("Change:");
+    expect(prompt).not.toContain("{diff}");
+    expect(prompt.split(DIFF).length - 1).toBe(1);
+  });
 });
 
 describe("getRefinePrompt", () => {

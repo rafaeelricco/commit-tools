@@ -275,20 +275,44 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
   }
 }
 
+const IMPERATIVE_SUMMARY = `Each message starts with a capitalized imperative verb ("Add", "Fix", "Refactor").
+        No Conventional Commits prefix, no ticket IDs, no author names, no "WIP".`;
+
+function conventionSummary(convention: CommitConvention, customTemplate: Maybe<string>): string {
+  switch (convention) {
+    case "conventional":
+      return `Each message uses Conventional Commits: "type(optional-scope): description",
+        type drawn from feat, fix, refactor, chore, docs, style, test, perf, ci, build.
+        Imperative and lowercase after the prefix, no ticket IDs, no author names, no "WIP".`;
+    case "imperative":
+      return IMPERATIVE_SUMMARY;
+    case "custom":
+      return customTemplate.maybe(IMPERATIVE_SUMMARY, (t) => `Each message follows this user style template:\n        ${t.replace("{diff}", "").trim()}`);
+    default:
+      return absurd(convention, "CommitConvention");
+  }
+}
+
 function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
-  const basePrompt = getPrompt(diff, convention, customTemplate);
-  const outputInstructionsStart = basePrompt.lastIndexOf("<output_instructions>");
-  const conventionPrompt = outputInstructionsStart >= 0 ? basePrompt.slice(0, outputInstructionsStart) : basePrompt;
   return `
       <task>
         Partition staged files into reviewable commits. Do not write one message for the whole diff.
         A feature that touches unrelated layers is several commits.
       </task>
-      ${conventionPrompt}
 
       <staged_files>
         ${files.join("\n")}
       </staged_files>
+
+      <git_diff>
+        ${diff}
+      </git_diff>
+
+      <message_convention>
+        ${conventionSummary(convention, customTemplate)}
+        A commit covering one small change is a single line. A commit covering several files
+        may add a blank line then "- " bullets.
+      </message_convention>
 
       <output_shape>
         Return ONE JSON object. First character "{", last "}".
@@ -301,7 +325,7 @@ function getSplitPrompt(diff: string, files: readonly string[], convention: Comm
         - should_split=false only when every file is the same concern (implementation + its test, rename + callers). Then exactly 1 commit covering every staged path.
         - Same feature across unrelated layers (CLI, domain, docs, unrelated tests) is still should_split=true.
         - When unsure across 2+ areas, should_split=true with 2+ commits.
-        - Each message follows the active convention (SMALL/MEDIUM/LARGE shape) for that commit only.
+        - Each message follows the active convention in message_convention, scoped to that commit only.
       </partition_rules>
       <examples>
         <example>

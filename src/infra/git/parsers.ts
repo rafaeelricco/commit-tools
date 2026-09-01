@@ -9,6 +9,9 @@ export {
   splitCommitFields,
   commandFailureMessage,
   parseHookInterpreter,
+  isGeneratedPath,
+  parseNumstatCounts,
+  formatOmittedPaths,
   CREATED_FROM_RE,
   COMMIT_KEYS,
   type BaseLookupError
@@ -30,6 +33,36 @@ const commandFailureMessage = (failure: CommandFailure, fallbackMsg: string): st
   failure.output.stderr.trim() || failure.output.stdout.trim() || `${failure.error.message}: ${fallbackMsg}`;
 
 const lastPathSegment = (path: string): string => path.split(/[/\\]/).filter(Boolean).at(-1) ?? path;
+
+const GENERATED_PATH_RE =
+  /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb|Cargo\.lock|poetry\.lock|Gemfile\.lock|composer\.lock|go\.sum)$|(^|\/)(dist|out|__snapshots__)\/|\.min\.(js|css)$|\.snap$/;
+
+const isGeneratedPath = (path: string): boolean => GENERATED_PATH_RE.test(path);
+
+type DiffCounts = { added: string; deleted: string };
+
+const parseNumstatCounts = (stdout: string): ReadonlyMap<string, DiffCounts> => {
+  const map = new Map<string, DiffCounts>();
+  for (const rec of stdout.split("\0")) {
+    const [added, deleted, path] = rec.split("\t");
+    if (added !== undefined && deleted !== undefined && path) {
+      map.set(path, { added, deleted });
+    }
+  }
+  return map;
+};
+
+const formatOmittedPaths = (paths: readonly string[], counts: ReadonlyMap<string, DiffCounts>): string => {
+  if (paths.length === 0) {
+    return "";
+  }
+  const lines = paths.map((path) => {
+    const c = counts.get(path);
+    const churn = c === undefined || c.added === "-" ? "binary" : `+${c.added} -${c.deleted}`;
+    return `${path} | ${churn} (generated, body omitted)`;
+  });
+  return `\n# Generated files changed but not shown:\n${lines.join("\n")}\n`;
+};
 
 const parseHookInterpreter = (shebangLine: string): string => {
   const line = shebangLine.trim();

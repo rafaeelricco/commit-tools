@@ -1,4 +1,4 @@
-export { seedProviderConfig, withModel, withMinEffort, selectEffortForProvider };
+export { seedProviderConfig, withModel, withMinEffort, withDefaultMinEffort, selectEffortForProvider };
 
 import { type Future } from "@/libs/future";
 import {
@@ -58,6 +58,8 @@ const withMinEffort = (config: ProviderConfig): ProviderConfig => {
       return absurd(config, "ProviderConfig");
   }
 };
+
+const withDefaultMinEffort = (config: ProviderConfig): ProviderConfig => (config.effort instanceof Nothing ? withMinEffort(config) : config);
 
 const selectEffortForProvider = (current: ProviderConfig, modelEffort: Maybe<OpenAIModelEffort> = Nothing()): Future<Error, ProviderConfig> => {
   switch (current.provider) {

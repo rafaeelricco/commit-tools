@@ -12,7 +12,9 @@ import { unsupportedAuth } from "@/domain/llm/auth-error";
 import { Just, Nothing, fromOptional, type Maybe } from "@/libs/maybe";
 
 type AnthropicConfig = Extract<Config["ai"], { provider: "anthropic" }>;
-type SystemParam = NonNullable<Anthropic.MessageStreamParams["system"]>;
+type SystemBlocks = Anthropic.TextBlockParam[];
+
+const cacheable = (text: string): Anthropic.TextBlockParam => ({ type: "text", text, cache_control: { type: "ephemeral" } });
 
 const extractAnthropicText = (content: Anthropic.ContentBlock[]): string =>
   content
@@ -31,7 +33,7 @@ const toTokenUsage = (usage: Anthropic.Usage): TokenUsage => {
 
 const buildParams = (
   model: string,
-  system: Maybe<SystemParam>,
+  system: Maybe<SystemBlocks>,
   effort: Maybe<AnthropicEffort>,
   params: GenerateContentParams
 ): Anthropic.MessageStreamParams => {
@@ -45,11 +47,10 @@ const buildParams = (
   return system.maybe(core, (s) => ({ ...core, system: s }));
 };
 
-const buildSetupTokenSystem = (instruction: Maybe<string>): SystemParam =>
-  instruction.maybe<Anthropic.TextBlockParam[]>([{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }], (text) => [
-    { type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT },
-    { type: "text", text }
-  ]);
+const buildApiKeySystem = (instruction: Maybe<string>): Maybe<SystemBlocks> => instruction.map((text) => [cacheable(text)]);
+
+const buildSetupTokenSystem = (instruction: Maybe<string>): SystemBlocks =>
+  instruction.maybe<SystemBlocks>([cacheable(CLAUDE_CODE_SYSTEM_PROMPT)], (text) => [{ type: "text", text: CLAUDE_CODE_SYSTEM_PROMPT }, cacheable(text)]);
 
 const callAnthropicWithApiKey = (
   apiKey: string,
@@ -59,7 +60,7 @@ const callAnthropicWithApiKey = (
 ): Future<Error, ProviderGeneratedContent> =>
   Future.attemptP(async () => {
     const client = new Anthropic({ apiKey, maxRetries: 3, timeout: 120_000 });
-    const stream = client.messages.stream(buildParams(model, fromOptional(params.systemInstruction), effort, params));
+    const stream = client.messages.stream(buildParams(model, buildApiKeySystem(fromOptional(params.systemInstruction)), effort, params));
     return await stream.finalMessage();
   })
     .mapRej((error) => new Error(`Failed to create Anthropic message: ${error instanceof Error ? error.message : String(error)}`, { cause: error }))
@@ -85,7 +86,7 @@ const callAnthropicWithSetupToken = (
       maxRetries: 3,
       timeout: 120_000
     });
-    const system = Just<SystemParam>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
+    const system = Just<SystemBlocks>(buildSetupTokenSystem(fromOptional(params.systemInstruction)));
     const stream = client.messages.stream(buildParams(model, system, effort, params));
     return await stream.finalMessage();
   })

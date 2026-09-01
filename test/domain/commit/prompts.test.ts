@@ -6,27 +6,29 @@ const DIFF = "diff --git a/foo.ts b/foo.ts\n+console.log(1)";
 
 describe("getPrompt", () => {
   it("embeds diff in conventional prompt", () => {
-    const prompt = getPrompt(DIFF, "conventional");
+    const { prompt, systemInstruction } = getPrompt(DIFF, "conventional");
     expect(prompt).toContain(DIFF);
-    expect(prompt).toContain("Conventional Commits");
+    expect(systemInstruction).toContain("Conventional Commits");
+    expect(systemInstruction).not.toContain(DIFF);
   });
 
   it("embeds diff in imperative prompt", () => {
-    const prompt = getPrompt(DIFF, "imperative");
+    const { prompt, systemInstruction } = getPrompt(DIFF, "imperative");
     expect(prompt).toContain(DIFF);
-    expect(prompt).toContain("Do NOT use conventional commit prefixes");
+    expect(systemInstruction).toContain("Do NOT use conventional commit prefixes");
   });
 
-  it("substitutes {diff} in custom template", () => {
-    const prompt = getPrompt(DIFF, "custom", Just("Change:\n{diff}"));
-    expect(prompt).toContain("Change:");
+  it("keeps the custom template static and sends the diff once", () => {
+    const { prompt, systemInstruction } = getPrompt(DIFF, "custom", Just("Change:\n{diff}"));
+    expect(systemInstruction).toContain("Change:");
+    expect(systemInstruction).not.toContain("{diff}");
+    expect(systemInstruction).not.toContain(DIFF);
     expect(prompt).toContain(DIFF);
-    expect(prompt).not.toContain("{diff}");
   });
 
   it("falls back to imperative when custom has no template", () => {
-    const prompt = getPrompt(DIFF, "custom", Nothing());
-    expect(prompt).toContain("imperative");
+    const { systemInstruction } = getPrompt(DIFF, "custom", Nothing());
+    expect(systemInstruction).toContain("imperative");
   });
 });
 

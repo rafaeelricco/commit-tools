@@ -4,7 +4,11 @@ import { CommitConvention } from "@/domain/config/config";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
-function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
+type CommitPrompt = { prompt: string; systemInstruction: string };
+
+const diffPrompt = (gitDiff: string): string => `<git_diff>\n${gitDiff}\n</git_diff>`;
+
+function getPrompt(diff: string, convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): CommitPrompt {
   switch (convention) {
     case "conventional":
       return promptConventional(diff);
@@ -17,8 +21,8 @@ function getPrompt(diff: string, convention: CommitConvention, customTemplate: M
   }
 }
 
-function promptConventional(gitDiff: string): string {
-  return `
+function promptConventional(gitDiff: string): CommitPrompt {
+  const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -102,12 +106,6 @@ function promptConventional(gitDiff: string): string {
         </example>
       </examples>
 
-      <input>
-        <git_diff>
-          ${gitDiff}
-        </git_diff>
-      </input>
-
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE.
         2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
@@ -122,10 +120,11 @@ function promptConventional(gitDiff: string): string {
             • Remaining lines: each line is a bullet starting with "- ".
       </output_instructions>
   `;
+  return { prompt: diffPrompt(gitDiff), systemInstruction };
 }
 
-function promptImperative(gitDiff: string): string {
-  return `
+function promptImperative(gitDiff: string): CommitPrompt {
+  const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -216,12 +215,6 @@ function promptImperative(gitDiff: string): string {
 
       </examples>
 
-      <input>
-        <git_diff>
-          ${gitDiff}
-        </git_diff>
-      </input>
-
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE
           according to the rules above.
@@ -238,15 +231,15 @@ function promptImperative(gitDiff: string): string {
         7. Inline code with single backticks is allowed in the bullet points.
       </output_instructions>
 `;
+  return { prompt: diffPrompt(gitDiff), systemInstruction };
 }
 
-function promptCustom(gitDiff: string, template: Maybe<string>): string {
+function promptCustom(gitDiff: string, template: Maybe<string>): CommitPrompt {
   switch (true) {
     case template instanceof Nothing:
       return promptImperative(gitDiff);
     case template instanceof Just: {
-      const processedTemplate = template.value.replace("{diff}", gitDiff);
-      return `
+      const systemInstruction = `
       <system>
         You are an expert software engineer and version control specialist.
         Your job is to read git diffs and output high-quality commit messages
@@ -254,12 +247,8 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
       </system>
 
       <user_template>
-        ${processedTemplate}
+        ${template.value.replace("{diff}", "").trim()}
       </user_template>
-
-      <git_diff>
-        ${gitDiff}
-      </git_diff>
 
       <output_instructions>
         1. Follow the user's template style and format.
@@ -268,6 +257,7 @@ function promptCustom(gitDiff: string, template: Maybe<string>): string {
         4. Do NOT wrap the commit message in quotes or code fences.
       </output_instructions>
 `;
+      return { prompt: diffPrompt(gitDiff), systemInstruction };
     }
     default:
       template satisfies never;

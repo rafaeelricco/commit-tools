@@ -10,11 +10,18 @@ vi.mock("@/infra/auth/openai", () => ({
   performOpenAIOAuthFlow: vi.fn(),
   validateOpenAITokens: vi.fn()
 }));
+vi.mock("@/infra/auth/xai", () => ({
+  performXaiOAuthFlow: vi.fn()
+}));
 
 import { Setup } from "@/cli/setup";
 import { Future } from "@/libs/future";
 import { Just } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
+
+vi.mock("@/infra/auth/oauth", () => ({
+  openBrowser: vi.fn(() => Future.resolve(undefined))
+}));
 
 vi.mock("@clack/prompts", () => ({
   intro: vi.fn(),
@@ -90,5 +97,42 @@ describe("Setup.run", () => {
     expect(saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({ ai: expect.objectContaining({ provider: "xai", auth_method: { type: "api_key", content: "sk-test" } }) })
     );
+  });
+
+  it("saves xai oauth tokens after the device login prompt", async () => {
+    await scriptWizard("xai", "conventional", false, "xai_oauth");
+    const { performXaiOAuthFlow } = await import("@/infra/auth/xai");
+    const { saveConfig } = await import("@/infra/storage/config");
+    const p = await import("@clack/prompts");
+
+    vi.mocked(performXaiOAuthFlow).mockImplementation((hooks) =>
+      hooks
+        .onDeviceCode({ userCode: "BB88-BABF", verificationUri: "https://auth.x.ai/oauth2/device" })
+        .chain(() => Future.resolve({ access_token: "xa", refresh_token: "xr", expiry_date: 1 }))
+    );
+
+    await runFuture(Setup.create().chain((s) => s.run()));
+
+    expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("First copy your one-time code: BB88-BABF"));
+    expect(p.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("https://auth.x.ai/oauth2/device"), initialValue: true })
+    );
+    expect(p.log.info).toHaveBeenCalledWith("Waiting for authentication...");
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ai: expect.objectContaining({ provider: "xai", auth_method: expect.objectContaining({ type: "xai_oauth" }) })
+      })
+    );
+  });
+
+  it("logs device-login failures instead of exiting silently", async () => {
+    await scriptWizard("xai", "conventional", false, "xai_oauth");
+    const { performXaiOAuthFlow } = await import("@/infra/auth/xai");
+    const p = await import("@clack/prompts");
+
+    vi.mocked(performXaiOAuthFlow).mockReturnValue(Future.reject(new Error("xAI device code expired")));
+
+    await expect(runFuture(Setup.create().chain((s) => s.run()))).rejects.toThrow("xAI device code expired");
+    expect(p.log.error).toHaveBeenCalledWith(expect.stringContaining("xAI device code expired"));
   });
 });

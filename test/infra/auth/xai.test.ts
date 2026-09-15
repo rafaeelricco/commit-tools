@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createHash } from "node:crypto";
 
-import { buildXaiAuthUrl, ensureFreshXaiTokens, xaiApiKeyOptions, xaiOAuthOptions } from "@/infra/auth/xai";
+import { performXaiOAuthFlow, ensureFreshXaiTokens, xaiApiKeyOptions, xaiOAuthOptions } from "@/infra/auth/xai";
 import { generateCodeChallenge, generateCodeVerifier } from "@/infra/auth/oauth";
 import { runFuture } from "@test/helpers/run-future";
+import { Future } from "@/libs/future";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -38,30 +39,127 @@ describe("xaiOAuthOptions", () => {
   });
 });
 
-describe("buildXaiAuthUrl", () => {
-  const url = () => new URL(buildXaiAuthUrl("http://127.0.0.1:54321/callback", "challenge", "state-value"));
+describe("performXaiOAuthFlow", () => {
+  const noop = { onDeviceCode: () => Future.resolve<Error, void>(undefined) };
+  const deviceBody = {
+    device_code: "dev-1",
+    user_code: "BB88-BABF",
+    verification_uri: "https://auth.x.ai/oauth2/device",
+    interval: 0.001,
+    expires_in: 1800
+  };
+  const tokenBody = { access_token: "new-access", refresh_token: "new-refresh", expires_in: 3600 };
+  const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
-  it("uses the discovered authorize endpoint", () => {
-    expect(url().origin + url().pathname).toBe("https://auth.x.ai/oauth2/authorize");
+  it("posts a form-encoded device code request with the client id and grok-build referrer", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/device/code")) return jsonResponse(deviceBody);
+      return jsonResponse(tokenBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runFuture(performXaiOAuthFlow(noop));
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://auth.x.ai/oauth2/device/code");
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/x-www-form-urlencoded");
+    const body = new URLSearchParams(init.body as string);
+    expect(body.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
+    expect(body.get("scope")).toContain("offline_access");
+    expect(body.get("referrer")).toBe("grok-build");
   });
 
-  it("requests an authorization code with PKCE S256", () => {
-    const params = url().searchParams;
-    expect(params.get("response_type")).toBe("code");
-    expect(params.get("code_challenge")).toBe("challenge");
-    expect(params.get("code_challenge_method")).toBe("S256");
-    expect(params.get("state")).toBe("state-value");
+  it("polls the token endpoint with grant_type device_code", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/device/code")) return jsonResponse(deviceBody);
+      return jsonResponse(tokenBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runFuture(performXaiOAuthFlow(noop));
+
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe("https://auth.x.ai/oauth2/token");
+    const body = new URLSearchParams(init.body as string);
+    expect(body.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
+    expect(body.get("device_code")).toBe("dev-1");
+    expect(body.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
   });
 
-  it("identifies the client and the loopback redirect", () => {
-    const params = url().searchParams;
-    expect(params.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
-    expect(params.get("redirect_uri")).toBe("http://127.0.0.1:54321/callback");
-    expect(params.get("referrer")).toBe("grok-build");
+  it("retries on authorization_pending then returns tokens", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/device/code")) return jsonResponse(deviceBody);
+      if (fetchMock.mock.calls.filter((call) => (call[0] as string).includes("/token")).length === 1) {
+        return jsonResponse({ error: "authorization_pending" }, 400);
+      }
+      return jsonResponse(tokenBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runFuture(performXaiOAuthFlow(noop));
+
+    expect(result.access_token).toBe("new-access");
+    expect(result.refresh_token).toBe("new-refresh");
   });
 
-  it("requests offline access so a refresh token is issued", () => {
-    expect(url().searchParams.get("scope")).toContain("offline_access");
+  it("retries on slow_down then returns tokens", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/device/code")) return jsonResponse(deviceBody);
+      if (fetchMock.mock.calls.filter((call) => (call[0] as string).includes("/token")).length === 1) {
+        return jsonResponse({ error: "slow_down", interval: 0.001 }, 400);
+      }
+      return jsonResponse(tokenBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runFuture(performXaiOAuthFlow(noop));
+
+    expect(result.access_token).toBe("new-access");
+  });
+
+  it("fails on access_denied", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/device/code")) return jsonResponse(deviceBody);
+        return jsonResponse({ error: "access_denied" }, 400);
+      })
+    );
+
+    await expect(runFuture(performXaiOAuthFlow(noop))).rejects.toThrow("denied");
+  });
+
+  it("fails on expired_token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/device/code")) return jsonResponse(deviceBody);
+        return jsonResponse({ error: "expired_token" }, 400);
+      })
+    );
+
+    await expect(runFuture(performXaiOAuthFlow(noop))).rejects.toThrow("expired");
+  });
+
+  it("passes the user code and verification URI to onDeviceCode before polling", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/device/code")) return jsonResponse(deviceBody);
+      return jsonResponse(tokenBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const seen: { userCode: string; verificationUri: string }[] = [];
+    await runFuture(
+      performXaiOAuthFlow({
+        onDeviceCode: (prompt) => {
+          seen.push(prompt);
+          expect(fetchMock.mock.calls.some((call) => (call[0] as string).includes("/token"))).toBe(false);
+          return Future.resolve(undefined);
+        }
+      })
+    );
+
+    expect(seen).toEqual([{ userCode: "BB88-BABF", verificationUri: "https://auth.x.ai/oauth2/device" }]);
   });
 });
 

@@ -1,27 +1,9 @@
-export {
-  xaiApiKeyOptions,
-  xaiOAuthOptions,
-  performXaiOAuthFlow,
-  ensureFreshXaiTokens,
-  getXaiAccessToken,
-  buildXaiAuthUrl,
-  XAI_API_BASE_URL,
-  XAI_PROXY_BASE_URL
-};
+export { xaiApiKeyOptions, xaiOAuthOptions, performXaiOAuthFlow, ensureFreshXaiTokens, getXaiAccessToken, XAI_API_BASE_URL, XAI_PROXY_BASE_URL };
+
+export type { DeviceCodePrompt, XaiOAuthFlowHooks };
 
 import { type BearerTokens } from "@/domain/config/config";
-import { SUCCESS_HTML, ERROR_HTML } from "@/infra/auth/templates";
-import {
-  type CallbackServer,
-  generateCodeVerifier,
-  generateCodeChallenge,
-  generateState,
-  stopCallbackServer,
-  openBrowser,
-  oauthTimeout
-} from "@/infra/auth/oauth";
 import { Future } from "@/libs/future";
-import { createServer } from "node:http";
 
 import type { ClientOptions } from "openai";
 
@@ -32,11 +14,10 @@ const XAI_PROXY_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
 // Hardcoded on purpose: refresh runs on every command through `resolveProvider`, so live
 // discovery would put a network round-trip in front of every commit generation. If xAI
 // moves these it will rotate the client id and scopes too, which discovery cannot supply.
-const XAI_AUTH_URL = "https://auth.x.ai/oauth2/authorize";
 const XAI_TOKEN_URL = "https://auth.x.ai/oauth2/token";
+const XAI_DEVICE_CODE_URL = "https://auth.x.ai/oauth2/device/code";
 const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
 const SCOPES = "openid profile email offline_access grok-cli:access api:access";
-const OAUTH_TIMEOUT_MS = 300_000;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // `/chat/completions` on the proxy rejects requests with no client version (HTTP 426) and
@@ -60,115 +41,164 @@ const xaiOAuthOptions = (accessToken: string): ClientOptions => ({
   timeout: 120_000
 });
 
-const buildXaiAuthUrl = (redirectUri: string, codeChallenge: string, state: string): string => {
-  const url = new URL(XAI_AUTH_URL);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", XAI_CLIENT_ID);
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", SCOPES);
-  url.searchParams.set("code_challenge", codeChallenge);
-  url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("state", state);
-  url.searchParams.set("referrer", "grok-build");
-  return url.toString();
+type DeviceCodePrompt = {
+  readonly userCode: string;
+  readonly verificationUri: string;
 };
 
-/**
- * Binds an OS-assigned loopback port, so the redirect URI is only known once the server is
- * listening — which is why the auth URL is built inside the bracket rather than before it.
- */
-const startCallbackServer = (state: string): Future<Error, CallbackServer> =>
-  Future.create<Error, CallbackServer>((reject, resolve) => {
-    let resolveCode: (code: string) => void;
-    let rejectCode: (err: Error) => void;
+type XaiOAuthFlowHooks = {
+  readonly onDeviceCode: (prompt: DeviceCodePrompt) => Future<Error, void>;
+};
 
-    const codePromise = new Promise<string>((res, rej) => {
-      resolveCode = res;
-      rejectCode = rej;
+type XaiDeviceCode = {
+  readonly deviceCode: string;
+  readonly userCode: string;
+  readonly verificationUri: string;
+  readonly intervalSeconds: number;
+  readonly expiresInSeconds: number;
+};
+
+type DevicePoll =
+  | { readonly status: "complete"; readonly tokens: BearerTokens }
+  | { readonly status: "pending"; readonly intervalMs: number }
+  | { readonly status: "failed"; readonly message: string };
+
+type JsonObject = Record<string, unknown>;
+
+const requiredString = (body: JsonObject, field: string): string => {
+  const value = body[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Invalid xAI OAuth response field: ${field}`);
+  }
+  return value;
+};
+
+const asJsonObject = (value: unknown): JsonObject => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {});
+
+const httpsUri = (raw: string): string => {
+  const url = new URL(raw);
+  if (url.protocol !== "https:") {
+    throw new Error("Untrusted verification URI in xAI OAuth response");
+  }
+  return url.href;
+};
+
+const requestXaiDeviceCode = (): Future<Error, XaiDeviceCode> =>
+  Future.attemptP(async () => {
+    const response = await fetch(XAI_DEVICE_CODE_URL, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: XAI_CLIENT_ID, scope: SCOPES, referrer: "grok-build" }).toString()
     });
 
-    const server = createServer((req, res) => {
-      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const body = asJsonObject(await response.json());
+    if (!response.ok) {
+      const detail = [body["error"], body["error_description"]].filter((value) => typeof value === "string").join(": ");
+      throw new Error(`xAI device authorization failed (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
 
-      if (url.pathname !== "/callback") {
-        res.writeHead(404);
-        res.end("Not found");
-        return;
-      }
+    const interval = body["interval"];
+    const expiresIn = body["expires_in"];
+    if (typeof expiresIn !== "number" || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+      throw new Error("Invalid xAI OAuth response field: expires_in");
+    }
 
-      const fail = (message: string): void => {
-        rejectCode(new Error(message));
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(ERROR_HTML(message));
-      };
-
-      const error = url.searchParams.get("error");
-      if (error) return fail(`OAuth error: ${url.searchParams.get("error_description") ?? error}`);
-      if (url.searchParams.get("state") !== state) return fail("CSRF state mismatch — possible attack");
-
-      const code = url.searchParams.get("code");
-      if (!code) return fail("No authorization code received");
-
-      resolveCode(code);
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(SUCCESS_HTML);
-    });
-
-    server.once("error", (err) => {
-      reject(new Error(`Failed to start callback server: ${err}`));
-    });
-
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (address === null || typeof address === "string") {
-        reject(new Error("Callback server did not bind to a TCP port"));
-        return;
-      }
-      resolve({ server, port: address.port, codePromise });
-    });
+    return {
+      deviceCode: requiredString(body, "device_code"),
+      userCode: requiredString(body, "user_code"),
+      verificationUri: httpsUri(requiredString(body, "verification_uri")),
+      intervalSeconds: typeof interval === "number" && Number.isFinite(interval) && interval > 0 ? interval : 5,
+      expiresInSeconds: expiresIn
+    };
   });
 
-const exchangeCodeForTokens = (code: string, codeVerifier: string, redirectUri: string): Future<Error, BearerTokens> =>
+const devicePollFromError = (error: unknown, intervalMs: number, status: number, body: JsonObject): DevicePoll => {
+  if (error === "authorization_pending") {
+    return { status: "pending", intervalMs };
+  }
+  if (error === "slow_down") {
+    const next = body["interval"];
+    return {
+      status: "pending",
+      intervalMs: typeof next === "number" && next > 0 ? next * 1000 : intervalMs + 5000
+    };
+  }
+  if (error === "access_denied" || error === "authorization_denied") {
+    return { status: "failed", message: "xAI device authorization was denied" };
+  }
+  if (error === "expired_token") {
+    return { status: "failed", message: "xAI device code expired" };
+  }
+
+  const detail = [error, body["error_description"]].filter((value) => typeof value === "string").join(": ");
+  return {
+    status: "failed",
+    message: `xAI device token polling failed (${status})${detail ? `: ${detail}` : ""}`
+  };
+};
+
+const pollOnce = (device: XaiDeviceCode, intervalMs: number): Future<Error, DevicePoll> =>
   Future.attemptP(async () => {
     const response = await fetch(XAI_TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type: "authorization_code",
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
         client_id: XAI_CLIENT_ID,
-        code,
-        redirect_uri: redirectUri,
-        code_verifier: codeVerifier
+        device_code: device.deviceCode
       }).toString()
     });
 
+    const body = asJsonObject(await response.json());
+
     if (!response.ok) {
-      throw new Error(`Token exchange failed (${response.status}): ${await response.text()}`);
+      return devicePollFromError(body["error"], intervalMs, response.status, body);
     }
 
-    const data = (await response.json()) as { access_token: string; refresh_token: string; expires_in: number };
-
-    if (!data.access_token || !data.refresh_token) {
-      throw new Error("Incomplete token response from xAI. Missing access_token or refresh_token.");
+    const expiresIn = body["expires_in"];
+    if (typeof expiresIn !== "number" || !Number.isFinite(expiresIn)) {
+      throw new Error("Incomplete token response from xAI. Missing expires_in.");
     }
-
-    return { access_token: data.access_token, refresh_token: data.refresh_token, expiry_date: Date.now() + data.expires_in * 1000 };
-  }).mapRej((e) => new Error(`Token exchange failed: ${e}`));
-
-const performXaiOAuthFlow = (): Future<Error, BearerTokens> => {
-  const codeVerifier = generateCodeVerifier();
-  const state = generateState();
-
-  return Future.bracket<Error, CallbackServer, BearerTokens, void>(startCallbackServer(state), stopCallbackServer, (cs) => {
-    const redirectUri = `http://127.0.0.1:${cs.port}/callback`;
-    const authUrl = buildXaiAuthUrl(redirectUri, generateCodeChallenge(codeVerifier), state);
-
-    const waitForCode: Future<Error, string> = openBrowser(authUrl).chain(() => Future.attemptP(() => cs.codePromise));
-    const timeout = oauthTimeout(OAUTH_TIMEOUT_MS, "OAuth flow timed out after 5 minutes. Please try again.");
-
-    return Future.race<Error, string>(waitForCode, timeout).chain((code) => exchangeCodeForTokens(code, codeVerifier, redirectUri));
+    return {
+      status: "complete",
+      tokens: {
+        access_token: requiredString(body, "access_token"),
+        refresh_token: requiredString(body, "refresh_token"),
+        expiry_date: Date.now() + expiresIn * 1000
+      }
+    };
   });
+
+const pollXaiDeviceToken = (device: XaiDeviceCode): Future<Error, BearerTokens> => {
+  const deadline = Date.now() + device.expiresInSeconds * 1000;
+  const interval = { ms: device.intervalSeconds * 1000 };
+
+  const poll = (): Future<Error, BearerTokens> =>
+    Future.resolveAfter<Error, void>(interval.ms, undefined).chain(() =>
+      pollOnce(device, interval.ms).chain((result) => {
+        switch (result.status) {
+          case "complete":
+            return Future.resolve(result.tokens);
+          case "failed":
+            return Future.reject(new Error(result.message));
+          case "pending": {
+            if (Date.now() > deadline) {
+              return Future.reject(new Error("xAI device code expired"));
+            }
+            interval.ms = result.intervalMs;
+            return poll();
+          }
+        }
+      })
+    );
+
+  return poll();
 };
+
+const performXaiOAuthFlow = (hooks: XaiOAuthFlowHooks): Future<Error, BearerTokens> =>
+  requestXaiDeviceCode().chain((device) =>
+    hooks.onDeviceCode({ userCode: device.userCode, verificationUri: device.verificationUri }).chain(() => pollXaiDeviceToken(device))
+  );
 
 const ensureFreshXaiTokens = (tokens: BearerTokens): Future<Error, BearerTokens> => {
   if (tokens.expiry_date > Date.now() + TOKEN_REFRESH_BUFFER_MS) {

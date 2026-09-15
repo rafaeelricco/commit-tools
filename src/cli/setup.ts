@@ -9,6 +9,7 @@ import { CommitConvention, type Config, type Model, type ProviderConfig } from "
 import { performOAuthFlow, type GoogleOAuthPhase } from "@/infra/auth/google";
 import { performOpenAIOAuthFlow, validateOpenAITokens } from "@/infra/auth/openai";
 import { performXaiOAuthFlow } from "@/infra/auth/xai";
+import { openBrowser } from "@/infra/auth/oauth";
 import { validateAnthropicApiKey, validateAnthropicSetupToken } from "@/infra/auth/anthropic";
 import { Just, Nothing } from "@/libs/maybe";
 import { bracketStatus, loading } from "@/infra/ui/spinner";
@@ -97,18 +98,25 @@ class Setup {
   }
 
   run(): Future<Error, void> {
-    switch (this.preferences.authMethod) {
-      case "google_oauth":
-        return this.setupOAuth();
-      case "openai_oauth":
-        return this.setupOpenAIOAuth();
-      case "xai_oauth":
-        return this.setupXaiOAuth();
-      case "anthropic_setup_token":
-        return this.setupAnthropicSetupToken();
-      case "api_key":
-        return this.setupApiKey();
-    }
+    const flow = (() => {
+      switch (this.preferences.authMethod) {
+        case "google_oauth":
+          return this.setupOAuth();
+        case "openai_oauth":
+          return this.setupOpenAIOAuth();
+        case "xai_oauth":
+          return this.setupXaiOAuth();
+        case "anthropic_setup_token":
+          return this.setupAnthropicSetupToken();
+        case "api_key":
+          return this.setupApiKey();
+      }
+    })();
+
+    return flow.mapRej((e) => {
+      p.log.error(color.red(e.message));
+      return e;
+    });
   }
 
   private buildConfig(ai: ProviderConfig): Config {
@@ -147,9 +155,9 @@ class Setup {
   }
 
   private setupOpenAIOAuth(): Future<Error, void> {
-    p.log.info("Opening browser for ChatGPT sign-in...");
-
-    return performOpenAIOAuthFlow()
+    return performOpenAIOAuthFlow({
+      onDeviceCode: ({ userCode, verificationUri }) => promptDeviceLogin(userCode, verificationUri)
+    })
       .chain((tokens) =>
         loading("Validating tokens...", "Tokens validated!", validateOpenAITokens(tokens)).map(() => ({
           type: "openai_oauth" as const,
@@ -160,9 +168,9 @@ class Setup {
   }
 
   private setupXaiOAuth(): Future<Error, void> {
-    p.log.info("Opening browser for Grok sign-in...");
-
-    return performXaiOAuthFlow().chain((tokens) => this.finalizeSetup({ type: "xai_oauth" as const, content: tokens }));
+    return performXaiOAuthFlow({
+      onDeviceCode: ({ userCode, verificationUri }) => promptDeviceLogin(userCode, verificationUri)
+    }).chain((tokens) => this.finalizeSetup({ type: "xai_oauth" as const, content: tokens }));
   }
 
   private setupApiKey(): Future<Error, void> {
@@ -199,10 +207,6 @@ class Setup {
       .chain((ai) => saveConfig(this.buildConfig(ai)))
       .map(() => {
         p.outro(color.green("Setup complete!"));
-      })
-      .mapRej((e) => {
-        p.log.error(color.red(e.message));
-        return e;
       });
   }
 }
@@ -296,3 +300,17 @@ function apiKeyPromptFor(provider: ProviderConfig["provider"]): ApiKeyPrompt {
       return { message: "Enter your XAI_API_KEY (xai-...):", validate: genericApiKeyValidator };
   }
 }
+
+const promptDeviceLogin = (userCode: string, verificationUri: string): Future<Error, void> =>
+  Future.attemptP(async () => {
+    p.log.warn(`First copy your one-time code: ${userCode}`);
+    const confirmed = await p.confirm({
+      message: `Press Enter to open ${verificationUri} in your browser`,
+      initialValue: true
+    });
+    if (p.isCancel(confirmed) || !confirmed) throw new Error("Setup cancelled");
+  })
+    .chain(() => openBrowser(verificationUri))
+    .map(() => {
+      p.log.info("Waiting for authentication...");
+    });

@@ -62,7 +62,7 @@ describe("generateCommitMessage", () => {
 describe("refineCommitMessage", () => {
   it("calls openai provider for openai config", async () => {
     const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
-    await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
+    await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff", "conventional"));
     expect(generateContentWithOpenAI).toHaveBeenCalled();
   });
 
@@ -72,7 +72,7 @@ describe("refineCommitMessage", () => {
       Future.resolve({ text: "feat: test", tokens: Nothing(), effectiveEffort: Just("provider default") })
     );
 
-    const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
+    const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff", "conventional"));
     expect(result.metadata.model.effort).toBe("provider default");
   });
 });

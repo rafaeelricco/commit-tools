@@ -85,10 +85,25 @@ describe("getRefinePrompt", () => {
     const { prompt, systemInstruction } = getRefinePrompt({
       diff: DIFF,
       currentMessage: "feat: add x",
-      adjustment: "shorter"
+      adjustment: "shorter",
+      convention: "conventional",
+      customTemplate: Nothing()
     });
     expect(prompt).toContain("<diff>");
     expect(prompt).toContain("shorter");
     expect(systemInstruction).toContain("revise commit messages");
+  });
+
+  it("states the configured convention instead of inferring it from the message", () => {
+    const { systemInstruction } = getRefinePrompt({
+      diff: DIFF,
+      currentMessage: "Add x",
+      adjustment: "shorter",
+      convention: "custom",
+      customTemplate: Just("[area] summary\n{diff}")
+    });
+    expect(systemInstruction).toContain("[area] summary");
+    expect(systemInstruction).not.toContain("{diff}");
+    expect(systemInstruction).not.toContain("SMALL");
   });
 });

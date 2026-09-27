@@ -140,8 +140,17 @@ const generateCommitMessage = (
 ): Future<Error, GeneratedContent> =>
   withTransientRetry(() => generateContent(withDefaultMinEffort(config), getPrompt(diff, convention, customTemplate)));
 
-const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
-  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ diff, currentMessage, adjustment })));
+const refineCommitMessage = (
+  config: ProviderConfig,
+  currentMessage: string,
+  adjustment: string,
+  diff: string,
+  convention: CommitConvention,
+  customTemplate: Maybe<string> = Nothing()
+): Future<Error, GeneratedContent> =>
+  withTransientRetry(() =>
+    generateContent(withDefaultMinEffort(config), getRefinePrompt({ diff, currentMessage, adjustment, convention, customTemplate }))
+  );
 
 const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
   r.either(

@@ -138,7 +138,11 @@ class Commit {
   }
 
   refine(message: string, adjustment: string, diff: string): Future<Error, GeneratedContent> {
-    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
+    return loading(
+      "Refining...",
+      "Refined!",
+      refineCommitMessage(this.providerConfig, message, adjustment, diff, this.config.commit_convention, this.config.custom_template)
+    );
   }
 
   commit(message: string): Future<Error, string> {

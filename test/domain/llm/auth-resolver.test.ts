@@ -20,6 +20,7 @@ const googleConfig = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
   split_commits: false,
+  fast_model: Nothing(),
   ai: {
     provider: "gemini",
     model: "gemini-2.0",
@@ -60,6 +61,7 @@ describe("resolveProvider", () => {
       commit_convention: "imperative",
       custom_template: Nothing(),
       split_commits: false,
+      fast_model: Nothing(),
       ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk-x" } }
     };
     const ai = await runFuture(resolveProvider(config));

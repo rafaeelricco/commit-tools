@@ -66,6 +66,7 @@ const config = (split_commits = false): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
   split_commits,
+  fast_model: Nothing(),
   ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
 });
 
@@ -182,6 +183,35 @@ describe("Commit.run", () => {
     expect(router.generateSplitPlan).toHaveBeenCalledTimes(1);
     expect(router.generateCommitMessage).toHaveBeenCalled();
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
+  });
+
+  it("writes the message with the fast model at the lowest effort", async () => {
+    const storage = await import("@/infra/storage/config");
+    vi.mocked(storage.loadConfig).mockReturnValue(Future.resolve({ ...config(), fast_model: Just("fast-m") }));
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const router = await import("@/domain/llm/router");
+    expect(vi.mocked(router.generateCommitMessage).mock.calls[0]?.[0]).toMatchObject({ model: "fast-m", effort: Just("low") });
+  });
+
+  it("plans splits with the fast model", async () => {
+    const storage = await import("@/infra/storage/config");
+    vi.mocked(storage.loadConfig).mockReturnValue(Future.resolve({ ...config(true), fast_model: Just("fast-m") }));
+    const repo = await import("@/infra/git/repo");
+    vi.mocked(repo.listStagedPaths).mockReturnValue(Future.resolve(["a.ts", "b.ts"]));
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const router = await import("@/domain/llm/router");
+    expect(router.generateSplitPlan).toHaveBeenCalled();
+    expect(vi.mocked(router.generateSplitPlan).mock.calls[0]?.[0]).toMatchObject({ model: "fast-m" });
+  });
+
+  it("keeps the main model when no fast model is set", async () => {
+    await runFuture(Commit.create().chain((c) => c.run()));
+    const router = await import("@/domain/llm/router");
+    expect(vi.mocked(router.generateCommitMessage).mock.calls[0]?.[0]).toMatchObject({ model: "gpt-4.1-mini", effort: Nothing() });
   });
 });
 

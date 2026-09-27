@@ -146,7 +146,8 @@ class Setup {
       ai,
       commit_convention: this.preferences.convention,
       custom_template: this.preferences.customTemplate ? Just(this.preferences.customTemplate) : Nothing(),
-      split_commits: this.preferences.splitCommits
+      split_commits: this.preferences.splitCommits,
+      fast_model: Nothing()
     };
   }
 

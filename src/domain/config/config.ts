@@ -139,7 +139,8 @@ const Config = s.object({
   ai: schema_ProviderConfig,
   commit_convention: s.stringEnum([...COMMIT_CONVENTIONS]),
   custom_template: s.optionalMaybe(s.string),
-  split_commits: s.optionalDefault(false, s.boolean)
+  split_commits: s.optionalDefault(false, s.boolean),
+  fast_model: s.optionalMaybe(s.string)
 });
 type Config = s.Infer<typeof Config>;
 

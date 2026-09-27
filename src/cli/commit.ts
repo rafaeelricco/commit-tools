@@ -1,8 +1,10 @@
 /*
 The default command: turn the staged diff into a commit message, then commit and optionally push.
 
-`Commit.create` loads config (running `Setup` when that fails, a corrupt file included) and
-refreshes OAuth tokens. `Commit.run` owns everything after that and logs any failure once, in red.
+`Commit.create` loads config (running `Setup` when that fails, a corrupt file included),
+refreshes OAuth tokens, and swaps in `fast_model` at the provider's lowest effort when one is set,
+so every model call below uses it. `Commit.run` owns everything after that and logs any failure
+once, in red.
 
     Commit.run()
         |-- 1. checkIsGitRepo(), then getStagedDiff() and listStagedPaths() together
@@ -36,6 +38,7 @@ import { Setup } from "@/cli/setup";
 import { Split } from "@/cli/split";
 import { type CommitConvention, type Config, type ProviderConfig } from "@/domain/config/config";
 import { resolveProvider } from "@/domain/llm/auth-resolver";
+import { withMinEffort, withModel } from "@/domain/llm/effort";
 import {
   generateCommitMessage,
   generateSplitPlan,
@@ -84,7 +87,15 @@ class Commit {
           .chain((s) => s.run())
           .chain(() => loadConfig());
       })
-      .chain((config) => resolveProvider(config).map((ai) => new Commit(config, ai)));
+      .chain((config) =>
+        resolveProvider(config).map(
+          (ai) =>
+            new Commit(
+              config,
+              config.fast_model.maybe(ai, (model) => withMinEffort(withModel(ai, model)))
+            )
+        )
+      );
   }
 
   run(): Future<Error, void> {

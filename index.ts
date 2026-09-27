@@ -2,7 +2,7 @@
 The `commit` binary: parse argv, run one subcommand, turn its Future into an exit code.
 
 `main` is the only place that sets the exit code, and it prints nothing itself. Commit, Branch,
-Setup, Model, Effort and Alias log `run()` failures in red; Update shows its Yarn error as a note;
+Setup, Model, FastModel, Effort and Alias log `run()` failures in red; Update shows its Yarn error as a note;
 Doctor never rejects.
 
     main()
@@ -17,13 +17,14 @@ Doctor never rejects.
 
 A rejection in step 3 never reaches `run()`'s logging. `AliasCommand.create` and `Setup.run`
 log their own; otherwise the process exits 1 with no message: a `resolveProvider` refresh
-failure in Commit, Branch or Model, a missing config in Model or Effort, a cancelled `Setup.create`.
+failure in Commit, Branch, Model or FastModel, a missing config in Model, FastModel or Effort, a cancelled `Setup.create`.
 */
 import { Commit } from "@/cli/commit";
 import { Branch } from "@/cli/branch";
 import { Setup } from "@/cli/setup";
 import { Doctor } from "@/cli/doctor";
 import { ModelCommand } from "@/cli/model";
+import { FastModelCommand } from "@/cli/fast-model";
 import { EffortCommand } from "@/cli/effort";
 import { AliasCommand } from "@/cli/alias";
 import { Update } from "@/cli/update";
@@ -34,7 +35,7 @@ import { checkUpdate } from "@/cli/update";
 
 import color from "picocolors";
 
-const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "effort", "branch", "alias"]);
+const NOTIFIER_COMMANDS = new Set<CliCommand["type"]>(["generate", "setup", "doctor", "model", "fast-model", "effort", "branch", "alias"]);
 
 const main = () => {
   const args = process.argv.slice(2);
@@ -56,6 +57,8 @@ const main = () => {
           return Doctor.create().run();
         case "model":
           return ModelCommand.create().chain((m) => m.run());
+        case "fast-model":
+          return FastModelCommand.create().chain((f) => f.run());
         case "effort":
           return EffortCommand.create().chain((e) => e.run());
         case "branch":

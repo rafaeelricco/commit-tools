@@ -12,6 +12,7 @@ describe("parseArgs", () => {
     [["login"], "setup"],
     [["doctor"], "doctor"],
     [["model"], "model"],
+    [["fast-model"], "fast-model"],
     [["effort"], "effort"],
     [["update"], "update"],
     [["alias"], "alias"],

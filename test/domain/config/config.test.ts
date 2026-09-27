@@ -10,6 +10,7 @@ const sampleConfig = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
   split_commits: false,
+  fast_model: Nothing(),
   ai: {
     provider: "openai",
     model: "gpt-4.1-mini",
@@ -88,5 +89,21 @@ describe("Config schema", () => {
     const decoded = s.decode(Config, encoded);
     expect(decoded.isSuccess()).toBe(true);
     if (decoded instanceof Success) expect(decoded.value.split_commits).toBe(false);
+  });
+
+  it("defaults a missing fast_model to Nothing and round-trips a set one", () => {
+    const encoded = s.encode(Config, sampleConfig()) as Record<string, unknown>;
+    delete encoded["fast_model"];
+    const decoded = s.decode(Config, encoded);
+    expect(decoded.isSuccess()).toBe(true);
+    if (decoded instanceof Success) expect(decoded.value.fast_model).toBeInstanceOf(Nothing);
+
+    const withFast: ConfigValue = { ...sampleConfig(), fast_model: Just("gpt-5-mini") };
+    const roundTripped = s.decode(Config, s.encode(Config, withFast));
+    expect(roundTripped.isSuccess()).toBe(true);
+    if (roundTripped instanceof Success) {
+      expect(roundTripped.value.fast_model).toBeInstanceOf(Just);
+      if (roundTripped.value.fast_model instanceof Just) expect(roundTripped.value.fast_model.value).toBe("gpt-5-mini");
+    }
   });
 });

@@ -39,6 +39,7 @@ describe("EffortCommand", () => {
         commit_convention: "conventional",
         custom_template: Nothing(),
         split_commits: false,
+        fast_model: Nothing(),
         ai: { provider: "openai", model: "gpt-4.1-mini", effort: Nothing(), auth_method: { type: "api_key", content: "sk" } }
       } satisfies ConfigValue)
     );
@@ -55,6 +56,7 @@ describe("EffortCommand", () => {
       commit_convention: "conventional",
       custom_template: Nothing(),
       split_commits: false,
+      fast_model: Nothing(),
       ai: {
         provider: "openai",
         model: "gpt-5.6-sol",

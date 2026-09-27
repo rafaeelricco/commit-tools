@@ -12,6 +12,7 @@ const sampleConfig = (): ConfigValue => ({
   commit_convention: "conventional",
   custom_template: Nothing(),
   split_commits: false,
+  fast_model: Nothing(),
   ai: {
     provider: "openai",
     model: "gpt-4.1-mini",
@@ -55,6 +56,7 @@ describe("config storage", () => {
         commit_convention: "imperative",
         custom_template: Just("tpl"),
         split_commits: false,
+        fast_model: Nothing(),
         ai: { ...sampleConfig().ai, auth_method: { type: "openai_oauth", content: staleTokens() } }
       })
     );

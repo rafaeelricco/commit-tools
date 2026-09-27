@@ -1,8 +1,8 @@
 /*
 Refresh OAuth tokens before a command talks to a provider.
 
-Commit, Branch and Model call `resolveProvider` in `create()`; Effort calls it in `run()`, and
-only for OpenAI OAuth. API keys and Anthropic setup tokens pass through untouched.
+Commit, Branch, Model and FastModel call `resolveProvider` in `create()`; Effort calls it in
+`run()`, and only for OpenAI OAuth. API keys and Anthropic setup tokens pass through untouched.
 
     resolveProvider(config)
         |-- api_key, anthropic_setup_token --> config.ai as is

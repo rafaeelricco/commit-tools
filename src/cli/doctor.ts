@@ -83,7 +83,7 @@ class Doctor {
           const rows: CheckRow[] = [row];
           const ai = config.ai;
 
-          rows.push(["Provider", color.green(ai.provider), renderModelInfo(ai)]);
+          rows.push(["Provider", color.green(ai.provider), renderModelInfo(ai, config.fast_model)]);
 
           const authMethod = ai.auth_method.type;
 
@@ -168,9 +168,10 @@ function renderPrRow(lookup: pr.PrLookup): CheckRow {
   }
 }
 
-function renderModelInfo(ai: ProviderConfig): string {
+function renderModelInfo(ai: ProviderConfig, fastModel: Maybe<string>): string {
   const base = `${ai.model}`;
-  return ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
+  const main = ai.effort instanceof Just ? `${base} (${ai.effort.value} effort)` : base;
+  return fastModel.maybe(main, (fast) => `${main}, fast: ${fast}`);
 }
 
 /** `Nothing` for auth methods that carry no expiry, so a new variant is a compile error rather than a missing row. */

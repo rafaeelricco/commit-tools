@@ -121,6 +121,12 @@ This flow also lets you adjust the reasoning effort for the chosen model. If the
 commit effort
 ```
 
+To make `commit` faster, pick a smaller model from the same provider for commit messages and split plans. It runs at the provider's lowest reasoning effort, and branch names keep the main model. Choose "Use the main model" in the same command to turn it off:
+
+```bash
+commit fast-model
+```
+
 ### 3. Create Aliases (optional)
 
 `commit` is the built-in name, but you can add your own short names bound to any subcommand:
@@ -205,6 +211,7 @@ commit --help
 | `commit login`           | Alias for setup — re-authenticate                 |
 | `commit doctor`          | Check installation and environment                |
 | `commit model`           | Select a different AI model                       |
+| `commit fast-model`      | Select a faster model for commit messages         |
 | `commit effort`          | Adjust the reasoning effort for the current model |
 | `commit alias`           | List, create, and delete extra CLI names          |
 | `commit update`          | Install the latest version from npm               |

@@ -13,6 +13,7 @@ type CliCommand =
   | { type: "setup" }
   | { type: "doctor" }
   | { type: "model" }
+  | { type: "fast-model" }
   | { type: "effort" }
   | { type: "branch" }
   | { type: "alias"; action: AliasAction }
@@ -60,6 +61,8 @@ const cliCommandDecoder: D.Decoder<CliCommand> = D.array(D.string).chain((args) 
       return D.succeed({ type: "doctor" });
     case "model":
       return D.succeed({ type: "model" });
+    case "fast-model":
+      return D.succeed({ type: "fast-model" });
     case "effort":
       return D.succeed({ type: "effort" });
     case "branch":
@@ -95,6 +98,7 @@ Commands:
   login               Alias for setup (re-authenticate)
   doctor              Check installation and environment
   model               Select a different AI model
+  fast-model          Select a faster model for commit messages
   effort              Adjust the reasoning effort for the current model
   alias               Manage extra CLI names (list, add <name> <target>, remove <name>)
   update              Install the latest version from npm

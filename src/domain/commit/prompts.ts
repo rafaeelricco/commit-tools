@@ -116,12 +116,9 @@ function promptConventional(gitDiff: string): CommitPrompt {
       </examples>
 
       <output_instructions>
-        1. First, internally decide if the change is SMALL, MEDIUM, or LARGE.
-        2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
-        3. Then output ONLY the final commit message text, with no explanation.
-        4. Do NOT wrap the commit message in quotes or code fences.
-        5. Always start with a Conventional Commits type prefix. Use lowercase for the first word after the prefix (except for proper nouns and acronyms), matching the style of the examples.
-        6. Respect the required format based on size:
+        1. Your reply is written verbatim as the commit message, so reply with the message text alone: no explanation, quotes, or code fences.
+        2. Start with a Conventional Commits type prefix. Use lowercase for the first word after the prefix (except for proper nouns and acronyms), matching the style of the examples.
+        3. Respect the required format based on size:
           - SMALL: single line only.
           - MEDIUM/LARGE:
             • Line 1: title line with type prefix.
@@ -148,7 +145,7 @@ function promptImperative(gitDiff: string): CommitPrompt {
           - MEDIUM: multiple files OR a substantial change in 1 file.
           - LARGE: many files and/or broad impact (new features, big refactors, major deletions).
         3. Commit message style:
-          - Use present-tense, imperative in the title (e.g. "add X", "fix Y", "refactor Z").
+          - Use present-tense, imperative in the title (e.g. "Add X", "Fix Y", "Refactor Z").
           - Avoid noise words like "small change" or "minor update".
           - No ticket IDs, no author names, no "WIP".
           - Do NOT use conventional commit prefixes like \`feat:\`, \`fix:\`, \`refactor:\`, \`chore:\`, \`docs:\`, \`style:\`, \`test:\`, \`perf:\`, \`ci:\`, \`build:\`. Start directly with the verb.
@@ -212,32 +209,28 @@ function promptImperative(gitDiff: string): CommitPrompt {
             Add prompt_commit_message function for git diff analysis
 
             - Add helper to generate commit messages from git diffs following our guidelines.
-            - Includes initial implementation of \`prompt_commit_message\` and tests to validate basic usage.
-            - ...
+            - Include initial implementation of \`prompt_commit_message\` with unit tests covering basic usage.
+            - Wire the helper into the commit flow so diff inputs produce structured prompts.
           </commit_message>
         </example>
 
         <negative_example>
           <bad>feat: add user authentication</bad>
-          <good>add user authentication</good>
+          <good>Add user authentication</good>
         </negative_example>
 
       </examples>
 
       <output_instructions>
-        1. First, internally decide if the change is SMALL, MEDIUM, or LARGE
-          according to the rules above.
-        2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
-        3. Then output ONLY the final commit message text, with no explanation.
-        4. Start the commit message with a capital letter.
-        5. Do NOT wrap the commit message in quotes or code fences.
-        6. Respect the required format based on size:
+        1. Your reply is written verbatim as the commit message, so reply with the message text alone: no explanation, quotes, or code fences.
+        2. Start the commit message with a capital letter.
+        3. Respect the required format based on size:
           - SMALL: single line only.
           - MEDIUM/LARGE:
             • Line 1: title line.
             • Line 2: blank.
             • Remaining lines: each line is a bullet starting with "- ".
-        7. Inline code with single backticks is allowed in the bullet points.
+        4. Inline code with single backticks is allowed in the bullet points.
       </output_instructions>
 `;
   return { prompt: diffPrompt(gitDiff), systemInstruction };
@@ -260,10 +253,8 @@ function promptCustom(gitDiff: string, template: Maybe<string>): CommitPrompt {
       </user_template>
 
       <output_instructions>
-        1. Follow the user's template style and format.
-        2. Analyze the content and create a commit message that matches the template pattern.
-        3. Output ONLY the final commit message text, with no explanation.
-        4. Do NOT wrap the commit message in quotes or code fences.
+        1. Follow the user's template style and format, and write a message for this diff that matches the template pattern.
+        2. Your reply is written verbatim as the commit message, so reply with the message text alone: no explanation, quotes, or code fences.
       </output_instructions>
 `;
       return { prompt: diffPrompt(gitDiff), systemInstruction };
@@ -327,6 +318,7 @@ function getSplitPrompt(diff: string, files: readonly string[], convention: Comm
         - Each message follows the active convention in message_convention, scoped to that commit only.
       </partition_rules>
       <examples>
+        These examples show the partition and JSON shape. Their messages are illustrative; write yours in the active convention.
         <example>
           <staged_files>src/cli/setup.ts
 test/cli/setup.test.ts</staged_files>
@@ -376,9 +368,9 @@ function getBranchNamePrompt(context: string): string {
         - ALLOWED as the LAST token: a change-kind word (refactor, cleanup, rewrite,
           hardening, migration, feature) when it sharpens the framing.
           Example: "frontend-list-ui-refactor" is valid because "refactor" is the suffix.
-        - Forbidden anywhere: tooling/instruction words — suggestion(s), prompt,
-          llm, model, cli, tool(s), command(s), workflow, meta, kebab-case, snapshot,
-          context, branch-name, name-picker.
+        - Forbidden anywhere: words that come from these instructions rather than
+          from the snapshot, such as suggestion(s), prompt, snapshot, kebab-case,
+          branch-name, name-picker.
         - Never trunk names: main, master, develop, head.
         - Area prefix: if every changed file shares one top-level area visible in
           the paths (a monorepo package, a top-level src/<area> subtree, or a
@@ -404,19 +396,8 @@ function getBranchNamePrompt(context: string): string {
         - user-visible change framing (names what a product user would notice)
         - refactor/architecture framing (names the structural shift)
         - shared/reusable focus (names what becomes reusable across pages)
+        No slug may be just a subset of another.
       </diversity_axes>
-
-      <synthesis_protocol>
-        Before answering, internally (you do NOT output these steps):
-        1. List every file in the snapshot and the one-phrase intent of each hunk.
-        2. Group the hunks into 1-3 themes that span multiple files.
-        3. Pick the three diversity axes that best describe this diff.
-        4. Draft a slug for each axis, then verify each slug:
-           (a) matches the pattern, (b) is grounded in snapshot tokens,
-           (c) is not just a subset of another slug,
-           (d) frames a different axis than the other two.
-        5. If two slugs frame the same axis, replace one before emitting.
-      </synthesis_protocol>
 
       <examples>
         <example>
@@ -439,17 +420,20 @@ function getBranchNamePrompt(context: string): string {
   `;
 }
 
-function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {
-  prompt: string;
-  systemInstruction: string;
-} {
+function getRefinePrompt(params: {
+  diff: string;
+  currentMessage: string;
+  adjustment: string;
+  convention: CommitConvention;
+  customTemplate: Maybe<string>;
+}): CommitPrompt {
   return {
     prompt:
       `<diff>\n${params.diff}\n</diff>\n` + `<current>\n${params.currentMessage}\n</current>\n` + `<adjustment>\n${params.adjustment}\n</adjustment>`,
     systemInstruction:
-      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. " +
-      "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '. " +
-      "Preserve the original convention: if the current message starts with a Conventional Commits prefix (feat, fix, refactor, chore, docs, style, test, perf, ci, build), keep it; otherwise keep the imperative style. " +
-      "Output ONLY the revised commit message. No preamble, no explanation, no code fences, no surrounding quotes."
+      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message.\n" +
+      `Message convention: ${conventionSummary(params.convention, params.customTemplate)}\n` +
+      "A small change (one file, a few lines) gets a single line; anything larger gets a title, a blank line, then bullets starting with '- '.\n" +
+      "Your reply is written verbatim as the commit message, so reply with the revised message alone: no preamble, explanation, code fences, or quotes."
   };
 }

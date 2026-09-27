@@ -1,3 +1,18 @@
+/*
+`commit branch`: suggest three branch names from the local changes, then create and switch.
+
+    Branch.run()
+        |-- 1. checkIsGitRepo(), getLocalChangeContext()   `git diff HEAD` + `git status --porcelain`
+        |-- 2. generateBranchNameSuggestions()             three names, each already a valid slug
+        |-- 3. promptPick()
+        |-- 4. confirmForkFromBase()                       asks only when on a known non-base branch
+        |-- 5. createAndSwitchBranch()                     `git switch -c <name>`
+        v
+    renderBranchNote()
+
+No local changes is not a failure: it prints a note and exits 0. Cancelling at step 3 or 4
+creates nothing. Other errors are logged once in red by `run()`.
+*/
 export { Branch };
 
 import * as p from "@clack/prompts";

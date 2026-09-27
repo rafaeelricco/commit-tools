@@ -1,3 +1,18 @@
+/*
+OpenAI sign-in with a ChatGPT account (device code), plus token refresh.
+
+    performOpenAIOAuthFlow({ onDeviceCode })
+        |-- 1. requestOpenAIDeviceCode()   404 means device login is off in ChatGPT settings
+        |-- 2. onDeviceCode()              the caller shows the code and the verify URL
+        |-- 3. pollOpenAIDeviceCode()      every `interval` seconds (default 5) for up to
+        |                                  15 minutes; 403/404 mean "not yet"
+        |-- 4. exchangeCodeForTokens()     authorization code + verifier --> tokens
+        v
+    BearerTokens
+
+`ensureFreshOpenAITokens` refreshes within 5 minutes of expiry and keeps the old refresh token
+when none comes back. Plain fetch with no retries; HTTP errors carry their status.
+*/
 export { performOpenAIOAuthFlow, ensureFreshOpenAITokens, validateOpenAITokens, getOpenAIAccessToken };
 
 export type { OpenAIOAuthFlowHooks };

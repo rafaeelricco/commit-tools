@@ -1,3 +1,17 @@
+/*
+The retry policy for every LLM call the router makes.
+
+    withTransientRetry(make)
+        |-- run make(); a non-transient error rejects at once
+        |-- transient (TRANSIENT_PATTERNS: dropped connections, timeouts, DNS failures,
+        |     502/503/504/529, "overloaded", "rate limit"): up to 3 attempts, 500ms then 1s apart
+        |-- still failing --> ask "retry?": yes starts 3 more attempts, no rejects with the error
+        v
+
+A 429 or 500 counts only when its message matches a pattern. `isTransientLlmError` also reads
+one level of `err.cause`, so providers that keep the SDK error as `cause` (Anthropic, xAI) stay
+retryable; OpenAI and Gemini rely on the copied message.
+*/
 export { withTransientRetry, isTransientLlmError };
 
 import * as p from "@clack/prompts";

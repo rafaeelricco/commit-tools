@@ -1,3 +1,18 @@
+/*
+xAI sign-in (device code), token refresh, and client options for both auth methods.
+
+    performXaiOAuthFlow({ onDeviceCode })
+        |-- 1. requestXaiDeviceCode()   rejects a non-https verification URI
+        |-- 2. onDeviceCode()           the caller shows the code and the verify URL
+        |-- 3. pollXaiDeviceToken()     wait one interval, poll, repeat until the code expires;
+        |                               slow_down lengthens the interval; any other error rejects
+        v
+    BearerTokens
+
+API keys go straight to api.x.ai. OAuth goes through xAI's CLI proxy with SDK retries off (see
+`xaiOAuthOptions`). A stale XAI_CLIENT_VERSION only shows up later, as an HTTP 426 from the proxy
+(src/infra/llm/xai.ts).
+*/
 export { xaiApiKeyOptions, xaiOAuthOptions, performXaiOAuthFlow, ensureFreshXaiTokens, getXaiAccessToken, XAI_API_BASE_URL, XAI_PROXY_BASE_URL };
 
 export type { DeviceCodePrompt, XaiOAuthFlowHooks };

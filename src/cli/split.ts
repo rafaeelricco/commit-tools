@@ -1,3 +1,27 @@
+/*
+The split flow: review a multi-commit plan for the staged changes, edit it, then apply it.
+
+`Commit` hands over a plan that already covers every staged path exactly once
+(src/domain/split/plan.ts). The edit helpers keep that true: each returns a new plan, and moving
+a file out of a group drops the group if it is left empty.
+
+    Split.runPlan(diff, files, plan)
+        |
+        v
+    interact(plan)  <-----------------------------------------------+
+        |-- edit message | move file | reorder | regenerate ----------+  a cancelled prompt keeps the plan
+        |-- cancel --> done, nothing committed
+        |-- apply | apply + push
+        v
+    apply()   performCommit(message, files) for each group, in order;
+        |       each group commits alone and the other staged paths stay staged
+        v
+    push when asked, with the same publish / --force-with-lease prompts as Commit
+
+Groups commit one at a time with no rollback: if group 3 fails, groups 1 and 2 stay committed
+and the rest stay staged. A failed regenerate drops the plan. Errors reject up to `Commit.run`,
+which logs them.
+*/
 export { Split };
 
 import * as p from "@clack/prompts";

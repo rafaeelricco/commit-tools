@@ -1,3 +1,18 @@
+/*
+Turn the model's split-plan reply into a plan that commits every staged path exactly once.
+
+    parseAndValidateSplitPlan(raw, stagedFiles)
+        |-- 1. parseSplitPlan()        strip a ``` fence, cut out the JSON object, decode it
+        |                              (should_split, 1+ commits, each with a message and files)
+        |-- 2. leftoverStagedPaths()   reject a path listed twice or not staged
+        |-- 3a. should_split false --> one commit: every path, the first message
+        |-- 3b. should_split true ---> staged paths the model left out go in a last
+        v                              "Commit remaining staged changes" commit
+    SplitPlan
+
+Every failure is a `Failure` whose message starts with "Split plan:"; the router turns it into a
+rejected Future. Nothing here touches git.
+*/
 export { parseAndValidateSplitPlan, type SplitCommit, type SplitPlan };
 
 import * as D from "@/libs/json/decoder";

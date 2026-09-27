@@ -1,3 +1,14 @@
+/*
+Look up the GitHub pull request for the current branch with `gh pr view <branch> -R owner/repo`.
+
+Despite the name, `getOpenPullRequest` does not filter by state: a closed or merged PR for the
+branch also comes back as `found`. It never rejects. Every outcome is a `PrLookup`:
+
+    found            gh returned a url and number
+    not-found        gh says the branch has no pull request
+    unauthenticated  gh is not logged in
+    unavailable      not a GitHub remote, gh missing or failing, git failing, or unreadable JSON
+*/
 export { getOpenPullRequest, type PullRequest, type PrLookup };
 
 import * as repo from "@/infra/git/repo";

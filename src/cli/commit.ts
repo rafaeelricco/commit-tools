@@ -1,3 +1,27 @@
+/*
+The default command: turn the staged diff into a commit message, then commit and optionally push.
+
+`Commit.create` loads config (running `Setup` when that fails, a corrupt file included) and
+refreshes OAuth tokens. `Commit.run` owns everything after that and logs any failure once, in red.
+
+    Commit.run()
+        |-- 1. checkIsGitRepo(), then getStagedDiff() and listStagedPaths() together
+        |-- 2. route()
+        |        only generated files staged --> generatedOnlyMessage(), no model call for this draft
+        |        split_commits on, 2+ files ---> generateSplitPlan() --> followAnalysis()
+        |                                          should_split and 2+ groups --> Split.runPlan()
+        |                                          otherwise --> the first group's message
+        |        otherwise --------------------> generateCommitMessage()
+        |-- 3. interact()   commit | commit + push | regenerate | adjust | cancel
+        |                   regenerate and adjust call the model and loop back with the new message
+        |-- 4. performCommit(), then pushAfterCommit() when asked
+        v
+    push: no upstream --> offer to publish; rejected as non-fast-forward --> offer --force-with-lease
+
+Nothing staged fails step 1 with "No staged changes found". Cancelling the action menu ends
+with "Operation cancelled."; cancelling the adjust prompt returns to the menu. A failed push
+leaves the commit in place.
+*/
 export { Commit, routeAnalysis, type AnalysisRoute };
 
 import * as p from "@clack/prompts";

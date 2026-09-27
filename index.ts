@@ -1,3 +1,24 @@
+/*
+The `commit` binary: parse argv, run one subcommand, turn its Future into an exit code.
+
+`main` is the only place that sets the exit code, and it prints nothing itself. Commit, Branch,
+Setup, Model, Effort and Alias log `run()` failures in red; Update shows its Yarn error as a note;
+Doctor never rejects.
+
+    main()
+        |-- 1. parseArgs(argv)          unknown command or bad alias usage --> red message, exit 1
+        |-- 2. checkUpdate()            notifier commands only, skipped in CI or without a TTY;
+        |                               fire-and-forget, never blocks
+        |-- 3. <Command>.create()       load config (Commit and Branch run Setup when that fails),
+        |                               refresh OAuth tokens, load aliases
+        |-- 4. .run()                   the command's own flow (src/cli/*)
+        v
+    fork: rejected --> exit 1, resolved --> exit 0
+
+A rejection in step 3 never reaches `run()`'s logging. `AliasCommand.create` and `Setup.run`
+log their own; otherwise the process exits 1 with no message: a `resolveProvider` refresh
+failure in Commit, Branch or Model, a missing config in Model or Effort, a cancelled `Setup.create`.
+*/
 import { Commit } from "@/cli/commit";
 import { Branch } from "@/cli/branch";
 import { Setup } from "@/cli/setup";

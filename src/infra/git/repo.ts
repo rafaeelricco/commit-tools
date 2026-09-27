@@ -1,3 +1,41 @@
+/*
+Every git command the CLI runs, plus the isolated commit behind split commits.
+
+Reads (staged diff, branches, base branch, commit metadata) return `Future<Error, _>`; the
+`find*` variants and `hasUpstream` turn any failure into `Nothing()` / false for UI code that
+can do without the value. `getStagedDiff` shows generated files (lockfiles, dist/, out/,
+snapshots, minified; `isGeneratedPath`) as a numstat line instead of a diff body.
+
+`performCommit(message, paths)` with paths commits only those paths and leaves every other staged
+change staged. The real index is written only after a successful commit (step 5); the working
+tree changes only while a pre-commit hook runs, and is restored afterwards.
+
+    performCommit(message, paths)
+        |-- 1. write the message to a temp file (always removed)
+        |-- 2. commitIsolatedPaths()
+        |        refuse during a merge/rebase/cherry-pick/revert or with unmerged paths
+        |        copy .git/index to a temp index (always removed)
+        |-- 3. isolateAndCommit()      reset every other staged path in the temp index to HEAD;
+        |                              none of the paths staged --> resolve, commit nothing
+        |-- 4. commitIsolatedIndex()
+        |        no pre-commit hook --> `git commit` against the temp index
+        |        pre-commit hook -----> acquireWorktreeSnapshot(): back up selected paths whose
+        |                               worktree differs from the staged version and check the
+        |                               staged version out; back up and remove paths staged for
+        |                               deletion;
+        |                               run the hook, then reset every non-selected path in the
+        |                               temp index to HEAD again, in case the hook staged more;
+        |                               `git commit` with core.hooksPath set to a temp dir of
+        |                               wrappers for every hook but pre-commit, so it runs once;
+        |                               restore the worktree from the backup, even on failure
+        |-- 5. finishIsolatedCommit()  on success, reset the committed paths in the real index
+        v                              to the new HEAD so they no longer show as staged
+    `git commit` output, without git's "[branch sha]" summary line
+
+A failing hook or commit rejects with git's stderr and leaves the real index as it was. If the
+commit lands but step 5 fails, `performCommit` still rejects. Without paths, `performCommit` is
+a plain `git commit -F`.
+*/
 export {
   checkIsGitRepo,
   getStagedDiff,

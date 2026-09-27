@@ -1,3 +1,25 @@
+/*
+Interactive onboarding: pick a provider and message style, sign in, pick a model, save config.
+
+Runs as `commit setup` / `commit login`, and from `Commit.create` / `Branch.create` when loading
+config fails. Nothing is written until the last step, so quitting halfway keeps any previous config.
+
+    Setup.create()                 prompts: provider, convention (+ template), split commits, auth method
+        |
+        v
+    Setup.run()                    one sign-in flow per auth method
+        |-- google_oauth           performOAuthFlow(): browser + localhost callback
+        |-- openai_oauth           performOpenAIOAuthFlow(): device code, then validateOpenAITokens()
+        |-- xai_oauth              performXaiOAuthFlow(): device code
+        |-- anthropic_setup_token  paste the token printed by `claude setup-token`
+        |-- api_key                paste a key
+        v
+    fetchModels() --> selectModelInteractively() --> selectEffortForProvider() --> saveConfig()
+
+Cancelling a setup prompt rejects with "Setup cancelled" and the model picker with "Selection
+cancelled"; cancelling the effort slider keeps the default and carries on. `run()` logs its
+failures in red; a cancel inside `create()` exits 1 with no message (see index.ts).
+*/
 export { Setup };
 
 import * as p from "@clack/prompts";

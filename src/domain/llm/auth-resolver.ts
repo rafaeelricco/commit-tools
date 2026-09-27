@@ -1,3 +1,22 @@
+/*
+Refresh OAuth tokens before a command talks to a provider.
+
+Commit, Branch and Model call `resolveProvider` in `create()`; Effort calls it in `run()`, and
+only for OpenAI OAuth. API keys and Anthropic setup tokens pass through untouched.
+
+    resolveProvider(config)
+        |-- api_key, anthropic_setup_token --> config.ai as is
+        |-- google_oauth | openai_oauth | xai_oauth
+        |     1. ensureFresh*Tokens()   refresh only within 5 minutes of expiry
+        |     2. tokensChanged()        did access_token or expiry_date change?
+        |     3. updateOAuthTokens()    rewrite config.json only when they did; rejects if the
+        |                               auth type on disk no longer matches
+        v
+    ProviderConfig with fresh tokens
+
+Refresh and write errors reject as they are, with no retry; a revoked token asks the user to run
+setup again.
+*/
 export { resolveProvider, tokensChanged };
 
 import { Future } from "@/libs/future";

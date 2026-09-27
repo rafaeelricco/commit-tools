@@ -1,3 +1,10 @@
+/*
+Run a child process as a cancellable Future.
+
+`execBin` captures stdout and stderr and resolves a `Result`: a non-zero exit is a `Failure`
+carrying the output, not a rejection. `execBinInteractive` inherits the terminal and rejects on a
+non-zero exit. Both reject when the process cannot start, and cancelling the Future kills the child.
+*/
 export { execBin, execBinInteractive, type CommandOutput, type CommandFailure, type ExecResult };
 
 import { Future } from "@/libs/future";

@@ -1,3 +1,11 @@
+/*
+The latest published version, from a cache refreshed at most once a day.
+
+`checkForUpdate` reads <configDir>/version-check.json synchronously and returns what it holds right
+away. When the cache is missing or older than 24 hours it spawns a detached `node -e` that fetches
+the npm registry and rewrites the cache for the next run. Nothing here throws: a missing or bad
+cache means no update info, and the child's failures are ignored.
+*/
 export { checkForUpdate, compareVersions };
 
 import { spawn } from "node:child_process";

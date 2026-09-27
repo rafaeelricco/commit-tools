@@ -1,3 +1,21 @@
+/*
+Google sign-in for Gemini: browser OAuth with PKCE and a localhost callback, plus token refresh.
+
+    performOAuthFlow({ onPhase })
+        |-- 1. findAvailablePort()          first free port in 8400-8410
+        |-- 2. PKCE verifier/challenge and a random state; build the consent URL
+        |-- 3. start the callback server    always stopped afterwards (Future.bracket)
+        |-- 4. open the browser             or print the URL when that fails
+        |-- 5. wait for /callback           5-minute timeout; rejects on ?error=, a state
+        |                                   mismatch, or a missing code
+        |-- 6. exchangeCodeForTokens()      needs both access_token and refresh_token
+        |-- 7. getUserEmailFromTokenInfo()  best effort, only for the "signed in" message
+        v
+    OAuthTokens
+
+`ensureFreshTokens` refreshes within 5 minutes of expiry. `invalid_grant` becomes "run setup
+again"; `invalid_client` points at GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
+*/
 export { performOAuthFlow, createAuthenticatedClient, ensureFreshTokens, validateOAuthTokens, getAccessToken };
 
 import { type OAuthTokens } from "@/domain/config/config";

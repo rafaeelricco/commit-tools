@@ -1,3 +1,12 @@
+/*
+The prompt text for every LLM job: commit message (conventional, imperative, or the user's
+template), refinement, split plan, and branch names. Pure string builders.
+
+Commit, refine and split prompts get `getStagedDiff` output, where generated files are already
+swapped for a numstat summary; the branch prompt gets `getLocalChangeContext` untrimmed. Nothing
+here truncates. The split-plan and branch-name prompts ask for JSON that src/domain/split/plan.ts
+and src/domain/branch/suggestions.ts validate, so change both sides together.
+*/
 export { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt };
 
 import { CommitConvention } from "@/domain/config/config";

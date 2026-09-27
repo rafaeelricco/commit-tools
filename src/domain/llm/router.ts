@@ -1,3 +1,22 @@
+/*
+One entry point per LLM job, whatever the provider: commit message, refinement, branch names,
+split plan.
+
+Every job runs the same pipeline; only the effort floor and the reply parser differ.
+
+    generateCommitMessage | refineCommitMessage | generateBranchNameSuggestions | generateSplitPlan
+        |-- 1. effort            commit, refine: withDefaultMinEffort (lowest level when none is set)
+        |                        split plan: withMinEffort (always the lowest)   branch names: as configured
+        |-- 2. prompt            src/domain/commit/prompts.ts
+        |-- 3. generateContent() dispatch on provider to src/infra/llm/*, time the call
+        |-- 4. parse             branch names and split plans only; a bad reply rejects, not retried
+        v
+    withTransientRetry() around steps 3-4 (src/domain/llm/retry.ts)
+
+Three retry layers stack. The SDK clients retry on their own (maxRetries 3; Gemini
+retryOptions.attempts 3; none for xAI OAuth). OpenAI and xAI retry once without an effort the
+model rejected. `withTransientRetry` retries network and overload errors, then asks the user.
+*/
 export {
   type GenerateContentParams,
   type GeneratedContent,

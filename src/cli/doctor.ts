@@ -1,3 +1,10 @@
+/*
+`commit doctor`: a read-only health table (version, runtime, platform, OAuth env, config, git, PR).
+
+The config and git checks turn their own failures into rows ("Missing", "Outside", "Unknown")
+instead of rejecting, so doctor works with no config and outside a repo, and exits 0. A config
+that exists but can't be read still shows "Found", just without the provider, auth and token rows.
+*/
 export { Doctor };
 
 import * as pr from "@/infra/github/pr";

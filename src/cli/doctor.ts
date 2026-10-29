@@ -17,12 +17,13 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 import { access } from "node:fs/promises";
 import { environment } from "@/infra/env";
+import { hyperlinksEnabled } from "@/infra/ui/hyperlink";
 import { name as packageName, version as packageVersion } from "@/package.json";
 
 import color from "picocolors";
 import Table from "cli-table3";
 
-type CheckRow = [string, string, string];
+type CheckRow = [string, string, Table.Cell];
 
 class Doctor {
   private constructor() {}
@@ -127,7 +128,7 @@ class Doctor {
   private renderTable(rows: CheckRow[], elapsedMs: number): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
-      colWidths: [20, 15]
+      colWidths: [20, 15, 40]
     });
 
     for (const row of rows) {
@@ -153,10 +154,16 @@ function renderBaseRow(base: Maybe<string>): CheckRow {
   return base instanceof Just ? ["Base", color.green("Detected"), base.value] : ["Base", color.yellow("Unknown"), "Could not resolve base branch"];
 }
 
+// The Info column truncates long URLs; an OSC-8 href keeps the cut text opening the full PR.
+function prCell(number: number, url: string): Table.Cell {
+  const text = `#${number} ${url}`;
+  return hyperlinksEnabled() ? { content: text, href: url } : text;
+}
+
 function renderPrRow(lookup: pr.PrLookup): CheckRow {
   switch (lookup.type) {
     case "found":
-      return ["Pull Request", color.green("Open"), `#${lookup.pr.number} ${lookup.pr.url}`];
+      return ["Pull Request", color.green("Open"), prCell(lookup.pr.number, lookup.pr.url)];
     case "not-found":
       return ["Pull Request", color.yellow("None"), "No open PR for this branch"];
     case "unauthenticated":

@@ -37,6 +37,7 @@ import { Just, Nothing } from "@/libs/maybe";
 import { bracketStatus, loading } from "@/infra/ui/spinner";
 import { fetchModels } from "@/domain/commit/models";
 import { selectModelInteractively } from "@/infra/ui/model-picker";
+import { hyperlink } from "@/infra/ui/hyperlink";
 import { selectEffortForProvider, seedProviderConfig } from "@/domain/llm/effort";
 
 import color from "picocolors";
@@ -327,7 +328,7 @@ const promptDeviceLogin = (userCode: string, verificationUri: string): Future<Er
   Future.attemptP(async () => {
     p.log.warn(`First copy your one-time code: ${userCode}`);
     const confirmed = await p.confirm({
-      message: `Press Enter to open ${verificationUri} in your browser`,
+      message: `Press Enter to open ${hyperlink(verificationUri)} in your browser`,
       initialValue: true
     });
     if (p.isCancel(confirmed) || !confirmed) throw new Error("Setup cancelled");

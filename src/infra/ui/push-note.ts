@@ -7,6 +7,7 @@ import type { PrLookup } from "@/infra/github/pr";
 import type { LlmRequestMetadata } from "@/domain/llm/router";
 import type { Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
+import { hyperlink } from "@/infra/ui/hyperlink";
 
 type RequestMetadata = Maybe<LlmRequestMetadata>;
 
@@ -42,7 +43,7 @@ const renderModelLine = (metadata: LlmRequestMetadata): string => `model    ${me
 const renderPrLine = (lookup: PrLookup): string[] => {
   switch (lookup.type) {
     case "found":
-      return [`pr       #${lookup.pr.number} ${lookup.pr.url}`];
+      return [`pr       #${lookup.pr.number} ${hyperlink(lookup.pr.url)}`];
     case "unauthenticated":
       return [`pr       Tip: run 'gh auth login' to show open PR in the current branch...`];
     case "not-found":
@@ -82,7 +83,7 @@ const renderCommitNote = (m: CommitNoteMetadata): void => {
 const renderPushNote = (m: PushMetadata): void => {
   const branchLine = m.localBranch.maybe<string[]>([], (branch) => [`branch   ${branch}`]);
   const baseLine = m.baseBranch.maybe<string[]>([], (base) => [`base     ${base}`]);
-  const remoteLine = m.remoteUrl.maybe<string[]>([], (url) => [`remote   ${url}`]);
+  const remoteLine = m.remoteUrl.maybe<string[]>([], (url) => [`remote   ${hyperlink(url)}`]);
   const rangeLine = m.range.maybe<string[]>([], (range) => [`range    ${range.before}..${range.after}`]);
 
   const body = [

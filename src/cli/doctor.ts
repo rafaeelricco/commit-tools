@@ -127,7 +127,7 @@ class Doctor {
   private renderTable(rows: CheckRow[], elapsedMs: number): void {
     const table = new Table({
       head: [color.cyan("Check"), color.cyan("Status"), color.cyan("Info")],
-      colWidths: [20, 15, 40]
+      colWidths: [20, 15]
     });
 
     for (const row of rows) {

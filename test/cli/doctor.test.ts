@@ -5,6 +5,7 @@ vi.mock("@/infra/env", () => ({
 }));
 
 import { Doctor } from "@/cli/doctor";
+import * as pr from "@/infra/github/pr";
 import { Future } from "@/libs/future";
 import { Just } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
@@ -30,5 +31,16 @@ describe("Doctor.run", () => {
 
   it("completes when config file is missing", async () => {
     await expect(runFuture(Doctor.create().run())).resolves.toBeUndefined();
+  });
+
+  it("prints the whole PR url", async () => {
+    const url = "https://github.com/rafaeelricco/commit-tools/pull/42";
+    vi.mocked(pr.getOpenPullRequest).mockReturnValueOnce(Future.resolve({ type: "found" as const, pr: { number: 42, url } }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runFuture(Doctor.create().run());
+    const out = write.mock.calls.map(([chunk]) => String(chunk)).join("");
+    write.mockRestore();
+    expect(out).toContain(`#42 ${url}`);
+    expect(out).not.toContain("…");
   });
 });

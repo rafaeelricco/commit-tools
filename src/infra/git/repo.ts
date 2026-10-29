@@ -142,7 +142,12 @@ const bestEffort = (f: Future<Error, string>): Future<Error, string> => f.chainR
 const stagedImportLines = (root: string, paths: readonly string[]): Future<Error, string> =>
   paths.length === 0 ?
     Future.resolve<Error, string>("")
-  : bestEffort(execGitChecked(["-C", root, "grep", "--cached", "-I", "-E", IMPORT_LINE_PATTERN, "--", ...paths], "Failed to read imports"));
+  : bestEffort(
+      execGitChecked(
+        ["-C", root, "-c", "core.quotepath=off", "grep", "--cached", "--no-color", "-I", "-E", IMPORT_LINE_PATTERN, "--", ...paths],
+        "Failed to read imports"
+      )
+    );
 
 const coChangeHistory = (root: string, paths: readonly string[]): Future<Error, string> =>
   paths.length === 0 ?

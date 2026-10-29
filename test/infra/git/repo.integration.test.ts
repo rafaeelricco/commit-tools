@@ -165,18 +165,21 @@ describe("git repo integration", () => {
     }
   });
 
-  it("getStagedSnapshot keeps the diff parseable under noprefix, color and non-ASCII paths", async () => {
+  it("getStagedSnapshot keeps the diff and imports parseable under noprefix, color and non-ASCII paths", async () => {
     const { dir, run } = createTempGitRepo();
     run("config diff.noprefix true");
     run("config color.ui always");
-    writeFileSync(join(dir, "café.ts"), "x\n");
-    run("add café.ts");
+    writeFileSync(join(dir, "café.ts"), 'import { b } from "./b";\n');
+    writeFileSync(join(dir, "b.ts"), "export const b = 1;\n");
+    run("add café.ts b.ts");
     const prev = cwd();
     chdir(dir);
     try {
       const snap = await runFuture(repo.getStagedSnapshot());
       expect(snap.diff).toContain("diff --git a/café.ts b/café.ts");
       expect(snap.diff).not.toContain("\x1b[");
+      expect(snap.importLines).toContain('café.ts:import { b } from "./b";');
+      expect(snap.importLines).not.toContain("\x1b[");
     } finally {
       chdir(prev);
     }

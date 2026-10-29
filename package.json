@@ -10,6 +10,7 @@
     "start": "tsx --env-file=.env index.ts",
     "setup": "pnpm run start -- setup",
     "doctor": "pnpm run start -- doctor",
+    "measure": "tsx scripts/measure-context.ts",
     "build": "tsup",
     "install:global": "npm link",
     "format": "npx prettier . --write",

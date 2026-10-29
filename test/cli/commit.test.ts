@@ -4,7 +4,7 @@ vi.mock("@/infra/env", () => ({
   environment: { GOOGLE_CLIENT_ID: "test", GOOGLE_CLIENT_SECRET: "test" }
 }));
 
-import { Commit, routeAnalysis } from "@/cli/commit";
+import { Commit, compressionNote, routeAnalysis } from "@/cli/commit";
 import { Future } from "@/libs/future";
 import { Nothing, Just } from "@/libs/maybe";
 import { Failure, Success } from "@/libs/result";
@@ -249,5 +249,15 @@ describe("routeAnalysis", () => {
     if (r instanceof Failure) {
       expect(r.error.message).toBe("Split plan: expected at least 1 commit");
     }
+  });
+});
+
+describe("compressionNote", () => {
+  it("shows the reduction and both token counts", () => {
+    expect(compressionNote(11617, 88080)).toBe("Large diff compressed 87% for the model: ~88.1k → ~11.6k tokens");
+  });
+
+  it("keeps small counts unabbreviated", () => {
+    expect(compressionNote(450, 1200)).toBe("Large diff compressed 63% for the model: ~1.2k → ~450 tokens");
   });
 });

@@ -23,7 +23,7 @@ Nothing staged fails step 1 with "No staged changes found". Cancelling the actio
 with "Operation cancelled."; cancelling the adjust prompt returns to the menu. A failed push
 leaves the commit in place.
 */
-export { Commit, routeAnalysis, type AnalysisRoute };
+export { Commit, compressionNote, routeAnalysis, type AnalysisRoute };
 
 import * as p from "@clack/prompts";
 import * as pr from "@/infra/github/pr";
@@ -63,6 +63,13 @@ type AnalysisRoute = { tag: "split"; plan: SplitPlan } | { tag: "single"; messag
 type Proposal = { readonly text: string; readonly metadata: Maybe<LlmRequestMetadata> };
 
 const fromGenerated = (generated: GeneratedContent): Proposal => ({ text: generated.text, metadata: Just(generated.metadata) });
+
+const formatTokens = (n: number): string => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
+
+const compressionNote = (tokens: number, fullTokens: number): string => {
+  const saved = Math.round((1 - tokens / fullTokens) * 100);
+  return `Large diff compressed ${saved}% for the model: ~${formatTokens(fullTokens)} → ~${formatTokens(tokens)} tokens`;
+};
 
 const routeAnalysis = (plan: SplitPlan): Result<Error, AnalysisRoute> =>
   plan.shouldSplit && plan.commits.length >= 2 ?
@@ -107,7 +114,7 @@ class Commit {
       return this.interact(context, { text: generatedOnlyMessage(files, this.config.commit_convention), metadata: Nothing() });
     }
     if (context.size.tag === "compressed") {
-      p.log.info(`Large change: sending a compressed summary (~${context.size.tokens} of ~${context.size.fullTokens} tokens).`);
+      p.log.info(compressionNote(context.size.tokens, context.size.fullTokens));
     }
     return this.config.split_commits && files.length >= 2 ?
         loading(

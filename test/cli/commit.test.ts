@@ -22,7 +22,7 @@ vi.mock("@/domain/llm/auth-resolver", () => ({
 }));
 vi.mock("@/infra/git/repo", () => ({
   checkIsGitRepo: vi.fn(() => Future.resolve(undefined)),
-  getStagedDiff: vi.fn(() => Future.resolve("staged diff")),
+  getStagedSnapshot: vi.fn(() => Future.resolve({ diff: "staged diff", generatedNote: "", importLines: "", history: "" })),
   listStagedPaths: vi.fn(() => Future.resolve(["a.ts"])),
   performCommit: vi.fn(() => Future.resolve("\n 1 file changed\n")),
   findCommitMetadata: vi.fn()
@@ -182,6 +182,25 @@ describe("Commit.run", () => {
     expect(router.generateSplitPlan).toHaveBeenCalledTimes(1);
     expect(router.generateCommitMessage).toHaveBeenCalled();
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
+  });
+
+  it("adjust sends the manifest, not the diff", async () => {
+    const router = await import("@/domain/llm/router");
+    vi.mocked(router.refineCommitMessage).mockReturnValue(
+      Future.resolve({
+        text: "feat: refined",
+        metadata: { durationMs: 1, model: { provider: "openai", model: "m", effort: "medium" }, tokens: Nothing() }
+      })
+    );
+    const prompts = await import("@clack/prompts");
+    vi.mocked(prompts.select).mockResolvedValueOnce("adjust").mockResolvedValueOnce("commit");
+    vi.mocked(prompts.text).mockResolvedValueOnce("shorter");
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const repo = await import("@/infra/git/repo");
+    expect(vi.mocked(router.refineCommitMessage).mock.calls[0]?.[3]).not.toContain("staged diff");
+    expect(repo.performCommit).toHaveBeenCalledWith("feat: refined");
   });
 });
 

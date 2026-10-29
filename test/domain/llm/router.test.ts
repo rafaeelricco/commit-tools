@@ -4,6 +4,9 @@ import { Future } from "@/libs/future";
 import { Just, Nothing } from "@/libs/maybe";
 import { runFuture } from "@test/helpers/run-future";
 import type { ProviderConfig } from "@/domain/config/config";
+import { buildStagedContext } from "@/domain/context/context";
+
+const stagedContext = (files: readonly string[]) => buildStagedContext({ diff: "diff", generatedNote: "", importLines: "", history: "" }, files);
 
 const mockProvider = (provider: ProviderConfig["provider"]): ProviderConfig =>
   ({
@@ -89,7 +92,7 @@ describe("generateSplitPlan", () => {
     });
     vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Nothing() }));
 
-    const result = await runFuture(generateSplitPlan(mockProvider("openai"), "diff", ["a.ts", "b.ts"], "conventional", Nothing()));
+    const result = await runFuture(generateSplitPlan(mockProvider("openai"), stagedContext(["a.ts", "b.ts"]), "conventional", Nothing()));
     expect(result.plan.shouldSplit).toBe(true);
     expect(result.plan.commits).toEqual([
       { message: "feat: a", files: ["a.ts"] },
@@ -107,7 +110,7 @@ describe("generateSplitPlan", () => {
     });
     vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("low") }));
     const config = { ...mockProvider("openai"), effort: Just("high") } as ProviderConfig;
-    await runFuture(generateSplitPlan(config, "diff", ["a.ts"], "conventional", Nothing()));
+    await runFuture(generateSplitPlan(config, stagedContext(["a.ts"]), "conventional", Nothing()));
     expect(vi.mocked(generateContentWithOpenAI).mock.calls[0]?.[0].effort).toEqual(Just("low"));
   });
 });

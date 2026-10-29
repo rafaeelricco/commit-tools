@@ -78,16 +78,24 @@ describe("getSplitPrompt", () => {
     expect(prompt).not.toContain("{diff}");
     expect(prompt.split(DIFF).length - 1).toBe(1);
   });
+
+  it("adds grouping hints only when there are some", () => {
+    expect(getSplitPrompt(DIFF, ["foo.ts"], "conventional")).not.toContain("<grouping_hints>");
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "foo.test.ts"], "conventional", Nothing(), [{ files: ["foo.test.ts", "foo.ts"], reasons: ["test"] }]);
+    expect(prompt).toContain("<grouping_hints>");
+    expect(prompt).toContain("- foo.test.ts, foo.ts (test)");
+  });
 });
 
 describe("getRefinePrompt", () => {
-  it("wraps diff, current message, and adjustment", () => {
+  it("wraps staged files, current message, and adjustment", () => {
     const { prompt, systemInstruction } = getRefinePrompt({
-      diff: DIFF,
+      stagedFiles: "M foo.ts +1 -0",
       currentMessage: "feat: add x",
       adjustment: "shorter"
     });
-    expect(prompt).toContain("<diff>");
+    expect(prompt).toContain("<staged_files>\nM foo.ts +1 -0");
+    expect(prompt).not.toContain("<diff>");
     expect(prompt).toContain("shorter");
     expect(systemInstruction).toContain("revise commit messages");
   });

@@ -11,6 +11,7 @@ import { runFuture } from "@test/helpers/run-future";
 import * as s from "@/libs/json/schema";
 import { Config } from "@/domain/config/config";
 import { type LlmRequestMetadata } from "@/domain/llm/router";
+import { buildStagedContext } from "@/domain/context/context";
 
 type ConfigValue = s.Infer<typeof Config>;
 
@@ -58,7 +59,8 @@ const meta: LlmRequestMetadata = {
 
 const runPlan = () => {
   const cfg = config();
-  return Split.fromResolved(cfg, cfg.ai).runPlan("staged diff", ["a.ts", "b.ts"], plan, meta);
+  const context = buildStagedContext({ diff: "staged diff", generatedNote: "", importLines: "", history: "" }, ["a.ts", "b.ts"]);
+  return Split.fromResolved(cfg, cfg.ai).runPlan(context, plan, meta);
 };
 
 describe("Split.runPlan", () => {

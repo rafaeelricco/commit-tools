@@ -5,7 +5,8 @@ The default command: turn the staged diff into a commit message, then commit and
 refreshes OAuth tokens. `Commit.run` owns everything after that and logs any failure once, in red.
 
     Commit.run()
-        |-- 1. checkIsGitRepo(), then getStagedDiff() and listStagedPaths() together
+        |-- 1. checkIsGitRepo(), then getStagedSnapshot() and listStagedPaths() together,
+        |      then buildStagedContext() once: whole diff under budget, else compressed
         |-- 2. route()
         |        only generated files staged --> generatedOnlyMessage(), no model call for this draft
         |        split_commits on, 2+ files ---> generateSplitPlan() --> followAnalysis()
@@ -13,7 +14,7 @@ refreshes OAuth tokens. `Commit.run` owns everything after that and logs any fai
         |                                          otherwise --> the first group's message
         |        otherwise --------------------> generateCommitMessage()
         |-- 3. interact()   commit | commit + push | regenerate | adjust | cancel
-        |                   regenerate and adjust call the model and loop back with the new message
+        |                   regenerate resends context.diff; adjust sends only the manifest
         |-- 4. performCommit(), then pushAfterCommit() when asked
         v
     push: no upstream --> offer to publish; rejected as non-fast-forward --> offer --force-with-lease
@@ -45,6 +46,7 @@ import {
   type SplitPlanContent
 } from "@/domain/llm/router";
 import { type SplitPlan } from "@/domain/split/plan";
+import { buildStagedContext, type StagedContext } from "@/domain/context/context";
 import { Nothing, type Maybe, Just, fromOptional } from "@/libs/maybe";
 import { Failure, Success, type Result } from "@/libs/result";
 import { absurd } from "@/libs/types";
@@ -90,38 +92,44 @@ class Commit {
   run(): Future<Error, void> {
     return repo
       .checkIsGitRepo()
-      .chain(() => Future.concurrently({ diff: repo.getStagedDiff(), files: repo.listStagedPaths() }))
-      .chain(({ diff, files }) => this.route(diff, files))
+      .chain(() => Future.concurrently({ snapshot: repo.getStagedSnapshot(), files: repo.listStagedPaths() }))
+      .chain(({ snapshot, files }) => this.route(buildStagedContext(snapshot, files)))
       .mapRej((e) => {
         p.log.error(color.red(e.message));
         return e;
       });
   }
 
-  private route(diff: string, files: readonly string[]): Future<Error, void> {
+  private route(context: StagedContext): Future<Error, void> {
+    const { files } = context;
     if (files.every(isGeneratedPath)) {
       p.log.info("Only generated files are staged. Skipped the model.");
-      return this.interact(diff, { text: generatedOnlyMessage(files, this.config.commit_convention), metadata: Nothing() });
+      return this.interact(context, { text: generatedOnlyMessage(files, this.config.commit_convention), metadata: Nothing() });
+    }
+    if (context.size.tag === "compressed") {
+      p.log.info(`Large change: sending a compressed summary (~${context.size.tokens} of ~${context.size.fullTokens} tokens).`);
     }
     return this.config.split_commits && files.length >= 2 ?
         loading(
           "Analyzing staged changes...",
           "Ready!",
-          generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
-        ).chain((content) => this.followAnalysis(diff, files, content))
-      : this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((message) => this.interact(diff, fromGenerated(message)));
+          generateSplitPlan(this.providerConfig, context, this.config.commit_convention, this.config.custom_template)
+        ).chain((content) => this.followAnalysis(context, content))
+      : this.generate(context, this.config.commit_convention, this.config.custom_template).chain((message) =>
+          this.interact(context, fromGenerated(message))
+        );
   }
 
-  private followAnalysis(diff: string, files: readonly string[], content: SplitPlanContent): Future<Error, void> {
+  private followAnalysis(context: StagedContext, content: SplitPlanContent): Future<Error, void> {
     const { plan, metadata } = content;
     return routeAnalysis(plan).either(
       (e) => Future.reject(e),
       (route) => {
         switch (route.tag) {
           case "split":
-            return Split.fromResolved(this.config, this.providerConfig).runPlan(diff, files, route.plan, metadata);
+            return Split.fromResolved(this.config, this.providerConfig).runPlan(context, route.plan, metadata);
           case "single":
-            return this.interact(diff, { text: route.message, metadata: Just(metadata) });
+            return this.interact(context, { text: route.message, metadata: Just(metadata) });
           default:
             return absurd(route, "AnalysisRoute");
         }
@@ -129,16 +137,12 @@ class Commit {
     );
   }
 
-  diff(): Future<Error, string> {
-    return repo.getStagedDiff();
+  generate(context: StagedContext, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, GeneratedContent> {
+    return loading("Generating commit message...", "Message generated!", generateCommitMessage(this.providerConfig, context.diff, convention, template));
   }
 
-  generate(diff: string, convention: CommitConvention, template: Maybe<string> = Nothing()): Future<Error, GeneratedContent> {
-    return loading("Generating commit message...", "Message generated!", generateCommitMessage(this.providerConfig, diff, convention, template));
-  }
-
-  refine(message: string, adjustment: string, diff: string): Future<Error, GeneratedContent> {
-    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, diff));
+  refine(message: string, adjustment: string, context: StagedContext): Future<Error, GeneratedContent> {
+    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, context.manifest));
   }
 
   commit(message: string): Future<Error, string> {
@@ -176,7 +180,7 @@ class Commit {
     );
   }
 
-  interact(diff: string, proposal: Proposal): Future<Error, void> {
+  interact(context: StagedContext, proposal: Proposal): Future<Error, void> {
     return this.promptAction(proposal.text).chain((action) => {
       switch (action) {
         case "commit":
@@ -184,9 +188,11 @@ class Commit {
         case "commit_push":
           return this.handleCommitAndPush(proposal);
         case "regenerate":
-          return this.generate(diff, this.config.commit_convention, this.config.custom_template).chain((msg) => this.interact(diff, fromGenerated(msg)));
+          return this.generate(context, this.config.commit_convention, this.config.custom_template).chain((msg) =>
+            this.interact(context, fromGenerated(msg))
+          );
         case "adjust":
-          return this.handleAdjust(diff, proposal);
+          return this.handleAdjust(context, proposal);
         case "cancel":
           return Future.resolve(undefined);
       }
@@ -273,11 +279,11 @@ class Commit {
     }).chain((shouldForce) => (shouldForce ? this.push(request, undefined, false, true) : Future.resolve(undefined)));
   }
 
-  private handleAdjust(diff: string, proposal: Proposal): Future<Error, void> {
+  private handleAdjust(context: StagedContext, proposal: Proposal): Future<Error, void> {
     return this.promptAdjustment().chain((maybeAdj) =>
       maybeAdj instanceof Nothing ?
-        this.interact(diff, proposal)
-      : this.refine(proposal.text, maybeAdj.value, diff).chain((refined) => this.interact(diff, fromGenerated(refined)))
+        this.interact(context, proposal)
+      : this.refine(proposal.text, maybeAdj.value, context).chain((refined) => this.interact(context, fromGenerated(refined)))
     );
   }
 

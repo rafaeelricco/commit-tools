@@ -85,6 +85,10 @@ describe("getSplitPrompt", () => {
     expect(prompt).toContain("<grouping_hints>");
     expect(prompt).toContain("- foo.test.ts, foo.ts (test)");
   });
+
+  it("forbids listing a path in two commits", () => {
+    expect(getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional")).toContain("Never list a path in two commits.");
+  });
 });
 
 describe("getRefinePrompt", () => {

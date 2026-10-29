@@ -338,6 +338,7 @@ ${hintsBlock(hints)}
       <partition_rules>
         - Use only paths from <staged_files>. Exact strings.
         - Every staged path in exactly one commit.
+        - Never list a path in two commits. A file shared by several concerns goes in the commit it mainly serves.
         - Prefer should_split=true when files (or groups) do not share one concern. Each group is its own commit.
         - should_split=false only when every file is the same concern (implementation + its test, rename + callers). Then exactly 1 commit covering every staged path.
         - Same feature across unrelated layers (CLI, domain, docs, unrelated tests) is still should_split=true.

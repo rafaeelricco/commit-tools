@@ -3,8 +3,10 @@ Every git command the CLI runs, plus the isolated commit behind split commits.
 
 Reads (staged diff, branches, base branch, commit metadata) return `Future<Error, _>`; the
 `find*` variants and `hasUpstream` turn any failure into `Nothing()` / false for UI code that
-can do without the value. `getStagedDiff` shows generated files (lockfiles, dist/, out/,
-snapshots, minified; `isGeneratedPath`) as a numstat line instead of a diff body.
+can do without the value. `getStagedSnapshot` returns the staged diff body with generated files
+(lockfiles, dist/, out/, snapshots, minified; `isGeneratedPath`) left out and named in a separate
+numstat note, plus best-effort `git grep --cached` import lines and recent `git log --name-only`
+history for grouping hints ("" when either fails).
 
 `performCommit(message, paths)` with paths commits only those paths and leaves every other staged
 change staged. The real index is written only after a successful commit (step 5); the working
@@ -38,7 +40,7 @@ a plain `git commit -F`.
 */
 export {
   checkIsGitRepo,
-  getStagedDiff,
+  getStagedSnapshot,
   listStagedPaths,
   getLocalChangeContext,
   createAndSwitchBranch,
@@ -67,6 +69,7 @@ import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { type Result, Failure, Success } from "@/libs/result";
 import { absurd } from "@/libs/types";
 import { type BaseLookupError } from "@/infra/git/parsers";
+import { type StagedSnapshot } from "@/domain/context/context";
 import { execBin, type CommandFailure, type ExecResult } from "@/infra/shell";
 import { spawn } from "node:child_process";
 import * as Decoder from "@/libs/json/decoder";
@@ -115,10 +118,14 @@ const splitNulPaths = (stdout: string): readonly string[] => stdout.split("\0").
 
 const checkIsGitRepo = (): Future<Error, void> => execGitChecked(["rev-parse", "--is-inside-work-tree"], "Not a git repository").map(() => {});
 
+// Pins the output shape src/domain/context/diff.ts parses, whatever the user's git config:
+// raw UTF-8 paths, a/ and b/ prefixes, no color, no external diff driver.
+const STAGED_DIFF_FORMAT = ["--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/"];
+
 const stagedDiffBody = (root: string, paths: readonly string[]): Future<Error, string> =>
   paths.length === 0 ?
     Future.resolve<Error, string>("")
-  : execGitChecked(["-C", root, "diff", "--staged", "--", ...paths], "Failed to get staged changes");
+  : execGitChecked(["-C", root, "-c", "core.quotepath=off", "diff", "--staged", ...STAGED_DIFF_FORMAT, "--", ...paths], "Failed to get staged changes");
 
 const omittedPathsSummary = (root: string, paths: readonly string[]): Future<Error, string> =>
   paths.length === 0 ?
@@ -127,15 +134,42 @@ const omittedPathsSummary = (root: string, paths: readonly string[]): Future<Err
       formatOmittedPaths(paths, parseNumstatCounts(stdout))
     );
 
-const getStagedDiff = (): Future<Error, string> =>
-  Future.concurrently<Error, { root: string; files: readonly string[] }>({ root: getWorkTreeRoot(), files: listStagedPaths() }).chain(({ root, files }) =>
-    Future.concurrently<Error, { body: string; note: string }>({
-      body: stagedDiffBody(
-        root,
-        files.filter((path) => !isGeneratedPath(path))
-      ),
-      note: omittedPathsSummary(root, files.filter(isGeneratedPath))
-    }).map(({ body, note }) => body + note)
+const IMPORT_LINE_PATTERN = "(from|import|require\\()[[:space:]]*[\"']";
+const HISTORY_DEPTH = "200";
+
+const bestEffort = (f: Future<Error, string>): Future<Error, string> => f.chainRej(() => Future.resolve<Error, string>(""));
+
+const stagedImportLines = (root: string, paths: readonly string[]): Future<Error, string> =>
+  paths.length === 0 ?
+    Future.resolve<Error, string>("")
+  : bestEffort(
+      execGitChecked(
+        ["-C", root, "-c", "core.quotepath=off", "grep", "--cached", "--no-color", "-I", "-E", IMPORT_LINE_PATTERN, "--", ...paths],
+        "Failed to read imports"
+      )
+    );
+
+const coChangeHistory = (root: string, paths: readonly string[]): Future<Error, string> =>
+  paths.length === 0 ?
+    Future.resolve<Error, string>("")
+  : bestEffort(
+      execGitChecked(
+        ["-C", root, "log", "-n", HISTORY_DEPTH, "--no-renames", "--full-diff", "--name-only", "--format=%x1e", "--", ...paths],
+        "Failed to read history"
+      )
+    );
+
+const getStagedSnapshot = (): Future<Error, StagedSnapshot> =>
+  Future.concurrently<Error, { root: string; files: readonly string[] }>({ root: getWorkTreeRoot(), files: listStagedPaths() }).chain(
+    ({ root, files }) => {
+      const sources = files.filter((path) => !isGeneratedPath(path));
+      return Future.concurrently<Error, StagedSnapshot>({
+        diff: stagedDiffBody(root, sources),
+        generatedNote: omittedPathsSummary(root, files.filter(isGeneratedPath)),
+        importLines: stagedImportLines(root, sources),
+        history: coChangeHistory(root, sources)
+      });
+    }
   );
 
 const listStagedPaths = (): Future<Error, readonly string[]> =>

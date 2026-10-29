@@ -4,7 +4,7 @@ vi.mock("@/infra/env", () => ({
   environment: { GOOGLE_CLIENT_ID: "test", GOOGLE_CLIENT_SECRET: "test" }
 }));
 
-import { Commit, routeAnalysis } from "@/cli/commit";
+import { Commit, compressionNote, routeAnalysis } from "@/cli/commit";
 import { Future } from "@/libs/future";
 import { Nothing, Just } from "@/libs/maybe";
 import { Failure, Success } from "@/libs/result";
@@ -22,7 +22,7 @@ vi.mock("@/domain/llm/auth-resolver", () => ({
 }));
 vi.mock("@/infra/git/repo", () => ({
   checkIsGitRepo: vi.fn(() => Future.resolve(undefined)),
-  getStagedDiff: vi.fn(() => Future.resolve("staged diff")),
+  getStagedSnapshot: vi.fn(() => Future.resolve({ diff: "staged diff", generatedNote: "", importLines: "", history: "" })),
   listStagedPaths: vi.fn(() => Future.resolve(["a.ts"])),
   performCommit: vi.fn(() => Future.resolve("\n 1 file changed\n")),
   findCommitMetadata: vi.fn()
@@ -59,7 +59,8 @@ vi.mock("@/infra/ui/push-note", () => ({
   renderPushNote: vi.fn()
 }));
 vi.mock("@/infra/ui/spinner", () => ({
-  loading: vi.fn((_a: string, _b: string, f: Future<Error, unknown>) => f as Future<Error, never>)
+  loading: vi.fn((_a: string, _b: string, f: Future<Error, unknown>) => f as Future<Error, never>),
+  quietLoading: vi.fn((_a: string, f: Future<Error, unknown>) => f as Future<Error, never>)
 }));
 
 const config = (split_commits = false): ConfigValue => ({
@@ -183,6 +184,25 @@ describe("Commit.run", () => {
     expect(router.generateCommitMessage).toHaveBeenCalled();
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
   });
+
+  it("adjust sends the manifest, not the diff", async () => {
+    const router = await import("@/domain/llm/router");
+    vi.mocked(router.refineCommitMessage).mockReturnValue(
+      Future.resolve({
+        text: "feat: refined",
+        metadata: { durationMs: 1, model: { provider: "openai", model: "m", effort: "medium" }, tokens: Nothing() }
+      })
+    );
+    const prompts = await import("@clack/prompts");
+    vi.mocked(prompts.select).mockResolvedValueOnce("adjust").mockResolvedValueOnce("commit");
+    vi.mocked(prompts.text).mockResolvedValueOnce("shorter");
+
+    await runFuture(Commit.create().chain((c) => c.run()));
+
+    const repo = await import("@/infra/git/repo");
+    expect(vi.mocked(router.refineCommitMessage).mock.calls[0]?.[3]).not.toContain("staged diff");
+    expect(repo.performCommit).toHaveBeenCalledWith("feat: refined");
+  });
 });
 
 describe("routeAnalysis", () => {
@@ -230,5 +250,15 @@ describe("routeAnalysis", () => {
     if (r instanceof Failure) {
       expect(r.error.message).toBe("Split plan: expected at least 1 commit");
     }
+  });
+});
+
+describe("compressionNote", () => {
+  it("shows the reduction and both token counts", () => {
+    expect(compressionNote(11617, 88080)).toBe("Large diff compressed 87% for the model: ~88.1k → ~11.6k tokens");
+  });
+
+  it("keeps small counts unabbreviated", () => {
+    expect(compressionNote(450, 1200)).toBe("Large diff compressed 63% for the model: ~1.2k → ~450 tokens");
   });
 });

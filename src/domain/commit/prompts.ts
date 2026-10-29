@@ -2,14 +2,16 @@
 The prompt text for every LLM job: commit message (conventional, imperative, or the user's
 template), refinement, split plan, and branch names. Pure string builders.
 
-Commit, refine and split prompts get `getStagedDiff` output, where generated files are already
-swapped for a numstat summary; the branch prompt gets `getLocalChangeContext` untrimmed. Nothing
-here truncates. The split-plan and branch-name prompts ask for JSON that src/domain/split/plan.ts
+Commit and split prompts get `StagedContext.diff` (src/domain/context/context.ts): the whole
+staged diff when it fits the budget, else a compressed summary that explains its own format. The
+split prompt also gets grouping hints; refine gets the manifest, not the diff. The branch prompt
+gets `getLocalChangeContext` untrimmed. The split-plan and branch-name prompts ask for JSON that src/domain/split/plan.ts
 and src/domain/branch/suggestions.ts validate, so change both sides together.
 */
 export { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt };
 
 import { CommitConvention } from "@/domain/config/config";
+import { type HintCluster } from "@/domain/context/hints";
 import { Just, Nothing, type Maybe } from "@/libs/maybe";
 import { absurd } from "@/libs/types";
 
@@ -292,7 +294,23 @@ function conventionSummary(convention: CommitConvention, customTemplate: Maybe<s
   }
 }
 
-function getSplitPrompt(diff: string, files: readonly string[], convention: CommitConvention, customTemplate: Maybe<string> = Nothing()): string {
+const hintsBlock = (hints: readonly HintCluster[]): string =>
+  hints.length === 0 ?
+    ""
+  : `
+      <grouping_hints>
+        Files that look related by name, imports or history. Suggestions only: follow them when the diff agrees.
+        ${hints.map((h) => `- ${h.files.join(", ")} (${h.reasons.join(", ")})`).join("\n        ")}
+      </grouping_hints>
+`;
+
+function getSplitPrompt(
+  diff: string,
+  files: readonly string[],
+  convention: CommitConvention,
+  customTemplate: Maybe<string> = Nothing(),
+  hints: readonly HintCluster[] = []
+): string {
   return `
       <task>
         Partition staged files into reviewable commits. Do not write one message for the whole diff.
@@ -306,7 +324,7 @@ function getSplitPrompt(diff: string, files: readonly string[], convention: Comm
       <git_diff>
         ${diff}
       </git_diff>
-
+${hintsBlock(hints)}
       <message_convention>
         ${conventionSummary(convention, customTemplate)}
         A commit covering one small change is a single line. A commit covering several files
@@ -320,6 +338,7 @@ function getSplitPrompt(diff: string, files: readonly string[], convention: Comm
       <partition_rules>
         - Use only paths from <staged_files>. Exact strings.
         - Every staged path in exactly one commit.
+        - Never list a path in two commits. A file shared by several concerns goes in the commit it mainly serves.
         - Prefer should_split=true when files (or groups) do not share one concern. Each group is its own commit.
         - should_split=false only when every file is the same concern (implementation + its test, rename + callers). Then exactly 1 commit covering every staged path.
         - Same feature across unrelated layers (CLI, domain, docs, unrelated tests) is still should_split=true.
@@ -439,15 +458,17 @@ function getBranchNamePrompt(context: string): string {
   `;
 }
 
-function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {
+function getRefinePrompt(params: { stagedFiles: string; currentMessage: string; adjustment: string }): {
   prompt: string;
   systemInstruction: string;
 } {
   return {
     prompt:
-      `<diff>\n${params.diff}\n</diff>\n` + `<current>\n${params.currentMessage}\n</current>\n` + `<adjustment>\n${params.adjustment}\n</adjustment>`,
+      `<staged_files>\n${params.stagedFiles}\n</staged_files>\n` +
+      `<current>\n${params.currentMessage}\n</current>\n` +
+      `<adjustment>\n${params.adjustment}\n</adjustment>`,
     systemInstruction:
-      "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. " +
+      "You revise commit messages. Use the current message, the staged file list and the user's adjustment to produce a polished commit message. " +
       "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '. " +
       "Preserve the original convention: if the current message starts with a Conventional Commits prefix (feat, fix, refactor, chore, docs, style, test, perf, ci, build), keep it; otherwise keep the imperative style. " +
       "Output ONLY the revised commit message. No preamble, no explanation, no code fences, no surrounding quotes."

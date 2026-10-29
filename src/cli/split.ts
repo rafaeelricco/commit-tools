@@ -5,7 +5,7 @@ The split flow: review a multi-commit plan for the staged changes, edit it, then
 (src/domain/split/plan.ts). The edit helpers keep that true: each returns a new plan, and moving
 a file out of a group drops the group if it is left empty.
 
-    Split.runPlan(diff, files, plan)
+    Split.runPlan(context, plan)        context: StagedContext (src/domain/context/context.ts)
         |
         v
     interact(plan)  <-----------------------------------------------+
@@ -33,6 +33,7 @@ import { Commit } from "@/cli/commit";
 import { type Config, type ProviderConfig } from "@/domain/config/config";
 import { generateSplitPlan, type LlmRequestMetadata, type SplitPlanContent } from "@/domain/llm/router";
 import { type SplitPlan } from "@/domain/split/plan";
+import { type StagedContext } from "@/domain/context/context";
 import { Just, type Maybe } from "@/libs/maybe";
 import { loading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
@@ -96,33 +97,33 @@ class Split {
     return new Split(config, providerConfig);
   }
 
-  runPlan(diff: string, files: readonly string[], plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
-    return this.interact(diff, files, plan, meta);
+  runPlan(context: StagedContext, plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
+    return this.interact(context, plan, meta);
   }
 
-  private generate(diff: string, files: readonly string[]): Future<Error, SplitPlanContent> {
+  private generate(context: StagedContext): Future<Error, SplitPlanContent> {
     return loading(
       "Generating split plan...",
       "Split plan generated!",
-      generateSplitPlan(this.providerConfig, diff, files, this.config.commit_convention, this.config.custom_template)
+      generateSplitPlan(this.providerConfig, context, this.config.commit_convention, this.config.custom_template)
     );
   }
 
-  private interact(diff: string, files: readonly string[], plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
-    return this.promptAction(plan, files.length).chain((action) => {
+  private interact(context: StagedContext, plan: SplitPlan, meta: LlmRequestMetadata): Future<Error, void> {
+    return this.promptAction(plan, context.files.length).chain((action) => {
       switch (action) {
         case "apply_push":
           return this.apply(plan, meta, true);
         case "apply":
           return this.apply(plan, meta, false);
         case "edit":
-          return this.editMessage(plan).chain((next) => this.interact(diff, files, next, meta));
+          return this.editMessage(plan).chain((next) => this.interact(context, next, meta));
         case "move":
-          return this.moveFile(plan).chain((next) => this.interact(diff, files, next, meta));
+          return this.moveFile(plan).chain((next) => this.interact(context, next, meta));
         case "reorder":
-          return this.reorder(plan).chain((next) => this.interact(diff, files, next, meta));
+          return this.reorder(plan).chain((next) => this.interact(context, next, meta));
         case "regenerate":
-          return this.generate(diff, files).chain((c) => this.interact(diff, files, c.plan, c.metadata));
+          return this.generate(context).chain((c) => this.interact(context, c.plan, c.metadata));
         case "cancel":
           return Future.resolve(undefined);
         default:

@@ -77,37 +77,39 @@ describe("git repo integration", () => {
     }
   });
 
-  it("getStagedDiff rejects when nothing staged", async () => {
+  it("getStagedSnapshot rejects when nothing staged", async () => {
     const { dir } = createTempGitRepo({ staged: false });
     const prev = cwd();
     chdir(dir);
     try {
-      await expect(runFuture(repo.getStagedDiff())).rejects.toThrow(/No staged changes/);
+      await expect(runFuture(repo.getStagedSnapshot())).rejects.toThrow(/No staged changes/);
     } finally {
       chdir(prev);
     }
   });
 
-  it("getStagedDiff returns staged patch", async () => {
+  it("getStagedSnapshot returns staged patch", async () => {
     const { dir } = createTempGitRepo({ staged: true });
     const prev = cwd();
     chdir(dir);
     try {
-      const diff = await runFuture(repo.getStagedDiff());
+      const snap = await runFuture(repo.getStagedSnapshot());
+      const diff = snap.diff + snap.generatedNote;
       expect(diff).toContain("file.txt");
     } finally {
       chdir(prev);
     }
   });
 
-  it("getStagedDiff omits generated file bodies but names them", async () => {
+  it("getStagedSnapshot omits generated file bodies but names them", async () => {
     const { dir, run } = createTempGitRepo({ staged: true });
     writeFileSync(join(dir, "pnpm-lock.yaml"), "lock: 1\nlock: 2\n");
     run("add pnpm-lock.yaml");
     const prev = cwd();
     chdir(dir);
     try {
-      const diff = await runFuture(repo.getStagedDiff());
+      const snap = await runFuture(repo.getStagedSnapshot());
+      const diff = snap.diff + snap.generatedNote;
       expect(diff).toContain("file.txt");
       expect(diff).not.toContain("lock: 2");
       expect(diff).toContain("pnpm-lock.yaml | +2 -0 (generated, body omitted)");
@@ -116,16 +118,85 @@ describe("git repo integration", () => {
     }
   });
 
-  it("getStagedDiff resolves with a summary when only generated files are staged", async () => {
+  it("getStagedSnapshot resolves with a summary when only generated files are staged", async () => {
     const { dir, run } = createTempGitRepo();
     writeFileSync(join(dir, "pnpm-lock.yaml"), "lock: 1\n");
     run("add pnpm-lock.yaml");
     const prev = cwd();
     chdir(dir);
     try {
-      const diff = await runFuture(repo.getStagedDiff());
+      const snap = await runFuture(repo.getStagedSnapshot());
+      const diff = snap.diff + snap.generatedNote;
       expect(diff).toContain("pnpm-lock.yaml");
       expect(diff).not.toContain("diff --git");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getStagedSnapshot splits body, generated note, imports and history", async () => {
+    const { dir, run } = createTempGitRepo();
+    writeFileSync(join(dir, "a.ts"), 'import { b } from "./b";\n');
+    writeFileSync(join(dir, "b.ts"), "export const b = 1;\n");
+    writeFileSync(join(dir, "pnpm-lock.yaml"), "lock: 1\n");
+    run("add a.ts b.ts pnpm-lock.yaml");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const snap = await runFuture(repo.getStagedSnapshot());
+      expect(snap.diff).toContain("diff --git a/a.ts b/a.ts");
+      expect(snap.diff).not.toContain("lock: 1");
+      expect(snap.generatedNote).toContain("pnpm-lock.yaml | +1 -0");
+      expect(snap.importLines).toContain('a.ts:import { b } from "./b";');
+      expect(snap.history).toBe(""); // a.ts and b.ts have no commits yet; git log prints nothing
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getStagedSnapshot returns empty imports when nothing matches", async () => {
+    const { dir } = createTempGitRepo({ staged: true });
+    const prev = cwd();
+    chdir(dir);
+    try {
+      expect((await runFuture(repo.getStagedSnapshot())).importLines).toBe("");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getStagedSnapshot keeps the diff and imports parseable under noprefix, color and non-ASCII paths", async () => {
+    const { dir, run } = createTempGitRepo();
+    run("config diff.noprefix true");
+    run("config color.ui always");
+    writeFileSync(join(dir, "café.ts"), 'import { b } from "./b";\n');
+    writeFileSync(join(dir, "b.ts"), "export const b = 1;\n");
+    run("add café.ts b.ts");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      const snap = await runFuture(repo.getStagedSnapshot());
+      expect(snap.diff).toContain("diff --git a/café.ts b/café.ts");
+      expect(snap.diff).not.toContain("\x1b[");
+      expect(snap.importLines).toContain('café.ts:import { b } from "./b";');
+      expect(snap.importLines).not.toContain("\x1b[");
+    } finally {
+      chdir(prev);
+    }
+  });
+
+  it("getStagedSnapshot history lists every file of a commit, not only staged ones", async () => {
+    const { dir, run } = createTempGitRepo();
+    writeFileSync(join(dir, "a.ts"), "1\n");
+    writeFileSync(join(dir, "other.ts"), "1\n");
+    run("add a.ts other.ts");
+    run('commit -qm "two files"');
+    writeFileSync(join(dir, "a.ts"), "2\n");
+    run("add a.ts");
+    const prev = cwd();
+    chdir(dir);
+    try {
+      expect((await runFuture(repo.getStagedSnapshot())).history).toContain("other.ts");
     } finally {
       chdir(prev);
     }

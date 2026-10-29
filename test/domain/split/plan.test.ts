@@ -64,12 +64,37 @@ describe("parseAndValidateSplitPlan", () => {
     expect(r instanceof Failure).toBe(true);
   });
 
-  it("rejects duplicate paths", () => {
-    const r = parseAndValidateSplitPlan(
-      '{"should_split":true,"commits":[{"message":"feat: a","files":["a.ts"]},{"message":"feat: again","files":["a.ts"]}]}',
-      staged
-    );
-    expect(r instanceof Failure).toBe(true);
+  it("keeps a repeated path in its first commit", () => {
+    const raw = JSON.stringify({
+      should_split: true,
+      commits: [
+        { message: "feat: a", files: ["a.ts", "b.ts"] },
+        { message: "feat: c", files: ["c.ts", "a.ts"] }
+      ]
+    });
+    const r = parseAndValidateSplitPlan(raw, staged);
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value.commits).toEqual([
+        { message: "feat: a", files: ["a.ts", "b.ts"] },
+        { message: "feat: c", files: ["c.ts"] }
+      ]);
+    }
+  });
+
+  it("drops a commit whose paths all repeat earlier ones", () => {
+    const raw = JSON.stringify({
+      should_split: true,
+      commits: [
+        { message: "feat: a", files: ["a.ts", "b.ts", "c.ts"] },
+        { message: "feat: again", files: ["a.ts"] }
+      ]
+    });
+    const r = parseAndValidateSplitPlan(raw, staged);
+    expect(r instanceof Success).toBe(true);
+    if (r instanceof Success) {
+      expect(r.value.commits).toEqual([{ message: "feat: a", files: ["a.ts", "b.ts", "c.ts"] }]);
+    }
   });
 
   it("rejects unknown path", () => {

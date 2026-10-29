@@ -4,9 +4,10 @@ Turn the model's split-plan reply into a plan that commits every staged path exa
     parseAndValidateSplitPlan(raw, stagedFiles)
         |-- 1. parseSplitPlan()        strip a ``` fence, cut out the JSON object, decode it
         |                              (should_split, 1+ commits, each with a message and files)
-        |-- 2. leftoverStagedPaths()   reject a path listed twice or not staged
-        |-- 3a. should_split false --> one commit: every path, the first message
-        |-- 3b. should_split true ---> staged paths the model left out go in a last
+        |-- 2. dropRepeatedPaths()     keep each path in the first commit that lists it; drop emptied commits
+        |-- 3. leftoverStagedPaths()   reject a path that is not staged
+        |-- 4a. should_split false --> one commit: every path, the first message
+        |-- 4b. should_split true ---> staged paths the model left out go in a last
         v                              "Commit remaining staged changes" commit
     SplitPlan
 
@@ -93,10 +94,24 @@ const collapseToSingleCommit = (commits: readonly SplitCommit[], leftover: reado
   });
 };
 
+// The model may list a shared file under several commits; a path can only be committed once.
+const dropRepeatedPaths = (commits: readonly SplitCommit[]): readonly SplitCommit[] => {
+  const seen = new Set<string>();
+  return commits
+    .map((commit) => ({
+      message: commit.message,
+      files: commit.files.filter((file) => {
+        if (seen.has(file)) {
+          return false;
+        }
+        seen.add(file);
+        return true;
+      })
+    }))
+    .filter((commit) => commit.files.length > 0);
+};
+
 const takePath = (file: string, staged: Set<string>, seen: Set<string>): Result<Error, void> => {
-  if (seen.has(file)) {
-    return Failure(new Error(`Split plan: duplicate path: ${file}`));
-  }
   if (!staged.has(file)) {
     return Failure(new Error(`Split plan: unknown path: ${file}`));
   }
@@ -118,8 +133,9 @@ const leftoverStagedPaths = (plan: SplitPlan, stagedFiles: readonly string[]): R
   return Success(stagedFiles.filter((file) => !seen.has(file)));
 };
 
-const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Result<Error, SplitPlan> =>
-  leftoverStagedPaths(plan, stagedFiles).chain((leftover) => {
+const validateSplitPlan = (raw: SplitPlan, stagedFiles: readonly string[]): Result<Error, SplitPlan> => {
+  const plan = { shouldSplit: raw.shouldSplit, commits: dropRepeatedPaths(raw.commits) };
+  return leftoverStagedPaths(plan, stagedFiles).chain((leftover) => {
     if (!plan.shouldSplit) {
       return collapseToSingleCommit(plan.commits, leftover);
     }
@@ -131,6 +147,7 @@ const validateSplitPlan = (plan: SplitPlan, stagedFiles: readonly string[]): Res
       commits: [...plan.commits, { message: REMAINING_STAGED_MESSAGE, files: leftover }]
     });
   });
+};
 
 const parseAndValidateSplitPlan = (raw: string, stagedFiles: readonly string[]): Result<Error, SplitPlan> =>
   parseSplitPlan(raw).chain((plan) => validateSplitPlan(plan, stagedFiles));

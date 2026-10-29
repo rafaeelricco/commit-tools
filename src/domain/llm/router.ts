@@ -45,6 +45,7 @@ import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/doma
 import { parseAndValidateSplitPlan, type SplitPlan } from "@/domain/split/plan";
 import { withTransientRetry } from "@/domain/llm/retry";
 import { withMinEffort, withDefaultMinEffort } from "@/domain/llm/effort";
+import { type StagedContext } from "@/domain/context/context";
 import { Maybe, Nothing } from "@/libs/maybe";
 
 type GenerateContentParams = {
@@ -140,8 +141,8 @@ const generateCommitMessage = (
 ): Future<Error, GeneratedContent> =>
   withTransientRetry(() => generateContent(withDefaultMinEffort(config), getPrompt(diff, convention, customTemplate)));
 
-const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
-  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ diff, currentMessage, adjustment })));
+const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, stagedFiles: string): Future<Error, GeneratedContent> =>
+  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ stagedFiles, currentMessage, adjustment })));
 
 const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
   r.either(
@@ -161,13 +162,12 @@ const generateBranchNameSuggestions = (config: ProviderConfig, context: string):
 
 const generateSplitPlan = (
   config: ProviderConfig,
-  diff: string,
-  files: readonly string[],
+  context: StagedContext,
   convention: CommitConvention,
   customTemplate: Maybe<string>
 ): Future<Error, SplitPlanContent> =>
   withTransientRetry(() =>
-    generateContent(withMinEffort(config), { prompt: getSplitPrompt(diff, files, convention, customTemplate) }).chain((gc) =>
-      resultToFuture(parseAndValidateSplitPlan(gc.text, files)).map((plan) => ({ plan, metadata: gc.metadata }))
+    generateContent(withMinEffort(config), { prompt: getSplitPrompt(context.diff, context.files, convention, customTemplate, context.hints) }).chain(
+      (gc) => resultToFuture(parseAndValidateSplitPlan(gc.text, context.files)).map((plan) => ({ plan, metadata: gc.metadata }))
     )
   );

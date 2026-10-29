@@ -50,7 +50,7 @@ import { buildStagedContext, type StagedContext } from "@/domain/context/context
 import { Nothing, type Maybe, Just, fromOptional } from "@/libs/maybe";
 import { Failure, Success, type Result } from "@/libs/result";
 import { absurd } from "@/libs/types";
-import { loading } from "@/infra/ui/spinner";
+import { loading, quietLoading } from "@/infra/ui/spinner";
 import { renderCommitNote, renderPushNote } from "@/infra/ui/push-note";
 
 import color from "picocolors";
@@ -117,9 +117,8 @@ class Commit {
       p.log.info(compressionNote(context.size.tokens, context.size.fullTokens));
     }
     return this.config.split_commits && files.length >= 2 ?
-        loading(
+        quietLoading(
           "Analyzing staged changes...",
-          "Ready!",
           generateSplitPlan(this.providerConfig, context, this.config.commit_convention, this.config.custom_template)
         ).chain((content) => this.followAnalysis(context, content))
       : this.generate(context, this.config.commit_convention, this.config.custom_template).chain((message) =>

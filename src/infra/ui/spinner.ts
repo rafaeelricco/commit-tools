@@ -1,4 +1,4 @@
-export { loading, bracketStatus, type StatusMessageSink, type BracketStatus };
+export { loading, quietLoading, bracketStatus, type StatusMessageSink, type BracketStatus };
 
 import * as p from "@clack/prompts";
 
@@ -16,6 +16,21 @@ const loading = <T>(label: string, stopLabel: string, f: Future<Error, T>): Futu
   return f
     .map((v) => {
       s.stop(stopLabel);
+      return v;
+    })
+    .mapRej((e) => {
+      s.stop("Failed.");
+      return e;
+    });
+};
+
+// Clears the spinner on success, for steps whose result the next prompt already shows.
+const quietLoading = <T>(label: string, f: Future<Error, T>): Future<Error, T> => {
+  const s = p.spinner();
+  s.start(label);
+  return f
+    .map((v) => {
+      s.clear();
       return v;
     })
     .mapRej((e) => {

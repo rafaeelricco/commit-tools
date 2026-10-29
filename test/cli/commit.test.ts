@@ -59,7 +59,8 @@ vi.mock("@/infra/ui/push-note", () => ({
   renderPushNote: vi.fn()
 }));
 vi.mock("@/infra/ui/spinner", () => ({
-  loading: vi.fn((_a: string, _b: string, f: Future<Error, unknown>) => f as Future<Error, never>)
+  loading: vi.fn((_a: string, _b: string, f: Future<Error, unknown>) => f as Future<Error, never>),
+  quietLoading: vi.fn((_a: string, f: Future<Error, unknown>) => f as Future<Error, never>)
 }));
 
 const config = (split_commits = false): ConfigValue => ({

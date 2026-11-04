@@ -2,10 +2,10 @@
 The prompt text for every LLM job: commit message (conventional, imperative, or the user's
 template), refinement, split plan, and branch names. Pure string builders.
 
-Commit and split prompts get `StagedContext.diff` (src/domain/context/context.ts): the whole
-staged diff when it fits the budget, else a compressed summary that explains its own format. The
-split prompt also gets grouping hints; refine gets the manifest, not the diff. The branch prompt
-gets `getLocalChangeContext` untrimmed. The split-plan and branch-name prompts ask for JSON that src/domain/split/plan.ts
+Commit, split and refine prompts get `StagedContext.diff` (src/domain/context/context.ts): the
+whole staged diff when it fits the budget, else a compressed summary that explains its own format.
+The split prompt also gets grouping hints. The branch prompt gets `getLocalChangeContext` untrimmed.
+The split-plan and branch-name prompts ask for JSON that src/domain/split/plan.ts
 and src/domain/branch/suggestions.ts validate, so change both sides together.
 */
 export { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt };
@@ -458,17 +458,15 @@ function getBranchNamePrompt(context: string): string {
   `;
 }
 
-function getRefinePrompt(params: { stagedFiles: string; currentMessage: string; adjustment: string }): {
+function getRefinePrompt(params: { diff: string; currentMessage: string; adjustment: string }): {
   prompt: string;
   systemInstruction: string;
 } {
   return {
     prompt:
-      `<staged_files>\n${params.stagedFiles}\n</staged_files>\n` +
-      `<current>\n${params.currentMessage}\n</current>\n` +
-      `<adjustment>\n${params.adjustment}\n</adjustment>`,
+      `<diff>\n${params.diff}\n</diff>\n` + `<current>\n${params.currentMessage}\n</current>\n` + `<adjustment>\n${params.adjustment}\n</adjustment>`,
     systemInstruction:
-      "You revise commit messages. Use the current message, the staged file list and the user's adjustment to produce a polished commit message. " +
+      "You revise commit messages. Use the current message, the diff and the user's adjustment to produce a polished commit message. " +
       "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '. " +
       "Preserve the original convention: if the current message starts with a Conventional Commits prefix (feat, fix, refactor, chore, docs, style, test, perf, ci, build), keep it; otherwise keep the imperative style. " +
       "Output ONLY the revised commit message. No preamble, no explanation, no code fences, no surrounding quotes."

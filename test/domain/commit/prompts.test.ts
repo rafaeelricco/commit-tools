@@ -92,14 +92,13 @@ describe("getSplitPrompt", () => {
 });
 
 describe("getRefinePrompt", () => {
-  it("wraps staged files, current message, and adjustment", () => {
+  it("wraps the diff, current message, and adjustment", () => {
     const { prompt, systemInstruction } = getRefinePrompt({
-      stagedFiles: "M foo.ts +1 -0",
+      diff: DIFF,
       currentMessage: "feat: add x",
       adjustment: "shorter"
     });
-    expect(prompt).toContain("<staged_files>\nM foo.ts +1 -0");
-    expect(prompt).not.toContain("<diff>");
+    expect(prompt).toContain(`<diff>\n${DIFF}`);
     expect(prompt).toContain("shorter");
     expect(systemInstruction).toContain("revise commit messages");
   });

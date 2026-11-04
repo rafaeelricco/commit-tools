@@ -78,6 +78,15 @@ describe("refineCommitMessage", () => {
     const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
     expect(result.metadata.model.effort).toBe("provider default");
   });
+
+  it("sends the diff to the provider", async () => {
+    const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
+    vi.mocked(generateContentWithOpenAI).mockClear();
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: "feat: y", tokens: Nothing(), effectiveEffort: Nothing() }));
+
+    await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff body"));
+    expect(vi.mocked(generateContentWithOpenAI).mock.calls[0]?.[1].prompt).toContain("<diff>\ndiff body\n</diff>");
+  });
 });
 
 describe("generateSplitPlan", () => {

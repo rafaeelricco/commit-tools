@@ -185,7 +185,7 @@ describe("Commit.run", () => {
     expect(repo.performCommit).toHaveBeenCalledWith("feat: generated");
   });
 
-  it("adjust sends the manifest, not the diff", async () => {
+  it("adjust sends the diff", async () => {
     const router = await import("@/domain/llm/router");
     vi.mocked(router.refineCommitMessage).mockReturnValue(
       Future.resolve({
@@ -200,7 +200,7 @@ describe("Commit.run", () => {
     await runFuture(Commit.create().chain((c) => c.run()));
 
     const repo = await import("@/infra/git/repo");
-    expect(vi.mocked(router.refineCommitMessage).mock.calls[0]?.[3]).not.toContain("staged diff");
+    expect(vi.mocked(router.refineCommitMessage).mock.calls[0]?.[3]).toContain("staged diff");
     expect(repo.performCommit).toHaveBeenCalledWith("feat: refined");
   });
 });

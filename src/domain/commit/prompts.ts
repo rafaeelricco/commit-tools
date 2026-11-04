@@ -276,6 +276,20 @@ function promptCustom(gitDiff: string, template: Maybe<string>): CommitPrompt {
   }
 }
 
+const MESSAGE_CONTENT = `Write each message from what that commit's own diff changes.
+        Describe behavior: what now happens, plus the reason when the diff shows it.
+        Cover each distinct behavior change, including error handling and edge cases.
+        Do not list files, quote line counts, or invent a reason the diff does not show.`;
+
+const MESSAGE_SHAPE = `A commit covering one small change is a single line. Anything larger is a title,
+        a blank line, then "- " bullets, each ending with a period.`;
+
+const DETAILED_EXAMPLE_MESSAGE =
+  "Fall back to one commit when a split plan is not worth applying\\n\\n- Read should_split from the reply and collapse the plan to its first message when it is false, so related files stay together.\\n- Reject a reply with no commits instead of committing nothing.";
+
+const hasCustomTemplate = (convention: CommitConvention, customTemplate: Maybe<string>): boolean =>
+  convention === "custom" && customTemplate instanceof Just;
+
 const IMPERATIVE_SUMMARY = `Each message starts with a capitalized imperative verb ("Add", "Fix", "Refactor").
         No Conventional Commits prefix, no ticket IDs, no author names, no "WIP".`;
 
@@ -327,8 +341,9 @@ function getSplitPrompt(
 ${hintsBlock(hints)}
       <message_convention>
         ${conventionSummary(convention, customTemplate)}
-        A commit covering one small change is a single line. A commit covering several files
-        may add a blank line then "- " bullets.
+        ${MESSAGE_CONTENT}
+        ${hasCustomTemplate(convention, customTemplate) ? "" : MESSAGE_SHAPE}
+        Inside the JSON string, write each line break as \\n.
       </message_convention>
 
       <output_shape>
@@ -346,6 +361,7 @@ ${hintsBlock(hints)}
         - Each message follows the active convention in message_convention, scoped to that commit only.
       </partition_rules>
       <examples>
+        ${hasCustomTemplate(convention, customTemplate) ? "These show the partition and the JSON shape. Write messages in the user's template." : "These show the partition, the JSON shape and the level of detail. Write messages in the active convention."}
         <example>
           <staged_files>src/cli/setup.ts
 test/cli/setup.test.ts</staged_files>
@@ -355,7 +371,7 @@ test/cli/setup.test.ts</staged_files>
           <staged_files>src/cli/setup.ts
 src/domain/split/plan.ts
 test/domain/split/plan.test.ts</staged_files>
-          <output>{"should_split":true,"commits":[{"message":"Add split option to setup","files":["src/cli/setup.ts"]},{"message":"Parse should_split in split plans","files":["src/domain/split/plan.ts","test/domain/split/plan.test.ts"]}]}</output>
+          <output>{"should_split":true,"commits":[{"message":"Add split option to setup","files":["src/cli/setup.ts"]},{"message":"${hasCustomTemplate(convention, customTemplate) ? "Parse should_split in split plans" : DETAILED_EXAMPLE_MESSAGE}","files":["src/domain/split/plan.ts","test/domain/split/plan.test.ts"]}]}</output>
         </example>
       </examples>
       <output_instructions>

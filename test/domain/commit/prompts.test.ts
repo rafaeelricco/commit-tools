@@ -89,6 +89,28 @@ describe("getSplitPrompt", () => {
   it("forbids listing a path in two commits", () => {
     expect(getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "conventional")).toContain("Never list a path in two commits.");
   });
+
+  it("asks for behavior and the reason, not file names", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "imperative");
+    expect(prompt).toContain("Do not list files");
+    expect(prompt).toContain("the reason when the diff shows it");
+    expect(prompt).toContain('"- " bullets');
+  });
+
+  it("leaves the message shape to a custom template", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "custom", Just("[area] summary"));
+    expect(prompt).toContain("[area] summary");
+    expect(prompt).not.toContain('"- " bullets, each ending');
+    expect(prompt).not.toContain("Fall back to one commit");
+    expect(prompt).not.toContain("level of detail");
+  });
+
+  it("writes examples that parse, with real line breaks in the detailed message", () => {
+    const prompt = getSplitPrompt(DIFF, ["foo.ts", "bar.ts"], "imperative");
+    const outputs = [...prompt.matchAll(/<output>(.*?)<\/output>/g)].map((m) => JSON.parse(m[1] ?? "") as { commits: { message: string }[] });
+    expect(outputs).toHaveLength(2);
+    expect(outputs[1]?.commits[1]?.message).toContain("applying\n\n- Read should_split");
+  });
 });
 
 describe("getRefinePrompt", () => {

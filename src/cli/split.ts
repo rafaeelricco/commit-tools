@@ -22,7 +22,7 @@ Groups commit one at a time with no rollback: if group 3 fails, groups 1 and 2 s
 and the rest stay staged. A failed regenerate drops the plan. Errors reject up to `Commit.run`,
 which logs them.
 */
-export { Split };
+export { Split, commitOptions, formatPlanNote, withEditedTitle };
 
 import * as p from "@clack/prompts";
 import * as pr from "@/infra/github/pr";
@@ -45,16 +45,23 @@ const SPLIT_ACTIONS = ["apply_push", "apply", "edit", "move", "reorder", "regene
 type SplitAction = (typeof SPLIT_ACTIONS)[number];
 
 const formatPlanNote = (plan: SplitPlan, stagedCount: number): string => {
-  const groups = plan.commits.map((commit, index) => `${index + 1}. ${commit.message}\n   ${commit.files.join("  ")}`).join("\n\n");
+  const groups = plan.commits
+    .map((commit, index) => `${index + 1}. ${commit.message.replaceAll("\n", "\n   ")}\n   ${commit.files.join("  ")}`)
+    .join("\n\n");
   return `${plan.commits.length} commits · ${stagedCount} staged files\n\n${groups}`;
 };
 
-const commitOptions = (plan: SplitPlan): { value: number; label: string }[] =>
-  plan.commits.map((commit, index) => ({ value: index, label: `${index + 1}. ${commit.message}` }));
+const messageTitle = (message: string): string => message.split("\n")[0] ?? "";
 
-const withEditedMessage = (plan: SplitPlan, index: number, message: string): SplitPlan => ({
+const commitOptions = (plan: SplitPlan): { value: number; label: string }[] =>
+  plan.commits.map((commit, index) => ({ value: index, label: `${index + 1}. ${messageTitle(commit.message)}` }));
+
+// The edit prompt is single-line and keeps only the last line of a multi-line value, so it edits the title alone.
+const withEditedTitle = (plan: SplitPlan, index: number, title: string): SplitPlan => ({
   ...plan,
-  commits: plan.commits.map((commit, i) => (i === index ? { message, files: commit.files } : commit))
+  commits: plan.commits.map((commit, i) =>
+    i === index ? { message: [title, ...commit.message.split("\n").slice(1)].join("\n"), files: commit.files } : commit
+  )
 });
 
 const withMovedFile = (plan: SplitPlan, file: string, destIndex: number): SplitPlan => {
@@ -172,14 +179,14 @@ class Split {
         return plan;
       }
       const next = await p.text({
-        message: "New message",
-        initialValue: current.message
+        message: current.message.includes("\n") ? "New title (the body stays as it is)" : "New message",
+        initialValue: messageTitle(current.message)
       });
       if (p.isCancel(next)) {
         return plan;
       }
-      const message = next.trim();
-      return message.length === 0 ? plan : withEditedMessage(plan, picked, message);
+      const title = next.trim();
+      return title.length === 0 ? plan : withEditedTitle(plan, picked, title);
     });
   }
 

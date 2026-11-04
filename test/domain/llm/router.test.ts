@@ -78,6 +78,15 @@ describe("refineCommitMessage", () => {
     const result = await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff"));
     expect(result.metadata.model.effort).toBe("provider default");
   });
+
+  it("sends the diff to the provider", async () => {
+    const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
+    vi.mocked(generateContentWithOpenAI).mockClear();
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: "feat: y", tokens: Nothing(), effectiveEffort: Nothing() }));
+
+    await runFuture(refineCommitMessage(mockProvider("openai"), "feat: x", "shorter", "diff body"));
+    expect(vi.mocked(generateContentWithOpenAI).mock.calls[0]?.[1].prompt).toContain("<diff>\ndiff body\n</diff>");
+  });
 });
 
 describe("generateSplitPlan", () => {
@@ -101,15 +110,25 @@ describe("generateSplitPlan", () => {
     expect(result.metadata.model.provider).toBe("openai");
   });
 
-  it("calls the provider with minimum effort", async () => {
+  it("passes the configured effort through", async () => {
     const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
     vi.mocked(generateContentWithOpenAI).mockClear();
     const json = JSON.stringify({
       should_split: false,
       commits: [{ message: "feat: a", files: ["a.ts"] }]
     });
-    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("low") }));
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("high") }));
     const config = { ...mockProvider("openai"), effort: Just("high") } as ProviderConfig;
+    await runFuture(generateSplitPlan(config, stagedContext(["a.ts"]), "conventional", Nothing()));
+    expect(vi.mocked(generateContentWithOpenAI).mock.calls[0]?.[0].effort).toEqual(Just("high"));
+  });
+
+  it("defaults to low effort when the config has none", async () => {
+    const { generateContentWithOpenAI } = await import("@/infra/llm/openai");
+    vi.mocked(generateContentWithOpenAI).mockClear();
+    const json = JSON.stringify({ should_split: false, commits: [{ message: "feat: a", files: ["a.ts"] }] });
+    vi.mocked(generateContentWithOpenAI).mockReturnValue(Future.resolve({ text: json, tokens: Nothing(), effectiveEffort: Just("low") }));
+    const config = { ...mockProvider("openai"), effort: Nothing() } as ProviderConfig;
     await runFuture(generateSplitPlan(config, stagedContext(["a.ts"]), "conventional", Nothing()));
     expect(vi.mocked(generateContentWithOpenAI).mock.calls[0]?.[0].effort).toEqual(Just("low"));
   });

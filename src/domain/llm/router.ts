@@ -5,8 +5,8 @@ split plan.
 Every job runs the same pipeline; only the effort floor and the reply parser differ.
 
     generateCommitMessage | refineCommitMessage | generateBranchNameSuggestions | generateSplitPlan
-        |-- 1. effort            commit, refine: withDefaultMinEffort (lowest level when none is set)
-        |                        split plan: withMinEffort (always the lowest)   branch names: as configured
+        |-- 1. effort            commit, refine, split plan: withDefaultMinEffort (lowest level when none is set)
+        |                        branch names: as configured
         |-- 2. prompt            src/domain/commit/prompts.ts
         |-- 3. generateContent() dispatch on provider to src/infra/llm/*, time the call
         |-- 4. parse             branch names and split plans only; a bad reply rejects, not retried
@@ -44,7 +44,7 @@ import { getPrompt, getRefinePrompt, getBranchNamePrompt, getSplitPrompt } from 
 import { parseAndValidateBranchSuggestions, type BranchSuggestion } from "@/domain/branch/suggestions";
 import { parseAndValidateSplitPlan, type SplitPlan } from "@/domain/split/plan";
 import { withTransientRetry } from "@/domain/llm/retry";
-import { withMinEffort, withDefaultMinEffort } from "@/domain/llm/effort";
+import { withDefaultMinEffort } from "@/domain/llm/effort";
 import { type StagedContext } from "@/domain/context/context";
 import { Maybe, Nothing } from "@/libs/maybe";
 
@@ -141,8 +141,8 @@ const generateCommitMessage = (
 ): Future<Error, GeneratedContent> =>
   withTransientRetry(() => generateContent(withDefaultMinEffort(config), getPrompt(diff, convention, customTemplate)));
 
-const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, stagedFiles: string): Future<Error, GeneratedContent> =>
-  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ stagedFiles, currentMessage, adjustment })));
+const refineCommitMessage = (config: ProviderConfig, currentMessage: string, adjustment: string, diff: string): Future<Error, GeneratedContent> =>
+  withTransientRetry(() => generateContent(withDefaultMinEffort(config), getRefinePrompt({ diff, currentMessage, adjustment })));
 
 const resultToFuture = <T>(r: Result<Error, T>): Future<Error, T> =>
   r.either(
@@ -167,7 +167,7 @@ const generateSplitPlan = (
   customTemplate: Maybe<string>
 ): Future<Error, SplitPlanContent> =>
   withTransientRetry(() =>
-    generateContent(withMinEffort(config), { prompt: getSplitPrompt(context.diff, context.files, convention, customTemplate, context.hints) }).chain(
-      (gc) => resultToFuture(parseAndValidateSplitPlan(gc.text, context.files)).map((plan) => ({ plan, metadata: gc.metadata }))
-    )
+    generateContent(withDefaultMinEffort(config), {
+      prompt: getSplitPrompt(context.diff, context.files, convention, customTemplate, context.hints)
+    }).chain((gc) => resultToFuture(parseAndValidateSplitPlan(gc.text, context.files)).map((plan) => ({ plan, metadata: gc.metadata })))
   );

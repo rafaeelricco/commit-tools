@@ -76,7 +76,7 @@ const report = (convention: CommitConvention, snapshot: StagedSnapshot, files: r
       [
         { label: "full staged diff", chars: full.length },
         { label: "sent", chars: diff.length },
-        { label: "manifest (adjust)", chars: context.manifest.length }
+        { label: "manifest", chars: context.manifest.length }
       ],
       full.length
     ),

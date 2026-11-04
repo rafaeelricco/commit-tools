@@ -14,7 +14,7 @@ refreshes OAuth tokens. `Commit.run` owns everything after that and logs any fai
         |                                          otherwise --> the first group's message
         |        otherwise --------------------> generateCommitMessage()
         |-- 3. interact()   commit | commit + push | regenerate | adjust | cancel
-        |                   regenerate resends context.diff; adjust sends only the manifest
+        |                   regenerate and adjust both resend context.diff
         |-- 4. performCommit(), then pushAfterCommit() when asked
         v
     push: no upstream --> offer to publish; rejected as non-fast-forward --> offer --force-with-lease
@@ -148,7 +148,7 @@ class Commit {
   }
 
   refine(message: string, adjustment: string, context: StagedContext): Future<Error, GeneratedContent> {
-    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, context.manifest));
+    return loading("Refining...", "Refined!", refineCommitMessage(this.providerConfig, message, adjustment, context.diff));
   }
 
   commit(message: string): Future<Error, string> {

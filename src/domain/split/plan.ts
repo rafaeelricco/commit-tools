@@ -72,11 +72,22 @@ const extractJsonObject = (s: string): string => {
   return s.slice(start, end + 1);
 };
 
+// Multi-line messages are the norm, and a model may write their line breaks raw instead of as \n.
+const escapeRawLineBreaks = (json: string): string => json.replace(/"(?:[^"\\]|\\[\s\S])*"/g, (text) => text.replace(/\n/g, "\\n").replace(/\r/g, "\\r"));
+
+const parseJsonLeniently = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return JSON.parse(escapeRawLineBreaks(text));
+  }
+};
+
 const parseSplitPlan = (raw: string): Result<Error, SplitPlan> => {
   const trimmed = extractJsonObject(stripOptionalJsonFence(raw.trim()));
   let json: unknown;
   try {
-    json = JSON.parse(trimmed);
+    json = parseJsonLeniently(trimmed);
   } catch {
     return Failure(new Error("Split plan: invalid JSON"));
   }

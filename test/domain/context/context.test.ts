@@ -25,4 +25,11 @@ describe("buildStagedContext", () => {
     expect(ctx.diff).toContain("pnpm-lock.yaml | +2 -0");
     expect(ctx.hints).toEqual([{ files: ["src/a.ts", "test/a.test.ts"], reasons: ["test"] }]);
   });
+
+  it("spends the budget on a single oversized file instead of reducing it to its stat line", () => {
+    const ctx = buildStagedContext({ diff: chunk("docs/a.md", 2000), generatedNote: "", importLines: "", history: "" }, ["docs/a.md"], 2_000);
+    expect(ctx.diff).toContain("+new");
+    expect(ctx.diff.length / 4).toBeLessThanOrEqual(2_000);
+    expect(ctx.diff.length / 4).toBeGreaterThan(1_500);
+  });
 });

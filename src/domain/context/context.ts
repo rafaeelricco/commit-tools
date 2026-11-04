@@ -6,15 +6,15 @@ Build the text every model call sees for the staged changes, once per `commit` r
         |-- hints      groupingHints() over non-generated paths
         |-- diff       whole: snapshot.diff + generatedNote, exactly what getStagedDiff returns,
         |                     when it fits CONTEXT_BUDGET_TOKENS
-        v              compressed: legend, "# Files" manifest, "# Changes" from fitToBudget()
-                               (units at stat level are left to the manifest)
+        v              compressed: legend, "# Files" manifest, "# Changes" from renderWithinBudget()
+                               (units with no text are left to the manifest)
 
 Tokens are estimated as chars / 4, the same estimate `pnpm measure` prints.
 */
 export { CONTEXT_BUDGET_TOKENS, estimateTokens, buildStagedContext, type StagedSnapshot, type StagedContext, type ContextSize };
 
 import { parseDiff } from "@/domain/context/diff";
-import { Detail, dedupeUnits, fitToBudget, renderUnit, statLine } from "@/domain/context/compress";
+import { dedupeUnits, renderWithinBudget, statLine } from "@/domain/context/compress";
 import { groupingHints, type HintCluster } from "@/domain/context/hints";
 import { isGeneratedPath } from "@/infra/git/parsers";
 
@@ -42,8 +42,9 @@ type StagedContext = {
 
 const LEGEND =
   "# Large change, compressed to fit. '# Files' lists every staged file (A added, M modified, D deleted, " +
-  "R<similarity> renamed, B binary) with line counts. '# Changes' shows the files that matter most: " +
-  "context lines removed, some files cut to hunk headers and declarations. Files absent there are summarized in '# Files' only.";
+  "R<similarity> renamed, B binary) with line counts. '# Changes' shows as much of each file as fits: " +
+  "context lines may be removed, and long files stop at a '# ... N more changed lines cut' marker. " +
+  "Files absent there are summarized in '# Files' only. Describe only what you can see, and do not infer changes from line counts.";
 
 const estimateTokens = (chars: number): number => Math.ceil(chars / CHARS_PER_TOKEN);
 
@@ -62,9 +63,7 @@ const buildStagedContext = (snapshot: StagedSnapshot, files: readonly string[], 
   }
   const head = `${LEGEND}\n\n# Files\n${manifest}\n\n# Changes\n`;
   const units = dedupeUnits(parsed);
-  const details = fitToBudget(units, Math.max(0, budgetTokens * CHARS_PER_TOKEN - head.length));
-  const changes = units
-    .map((unit, i) => (details[i] === Detail.Stat ? "" : renderUnit(unit, details[i] ?? Detail.Stat)))
+  const changes = renderWithinBudget(units, Math.max(0, budgetTokens * CHARS_PER_TOKEN - head.length))
     .filter((text) => text !== "")
     .join("\n");
   const diff = head + changes;

@@ -14,6 +14,21 @@ const threeCommits = JSON.stringify({
 });
 
 describe("parseAndValidateSplitPlan", () => {
+  it("keeps escaped and raw line breaks in a message", () => {
+    const stagedOne = ["a.ts"];
+    const escaped = parseAndValidateSplitPlan('{"should_split":false,"commits":[{"message":"Add a\\n\\n- Do b.","files":["a.ts"]}]}', stagedOne);
+    const raw = parseAndValidateSplitPlan(
+      '{"should_split":false,"commits":[{"message":"Add a\n\n- Say \\"b\\".\n- Do c.","files":["a.ts"]}]}',
+      stagedOne
+    );
+    expect(escaped instanceof Success && escaped.value.commits[0]?.message).toBe("Add a\n\n- Do b.");
+    expect(raw instanceof Success && raw.value.commits[0]?.message).toBe('Add a\n\n- Say "b".\n- Do c.');
+  });
+
+  it("still rejects a reply that is not JSON", () => {
+    expect(parseAndValidateSplitPlan('{"should_split":false,\n"commits":[', ["a.ts"]) instanceof Failure).toBe(true);
+  });
+
   it("parses valid 3-commit JSON", () => {
     const r = parseAndValidateSplitPlan(threeCommits, staged);
     expect(r instanceof Success).toBe(true);

@@ -8,12 +8,16 @@ on:
 jobs:
   check-version:
     name: Check if version changed
-    runs-on: ubuntu-latest
+    runs-on: r1cco-ci
     outputs:
       changed: ${{ steps.check.outputs.changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
       - name: Check if version is already published
         id: check
@@ -34,9 +38,11 @@ jobs:
 
   publish:
     name: Publish package
-    runs-on: ubuntu-latest
+    runs-on: r1cco-ci
     needs: check-version
-    if: needs.check-version.outputs.changed == 'true'
+    # Original version gate: needs.check-version.outputs.changed == 'true'.
+    # npm trusted publishing does not support self-hosted runners (official npm docs).
+    if: ${{ false }}
     permissions:
       contents: read
       id-token: write

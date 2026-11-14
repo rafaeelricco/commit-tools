@@ -10,8 +10,9 @@ concurrency:
 
 jobs:
   checks:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     name: Validate (typecheck, format, build, test)
-    runs-on: ubuntu-latest
+    runs-on: r1cco-ci
     permissions:
       contents: read
     env:
@@ -47,8 +48,9 @@ jobs:
         run: pnpm test
 
   lint:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     name: Cognitive complexity
-    runs-on: ubuntu-latest
+    runs-on: r1cco-ci
     permissions:
       contents: read
     steps:
@@ -70,13 +72,19 @@ jobs:
         run: pnpm run lint:ci
 
   publish-preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     name: Publish preview
-    runs-on: ubuntu-latest
+    runs-on: r1cco-ci
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
 
       - name: Install semver CLI
         run: npm install -g semver
@@ -137,15 +145,15 @@ jobs:
 
           if [ "$HEAD_VERSION" = "$BASE_VERSION" ]; then
             {
-              echo "### Will publish on merge"
+              echo "### Version eligible; automatic publication disabled"
               echo ""
-              echo "Version pinned at \`$HEAD_VERSION\` but not yet published on NPM — merging will publish \`${PACKAGE_NAME}@${HEAD_VERSION}\`."
+              echo "Version pinned at \`$HEAD_VERSION\` but not yet published on NPM. The VPS-only workflow does not publish automatically after merge."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           {
-            echo "### Will publish on merge"
+            echo "### Version eligible; automatic publication disabled"
             echo ""
-            echo "Merging will publish \`${PACKAGE_NAME}@${HEAD_VERSION}\` (bumped from \`$BASE_VERSION\`)."
+            echo "Version \`${PACKAGE_NAME}@${HEAD_VERSION}\` is a valid forward bump from \`$BASE_VERSION\`. The VPS-only workflow does not publish automatically after merge."
           } >> "$GITHUB_STEP_SUMMARY"
